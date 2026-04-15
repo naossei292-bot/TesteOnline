@@ -96,52 +96,18 @@ st.sidebar.title("📁 Gestão de Dados")
 
 with st.sidebar.expander("📚 Dados de Cursos (Moodle)", expanded=True):
     files_cursos = st.file_uploader("Upload CSV Cursos", type=["csv"], accept_multiple_files=True)
-files_cursos = st.file_uploader("Upload CSV Cursos", type=["csv"], accept_multiple_files=True)
+    if files_cursos:
+        dfs = [pd.read_csv(f).rename(columns=lambda x: x.strip()) for f in files_cursos]
+        st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
+        st.sidebar.success(f"✅ {len(files_cursos)} ficheiro(s) carregado(s)")
 
-if files_cursos:
-    # Guardar ficheiros em memória
-    st.session_state["files_cursos"] = [(f.name, f.read()) for f in files_cursos]
-
-    dfs = []
-    for name, content in st.session_state["files_cursos"]:
-        df = pd.read_csv(pd.io.common.BytesIO(content))
-        df = df.rename(columns=lambda x: x.strip())
-        dfs.append(df)
-
-    st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
-    st.sidebar.success(f"✅ {len(dfs)} ficheiro(s) carregado(s)")
-
-# 🔁 Recarregar automaticamente após rerun
-elif "files_cursos" in st.session_state:
-    dfs = []
-    for name, content in st.session_state["files_cursos"]:
-        df = pd.read_csv(pd.io.common.BytesIO(content))
-        df = df.rename(columns=lambda x: x.strip())
-        dfs.append(df)
-
-    st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
 with st.sidebar.expander("📋 Dados de Questionários", expanded=True):
     files_quest = st.file_uploader("Upload XLSX Questionários", type=["xlsx"], accept_multiple_files=True)
-files_quest = st.file_uploader("Upload XLSX Questionários", type=["xlsx"], accept_multiple_files=True)
+    if files_quest:
+        dfs_q = [processar_questionarios_excel(f) for f in files_quest]
+        st.session_state.quest_df = pd.concat(dfs_q, ignore_index=True)
+        st.sidebar.success(f"✅ {len(files_quest)} ficheiro(s) carregado(s)")
 
-if files_quest:
-    st.session_state["files_quest"] = [(f.name, f.read()) for f in files_quest]
-
-    dfs_q = []
-    for name, content in st.session_state["files_quest"]:
-        df = processar_questionarios_excel(pd.io.common.BytesIO(content))
-        dfs_q.append(df)
-
-    st.session_state.quest_df = pd.concat(dfs_q, ignore_index=True)
-    st.sidebar.success(f"✅ {len(dfs_q)} ficheiro(s) carregado(s)")
-
-elif "files_quest" in st.session_state:
-    dfs_q = []
-    for name, content in st.session_state["files_quest"]:
-        df = processar_questionarios_excel(pd.io.common.BytesIO(content))
-        dfs_q.append(df)
-
-    st.session_state.quest_df = pd.concat(dfs_q, ignore_index=True)
 # Filtro global por Centro
 st.sidebar.markdown("---")
 lista_centros = set()
