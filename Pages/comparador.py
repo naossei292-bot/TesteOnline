@@ -6,6 +6,9 @@ from utils.data_utils import get_col
 
 st.set_page_config(page_title="Comparador entre Centros", layout="wide")
 
+def mostrar_comparador():
+    """Função principal da página de comparador"""
+    
 st.header("⚔️ Comparador entre Centros")
 
 df_c = st.session_state.cursos_df
@@ -160,3 +163,6 @@ if has_cursos or has_quest:
         st.info("👆 Selecione pelo menos 2 centros para iniciar a comparação.")
 else:
     st.info("📂 Carregue ficheiros de Cursos e/ou Questionários na barra lateral.")
+
+if __name__ == "__main__":
+    mostrar_comparador()    

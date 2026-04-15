@@ -6,6 +6,8 @@ from utils.data_utils import get_col, aplicar_filtros
 
 st.set_page_config(page_title="Gestão de Qualidade", layout="wide")
 
+def mostrar_qualidade():
+    """Função principal da página de qualidade"""
 st.header("🎯 Scorecard de Qualidade Pedagógica")
 
 df_c_filt = aplicar_filtros(st.session_state.cursos_df)
@@ -211,3 +213,6 @@ if has_cursos or has_quest:
 
 else:
     st.warning("⚠️ Carregue ficheiros de Cursos e/ou Questionários na barra lateral para visualizar os KPIs.")
+
+if __name__ == "__main__":
+    mostrar_qualidade()    
