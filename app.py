@@ -152,7 +152,7 @@ with st.sidebar.expander("📚 Dados de Cursos (Moodle)", expanded=True):
         dfs = [pd.read_csv(f).rename(columns=lambda x: x.strip()) for f in files_cursos]
         st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
 
-with st.sidebar.expander("📋 Dados de Questionários", expanded=True):
+with st.sidebar.expander("📋 Dados de QuestionáriosCristiano", expanded=True):
     files_quest = st.file_uploader("Upload XLSX Questionários", type=["xlsx"], accept_multiple_files=True)
     if files_quest:
         dfs_q = [processar_questionarios_excel(f) for f in files_quest]
