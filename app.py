@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import hmac  # ⚠️ ESTAVA EM FALTA - necessário para a comparação segura de passwords
+import hmac  # ⚠️ CRÍTICO - necessário para a autenticação funcionar
 
 # --------------------------
 # CONFIGURAÇÃO DA PÁGINA
@@ -10,6 +10,7 @@ import hmac  # ⚠️ ESTAVA EM FALTA - necessário para a comparação segura d
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
+
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO (PROTEÇÃO POR PALAVRA-PASSE)
 # ============================================
@@ -46,7 +47,7 @@ def verificar_autenticacao():
         # Compara as passwords de forma segura
         if hmac.compare_digest(password_input, password_correta):
             st.session_state["autenticado"] = True
-            st.rerun()  # Recarrega a página já autenticada
+            st.rerun()
         else:
             st.error("❌ Palavra-passe incorreta!")
             return False
@@ -58,8 +59,18 @@ def verificar_autenticacao():
 # ============================================
 
 if not verificar_autenticacao():
-    st.stop()  # Para aqui se não estiver autenticado
+    st.stop()
 
+# ============================================
+# SE CHEGOU AQUI, ESTÁ AUTENTICADO!
+# ============================================
+
+# Mostrar mensagem de boas-vindas e opção de logout
+col_logout1, col_logout2 = st.columns([6, 1])
+with col_logout2:
+    if st.button("🚪 Sair", help="Terminar sessão"):
+        st.session_state.clear()
+        st.rerun()
 # --------------------------
 # INICIALIZAÇÃO DO ESTADO
 # --------------------------
