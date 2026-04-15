@@ -9,6 +9,55 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
+# ============================================
+# 🔒 SISTEMA DE AUTENTICAÇÃO (PROTEÇÃO POR PALAVRA-PASSE)
+# ============================================
+
+def verificar_autenticacao():
+    """Verifica se o utilizador está autenticado com a palavra-passe dos Secrets"""
+    
+    # Se já está autenticado nesta sessão, continua
+    if st.session_state.get("autenticado", False):
+        return True
+    
+    # Título da página de login
+    st.title("🔒 Acesso Restrito")
+    st.markdown("### Esta aplicação é privada")
+    st.markdown("Introduza a palavra-passe para continuar.")
+    
+    # Campo para a password
+    password_input = st.text_input(
+        "Palavra-passe:",
+        type="password",
+        key="login_password"
+    )
+    
+    # Botão para submeter
+    if st.button("🔓 Entrar", use_container_width=True):
+        # Busca a password correta dos Secrets
+        try:
+            password_correta = st.secrets["password"]
+        except KeyError:
+            st.error("⚠️ Erro de configuração: Password não definida nos Secrets")
+            st.info("Contacte o administrador da aplicação.")
+            return False
+        
+        # Compara as passwords de forma segura
+        if hmac.compare_digest(password_input, password_correta):
+            st.session_state["autenticado"] = True
+            st.rerun()  # Recarrega a página já autenticada
+        else:
+            st.error("❌ Palavra-passe incorreta!")
+            return False
+    
+    return False
+
+# ============================================
+# VERIFICA AUTENTICAÇÃO ANTES DE MOSTRAR A APP
+# ============================================
+
+if not verificar_autenticacao():
+    st.stop()  # Para aqui se não estiver autenticado
 
 # --------------------------
 # INICIALIZAÇÃO DO ESTADO
