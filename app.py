@@ -130,17 +130,17 @@ st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 
 if st.session_state.pagina == "📚 Cursos":
     # Importar e executar a página de cursos
-    from pages.cursos import mostrar_cursos
+    from Pages.cursos import mostrar_cursos
     mostrar_cursos()
 
 elif st.session_state.pagina == "📋 Questionários":
-    from pages.questionarios import mostrar_questionarios
+    from Pages.questionarios import mostrar_questionarios
     mostrar_questionarios()
 
 elif st.session_state.pagina == "🎯 Gestão de Qualidade":
-    from pages.qualidade import mostrar_qualidade
+    from Pages.qualidade import mostrar_qualidade
     mostrar_qualidade()
 
 elif st.session_state.pagina == "⚔️ Comparador Versus":
-    from pages.comparador import mostrar_comparador
+    from Pages.comparador import mostrar_comparador
     mostrar_comparador()
