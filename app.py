@@ -9,7 +9,31 @@ from utils.data_utils import processar_questionarios_excel, get_col
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
+# ============================================
+# MENU DE NAVEGAÇÃO
+# ============================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação")
 
+# Botões de navegação na sidebar
+if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
+    st.session_state.pagina = "📚 Cursos"
+    st.rerun()
+
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
+    st.rerun()
+
+if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
+    st.session_state.pagina = "🎯 Gestão de Qualidade"
+    st.rerun()
+
+if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+    st.session_state.pagina = "⚔️ Comparador Versus"
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO
 # ============================================
@@ -98,31 +122,7 @@ st.session_state.filtro_centro = st.sidebar.multiselect(
     default=st.session_state.filtro_centro
 )
 
-# ============================================
-# MENU DE NAVEGAÇÃO
-# ============================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação")
 
-# Botões de navegação na sidebar
-if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-    st.session_state.pagina = "📚 Cursos"
-    st.rerun()
-
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
-    st.rerun()
-
-if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
-    st.session_state.pagina = "🎯 Gestão de Qualidade"
-    st.rerun()
-
-if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-    st.session_state.pagina = "⚔️ Comparador Versus"
-    st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 
 # ============================================
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
