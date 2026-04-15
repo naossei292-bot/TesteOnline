@@ -4,7 +4,7 @@ from utils import aplicar_filtros
 from components.filters import checklist_com_select_all
 
 def mostrar_questionarios():
-    """Página de visualização de questionários"""
+    """Página de visualização de Cristiano"""
     df_q = aplicar_filtros(st.session_state.quest_df) 
     
     if df_q is not None:
