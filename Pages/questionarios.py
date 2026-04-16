@@ -1,92 +1,390 @@
 import streamlit as st
 import pandas as pd
-from utils.data_utils import aplicar_filtros
+import re
 
-def checklist_com_select_all(lista_itens, titulo, chave_unica):
-    """Componente de checklist com selecionar/limpar tudo"""
-    with st.popover(titulo, use_container_width=True):
-        c_btn1, c_btn2 = st.columns(2)
-        
-        if c_btn1.button("✅ Selecionar Tudo", key=f"all_btn_{chave_unica}"):
-            for item in lista_itens:
-                st.session_state[f"chk_{chave_unica}_{item}"] = True
-            st.rerun()
+# ─────────────────────────────────────────────────────────────
+# Metadados fixos por folha
+# ─────────────────────────────────────────────────────────────
+SHEET_META = {
+    "21a": {"Respondente": "Formando",              "Modalidade": "Presencial",   "Tipo": "Módulo"},
+    "21b": {"Respondente": "Formando",              "Modalidade": "À Distância",  "Tipo": "Módulo"},
+    "22a": {"Respondente": "Formando",              "Modalidade": "Presencial",   "Tipo": "Ação"},
+    "22b": {"Respondente": "Formando",              "Modalidade": "À Distância",  "Tipo": "Ação"},
+    "23a": {"Respondente": "Formador",              "Modalidade": "Presencial",   "Tipo": "Ação"},
+    "23b": {"Respondente": "Tutor",                 "Modalidade": "À Distância",  "Tipo": "Ação"},
+    "24a": {"Respondente": "Coordenação Pedagógica","Modalidade": "Presencial",   "Tipo": "Formador"},
+    "24b": {"Respondente": "Coordenação Pedagógica","Modalidade": "À Distância",  "Tipo": "Tutor"},
+}
 
-        if c_btn2.button("❌ Limpar Tudo", key=f"none_btn_{chave_unica}"):
-            for item in lista_itens:
-                st.session_state[f"chk_{chave_unica}_{item}"] = False
-            st.rerun()
+RE_PERGUNTA = re.compile(r'^[A-Z]\d{2}\s*[-–]')
+RE_CATEGORIA = re.compile(r'^([A-Z])\d{2}')
+IGNORAR = {"FIM DE TABELA", "começo de tabela", "Column1", "Categorias/Subcategorias",
+           "Resultados por categoria", "Nº total de Formandos",
+           "Nº de respostas:", "% Respostas:", "Ref. da ação"}
 
-        selecionados = []
-        for item in lista_itens:
-            chave_item = f"chk_{chave_unica}_{item}"
-            
-            if chave_item not in st.session_state:
-                st.session_state[chave_item] = True
-            
-            if st.checkbox(str(item), key=chave_item):
-                selecionados.append(item)
-        return selecionados
 
+def _extrair_uma_coluna(df: pd.DataFrame, col_pergunta: int, col_media: int,
+                        centro: str, sheet_name: str) -> list[dict]:
+    meta = SHEET_META.get(sheet_name, {"Respondente": sheet_name,
+                                       "Modalidade": "?", "Tipo": "?"})
+    registos = []
+    curso_atual = None
+    n_formandos = None
+    n_respostas = None
+    pct_respostas = None
+    dentro_bloco = False
+
+    for _, row in df.iterrows():
+        cel0 = row[col_pergunta]
+        cel1 = row[col_media]
+        s0 = str(cel0).strip() if pd.notna(cel0) else ""
+        s1 = str(cel1).strip() if pd.notna(cel1) else ""
+
+        if s0 == "Curso":
+            curso_atual   = s1 if s1 not in ("", "nan") else None
+            n_formandos   = None
+            n_respostas   = None
+            pct_respostas = None
+            dentro_bloco  = True
+            continue
+
+        if not dentro_bloco:
+            continue
+
+        if s0 == "Nº total de Formandos":
+            try: n_formandos = float(cel1)
+            except: pass
+            continue
+        if s0 == "Nº de respostas:":
+            try: n_respostas = float(cel1)
+            except: pass
+            continue
+        if s0 == "% Respostas:":
+            try: pct_respostas = float(cel1)
+            except: pass
+            continue
+
+        if s0 in ("FIM DE TABELA",) or s0.startswith("FIM DE TABELA"):
+            dentro_bloco = False
+            curso_atual  = None
+            continue
+        if s0 in IGNORAR or not s0:
+            continue
+        if re.match(r'^[A-Z] [-–]', s0):
+            continue
+
+        if RE_PERGUNTA.match(s0) and curso_atual:
+            m = RE_CATEGORIA.match(s0)
+            categoria = m.group(1) if m else "Outra"
+            try:
+                media_val = float(cel1)
+                if "%" in s0:
+                    media_exibida = f"{media_val:.0f}%"
+                else:
+                    media_exibida = media_val
+            except:
+                media_exibida = None
+
+            registos.append({
+                "Centro":        centro,
+                "Curso":         curso_atual,
+                "Folha":         sheet_name,
+                "Respondente":   meta["Respondente"],
+                "Modalidade":    meta["Modalidade"],
+                "Tipo":          meta["Tipo"],
+                "Categoria":     categoria,
+                "Pergunta":      s0,
+                "Média":         media_exibida,
+                "Nº Formandos":  n_formandos,
+                "Nº Respostas":  n_respostas,
+                "% Respostas":   pct_respostas,
+            })
+    return registos
+
+
+def extrair_centro_do_nome(nome: str) -> str:
+    nome_sem_ext = nome.rsplit(".", 1)[0]
+    parts = re.split(r"[_\-]", nome_sem_ext)
+    for part in reversed(parts):
+        part = part.strip()
+        if part and re.match(r'^[A-Za-zÀ-ÿ]', part):
+            return part.capitalize()
+    return ""
+
+
+def processar_relatorio(ficheiro, modo="left_only") -> pd.DataFrame:
+    centro = extrair_centro_do_nome(ficheiro.name)
+    xls = pd.ExcelFile(ficheiro)
+    todos = []
+
+    for sheet_name in xls.sheet_names:
+        if sheet_name not in SHEET_META:
+            continue
+        df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+        todos.extend(_extrair_uma_coluna(df, 0, 1, centro, sheet_name))
+        if modo == "both":
+            regs_dir = _extrair_uma_coluna(df, 3, 4, centro, sheet_name)
+            for r in regs_dir:
+                r["Agregado"] = True
+            todos.extend(regs_dir)
+
+    df_out = pd.DataFrame(todos)
+    if not df_out.empty and "Agregado" not in df_out.columns:
+        df_out["Agregado"] = False
+    return df_out
+
+
+# ─────────────────────────────────────────────────────────────
+# Página Streamlit
+# ─────────────────────────────────────────────────────────────
 def mostrar_questionarios():
-    """Função principal da página de questionários"""
     st.header("📋 Base de Dados de Satisfação")
-    
-    df_q = aplicar_filtros(st.session_state.quest_df)
-    
-    if df_q is not None and not df_q.empty:
-        
-        # Filtros
-        col1, col2, col3 = st.columns(3)
-    
-        with col1:
-            all_mods = sorted(df_q["Modalidade"].unique())
-            sel_mod = checklist_com_select_all(all_mods, "🎯 Filtrar Modalidade", "mods")
-    
-        with col2:
-            all_resps = sorted(df_q["Respondente"].unique())
-            sel_resp = checklist_com_select_all(all_resps, "👥 Filtrar Respondentes", "resps")
-            
-        df_temp = df_q[(df_q["Modalidade"].isin(sel_mod)) & (df_q["Respondente"].isin(sel_resp))]
-    
-        with col3:
-            all_cursos = sorted(df_temp["Curso"].unique())
-            sel_cursos = checklist_com_select_all(all_cursos, "📚 Filtrar Cursos", "cursos")
-    
-        col4, col5 = st.columns(2)
-        df_temp = df_temp[df_temp["Curso"].isin(sel_cursos)]
-    
-        with col4:
-            all_cats = sorted(df_temp["Categoria"].unique())
-            sel_cat = checklist_com_select_all(all_cats, "📂 Filtrar Categorias", "cats")
-    
-        with col5:
-            lista_pergs_filtrada = sorted(df_temp[df_temp["Categoria"].isin(sel_cat)]["Pergunta"].unique())
-            sel_perg = checklist_com_select_all(lista_pergs_filtrada, "❓ Filtrar Perguntas", "pergs")
-    
-        # Exibição dos dados
-        df_display = df_temp[
-            (df_temp["Categoria"].isin(sel_cat)) & 
-            (df_temp["Pergunta"].isin(sel_perg))
-        ]
-    
-        if not df_display.empty:
-            st.success(f"✅ Exibindo **{len(df_display)}** registos")
-            st.dataframe(df_display, use_container_width=True)
-            
-            # Estatísticas rápidas
-            with st.expander("📊 Estatísticas Rápidas"):
-                col_med1, col_med2, col_med3 = st.columns(3)
-                with col_med1:
-                    st.metric("Média Geral", f"{df_display['Media'].mean():.2f}")
-                with col_med2:
-                    st.metric("Mediana", f"{df_display['Media'].median():.2f}")
-                with col_med3:
-                    st.metric("Desvio Padrão", f"{df_display['Media'].std():.2f}")
+
+    COLUNAS_DADOS = [
+        "Centro", "Curso", "Folha", "Respondente", "Modalidade",
+        "Tipo", "Categoria", "Pergunta", "Média",
+        "Nº Formandos", "Nº Respostas", "% Respostas",
+    ]
+    COLUNAS_COM_APAGAR = ["Apagar"] + COLUNAS_DADOS
+
+    # --- Seletor de colunas (persistente) ---
+    if "colunas_quest_selecionadas" not in st.session_state:
+        st.session_state.colunas_quest_selecionadas = COLUNAS_DADOS.copy()
+
+    st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
+    colunas_escolhidas = st.multiselect(
+        "Selecione as colunas (a coluna 'Apagar' é sempre mostrada):",
+        options=COLUNAS_DADOS,
+        default=st.session_state.colunas_quest_selecionadas,
+        key="seletor_colunas_quest"
+    )
+
+    # Botão para remover colunas não selecionadas (efetivamente elimina as outras)
+    if st.button("🗑️ Remover colunas não selecionadas", use_container_width=True):
+        st.session_state.colunas_quest_selecionadas = colunas_escolhidas
+        if 'quest_editaveis' in st.session_state and not st.session_state.quest_editaveis.empty:
+            df_atual = st.session_state.quest_editaveis
+            if "Apagar" in df_atual.columns:
+                apagar = df_atual["Apagar"]
+                outras = {col: df_atual[col] for col in st.session_state.colunas_quest_selecionadas if col in df_atual.columns}
+                novo_df = pd.DataFrame(outras)
+                novo_df.insert(0, "Apagar", apagar)
+                st.session_state.quest_editaveis = novo_df
+            else:
+                st.session_state.quest_editaveis = pd.DataFrame(columns=["Apagar"] + st.session_state.colunas_quest_selecionadas)
+        st.rerun()
+
+    # Atualizar colunas_dados com a seleção atual
+    colunas_dados = st.session_state.colunas_quest_selecionadas
+    colunas_com_apagar = ["Apagar"] + colunas_dados
+
+    if 'quest_editaveis' not in st.session_state:
+        st.session_state.quest_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+
+    # ── Carregar ficheiros ────────────────────────────────────
+    st.subheader("📤 Carregar Relatórios Excel")
+    c1, c2 = st.columns(2)
+    with c1:
+        modo_carga = st.radio(
+            "Modo:", ["Substituir dados existentes", "Adicionar ao final"],
+            horizontal=True, key="modo_carga_quest"
+        )
+    with c2:
+        ficheiros = st.file_uploader(
+            "Relatórios Excel (Relatório_Centro.xlsx)",
+            type=None, accept_multiple_files=True, key="carga_quest_upload"
+        )
+
+    if ficheiros:
+        lista_dfs = []
+        for f in ficheiros:
+            nome = f.name.lower()
+            try:
+                if nome.endswith(".xlsx"):
+                    df_novo = processar_relatorio(f, modo="left_only")
+                    if df_novo.empty:
+                        st.warning(f"⚠️ Sem dados extraídos de: {f.name}")
+                        continue
+                    for col in COLUNAS_DADOS:
+                        if col not in df_novo.columns:
+                            df_novo[col] = None
+                    df_novo = df_novo[colunas_dados]  # usar colunas selecionadas
+                    df_novo.insert(0, "Apagar", False)
+                    lista_dfs.append(df_novo)
+                    st.success(f"✅ {f.name} → {len(df_novo)} perguntas de {df_novo['Curso'].nunique()} cursos")
+                elif nome.endswith(".csv"):
+                    df_csv = pd.read_csv(f)
+                    df_csv.columns = df_csv.columns.str.strip()
+                    for col in colunas_dados:
+                        if col not in df_csv.columns:
+                            df_csv[col] = None
+                    df_csv = df_csv[colunas_dados]
+                    df_csv.insert(0, "Apagar", False)
+                    lista_dfs.append(df_csv)
+                else:
+                    st.warning(f"Formato não suportado: {f.name}")
+            except Exception as e:
+                st.error(f"Erro em {f.name}: {e}")
+
+        if lista_dfs:
+            df_total = pd.concat(lista_dfs, ignore_index=True)
+            if modo_carga == "Substituir dados existentes":
+                st.session_state.quest_editaveis = df_total
+            else:
+                st.session_state.quest_editaveis = pd.concat(
+                    [st.session_state.quest_editaveis, df_total], ignore_index=True
+                )
+            st.rerun()
+
+    # ── DataFrame atual (para edição e filtros) ───────────────
+    df_atual = st.session_state.quest_editaveis.copy()
+    if "Apagar" not in df_atual.columns:
+        df_atual.insert(0, "Apagar", False)
+
+    # ── Filtros de visualização (apenas consulta) ─────────────
+    with st.expander("🔍 Filtrar visualização (consulta apenas)"):
+        if not df_atual.empty:
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                modalidades = sorted(df_atual["Modalidade"].dropna().unique()) if "Modalidade" in df_atual else []
+                filtro_modalidade = st.multiselect("Modalidade", modalidades, default=modalidades, key="filtro_modalidade")
+            with col_f2:
+                respondentes = sorted(df_atual["Respondente"].dropna().unique()) if "Respondente" in df_atual else []
+                filtro_respondente = st.multiselect("Respondente", respondentes, default=respondentes, key="filtro_respondente")
+
+            col_f3, col_f4 = st.columns(2)
+            with col_f3:
+                cursos = sorted(df_atual["Curso"].dropna().unique()) if "Curso" in df_atual else []
+                filtro_curso = st.multiselect("Curso", cursos, default=cursos, key="filtro_curso")
+            with col_f4:
+                categorias = sorted(df_atual["Categoria"].dropna().unique()) if "Categoria" in df_atual else []
+                filtro_categoria = st.multiselect("Categoria", categorias, default=categorias, key="filtro_categoria")
+
+            # Perguntas dependentes
+            df_temp = df_atual.copy()
+            if filtro_modalidade:
+                df_temp = df_temp[df_temp["Modalidade"].isin(filtro_modalidade)]
+            if filtro_respondente:
+                df_temp = df_temp[df_temp["Respondente"].isin(filtro_respondente)]
+            if filtro_curso:
+                df_temp = df_temp[df_temp["Curso"].isin(filtro_curso)]
+            if filtro_categoria:
+                df_temp = df_temp[df_temp["Categoria"].isin(filtro_categoria)]
+            perguntas = sorted(df_temp["Pergunta"].dropna().unique()) if "Pergunta" in df_temp else []
+            filtro_pergunta = st.multiselect("Pergunta", perguntas, default=perguntas, key="filtro_pergunta")
+
+            # Aplicar todos os filtros
+            df_filtrado = df_atual.copy()
+            if filtro_modalidade:
+                df_filtrado = df_filtrado[df_filtrado["Modalidade"].isin(filtro_modalidade)]
+            if filtro_respondente:
+                df_filtrado = df_filtrado[df_filtrado["Respondente"].isin(filtro_respondente)]
+            if filtro_curso:
+                df_filtrado = df_filtrado[df_filtrado["Curso"].isin(filtro_curso)]
+            if filtro_categoria:
+                df_filtrado = df_filtrado[df_filtrado["Categoria"].isin(filtro_categoria)]
+            if filtro_pergunta:
+                df_filtrado = df_filtrado[df_filtrado["Pergunta"].isin(filtro_pergunta)]
+
+            if not df_filtrado.empty:
+                st.markdown(f"**📋 Visualização filtrada:** {len(df_filtrado)} registos")
+                st.dataframe(df_filtrado.drop(columns=["Apagar"], errors="ignore"), use_container_width=True)
+            else:
+                st.info("Nenhum registo corresponde aos filtros selecionados.")
         else:
-            st.warning("⚠️ Selecione os itens nos filtros acima para visualizar os dados.")
+            st.info("Carregue ficheiros para ativar os filtros.")
+
+    # ── Adicionar linhas ──────────────────────────────────────
+    st.markdown("---")
+    st.subheader("➕ Adicionar linhas")
+    col_add1, col_add2, col_add3 = st.columns([1, 1, 2])
+    with col_add1:
+        if st.button("➕ Inserir 1 linha", use_container_width=True):
+            nova_linha = pd.DataFrame({col: [None] for col in colunas_dados})
+            nova_linha.insert(0, "Apagar", False)
+            st.session_state.quest_editaveis = pd.concat([st.session_state.quest_editaveis, nova_linha], ignore_index=True)
+            st.rerun()
+    with col_add2:
+        num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=100, value=5, step=1, key="num_linhas_quest")
+    with col_add3:
+        if st.button("➕ Adicionar múltiplas linhas vazias", use_container_width=True):
+            novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
+            novas_linhas.insert(0, "Apagar", False)
+            st.session_state.quest_editaveis = pd.concat([st.session_state.quest_editaveis, novas_linhas], ignore_index=True)
+            st.rerun()
+
+    # ── Tabela editável ───────────────────────────────────────
+    st.markdown("---")
+    st.subheader("✏️ Tabela de questionários (edição completa)")
+
+    edited_df = st.data_editor(
+        df_atual,
+        use_container_width=True,
+        num_rows="dynamic",
+        height=420,
+        key="quest_editor",
+        column_config={"Apagar": st.column_config.CheckboxColumn("Apagar", default=False)},
+    )
+
+    if not edited_df.equals(df_atual):
+        st.session_state.quest_editaveis = edited_df
+        st.rerun()
+
+    # ── Botões de eliminação ──────────────────────────────────
+    st.markdown("---")
+    cb1, cb2 = st.columns(2)
+    with cb1:
+        if st.button("🗑️ Limpar todos os dados", use_container_width=True):
+            st.session_state.quest_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+            st.rerun()
+    with cb2:
+        if st.button("✖️ Apagar selecionados", use_container_width=True):
+            df = st.session_state.quest_editaveis.copy()
+            mask = df.get("Apagar", pd.Series(False, index=df.index)) == True
+            if mask.any():
+                df = df[~mask].reset_index(drop=True)
+                df["Apagar"] = False
+                st.session_state.quest_editaveis = df
+                st.rerun()
+            else:
+                st.warning("Nenhuma linha marcada.")
+
+    # ── Métricas ──────────────────────────────────────────────
+    df_m = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore")
+    df_m = df_m.dropna(subset=["Curso"])
+    df_m = df_m[df_m["Curso"].astype(str).str.strip().isin(["", "None", "nan"]) == False]
+
+    if not df_m.empty:
+        st.markdown("---")
+        st.subheader("📊 Resumo Geral")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Centros",   df_m["Centro"].nunique() if "Centro" in df_m else 0)
+        m2.metric("Cursos",    df_m["Curso"].nunique())
+        m3.metric("Registos",  len(df_m))
+        media_col = pd.to_numeric(df_m["Média"], errors="coerce").dropna()
+        media_geral = media_col.mean() if not media_col.empty else 0
+        m4.metric("Média Geral", f"{media_geral:.2f}")
+
+        if "Centro" in df_m.columns:
+            centros = sorted(df_m["Centro"].dropna().unique())
+            if centros:
+                st.caption(f"🏢 Centros carregados: {', '.join(centros)}")
+
+        if all(c in df_m.columns for c in ["Centro", "Respondente", "Categoria"]):
+            df_m["Média_num"] = pd.to_numeric(df_m["Média"], errors="coerce")
+            resumo = (
+                df_m.groupby(["Centro", "Respondente", "Categoria"])["Média_num"]
+                .mean()
+                .round(3)
+                .reset_index()
+                .rename(columns={"Média_num": "Média Categoria"})
+            )
+            if not resumo.empty:
+                st.subheader("📋 Médias por Centro / Respondente / Categoria")
+                st.dataframe(resumo, use_container_width=True, hide_index=True)
     else:
-        st.info("📂 Carregue ficheiros de Questionários na barra lateral para ativar os filtros.")
+        st.info("ℹ️ Carregue ficheiros Excel para ver os dados.")
+
 
 if __name__ == "__main__":
     mostrar_questionarios()

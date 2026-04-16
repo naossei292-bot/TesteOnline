@@ -25,7 +25,7 @@ def mostrar_qualidade():
         df_cursos_raw = None
 
     # ----- Dados dos Questionários (se existirem) -----
-    df_quest_raw = st.session_state.get("quest_df", None)
+    df_quest_raw = st.session_state.get("quest_editaveis", None)
 
     # Deve ser:
     df_c_filt = aplicar_filtros(df_cursos_raw) if df_cursos_raw is not None else None
@@ -66,16 +66,19 @@ def mostrar_qualidade():
         
         # Cálculo dos KPIs
         if has_quest:
-            media_sat = df_q_filt["Media"].mean()
+            media_sat = df_q_filt["Média"].mean()
             META_SAT = st.session_state.obj_satisfacao
         else:
             media_sat = 0
             META_SAT = st.session_state.obj_satisfacao
         
         if has_cursos:
-            c_insc = get_col(df_cursos, "inscritos")
-            c_conc = get_col(df_cursos, "concluidos")
-            t_conc = (df_cursos[c_conc].sum() / df_cursos[c_insc].sum() * 100) if c_insc and c_conc else 0
+            if "Inscritos" in df_cursos.columns and "Concluídos" in df_cursos.columns:
+                total_insc = df_cursos["Inscritos"].sum()
+                total_conc = df_cursos["Concluídos"].sum()
+                t_conc = (total_conc / total_insc * 100) if total_insc > 0 else 0
+            else:
+                t_conc = 0
             META_CONC = st.session_state.obj_conclusao
             
             c_aval = get_col(df_cursos, "avaliados")
@@ -99,7 +102,7 @@ def mostrar_qualidade():
         
         if has_quest:
             df_formador = df_q_filt[df_q_filt["Respondente"].str.contains("Formador", na=False)]
-            media_formador = df_formador["Media"].mean() if not df_formador.empty else None
+            media_formador = df_formador["Média"].mean() if not df_formador.empty else None
             META_FORMADOR = st.session_state.obj_formador
         else:
             media_formador = None
@@ -878,10 +881,10 @@ def mostrar_qualidade():
 
             with col_rad:
                 st.subheader("Equilíbrio de Qualidade (Radar)")
-                cat_stats = df_q_filt.groupby("Categoria")["Media"].mean().reset_index()
+                cat_stats = df_q_filt.groupby("Categoria")["Média"].mean().reset_index()
                 fig_radar = go.Figure()
                 fig_radar.add_trace(go.Scatterpolar(
-                    r=cat_stats["Media"], 
+                    r=cat_stats["Média"], 
                     theta=cat_stats["Categoria"], 
                     fill='toself', 
                     name='Média'
@@ -891,11 +894,11 @@ def mostrar_qualidade():
 
             with col_bar:
                 st.subheader("Presencial vs. À Distância")
-                mod_comp = df_q_filt.groupby(["Categoria", "Modalidade"])["Media"].mean().reset_index()
+                mod_comp = df_q_filt.groupby(["Categoria", "Modalidade"])["Média"].mean().reset_index()
                 fig_mod = px.bar(
                     mod_comp, 
                     x="Categoria", 
-                    y="Media", 
+                    y="Média", 
                     color="Modalidade", 
                     barmode="group", 
                     range_y=[0,5]

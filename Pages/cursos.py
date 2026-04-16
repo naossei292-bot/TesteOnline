@@ -1,21 +1,47 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+
+def converter_colunas_numericas(df: pd.DataFrame) -> pd.DataFrame:
+    """Converte colunas relevantes para numérico (float)."""
+    colunas_numericas = ["Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado", "Valor da Ação", "Valor Total"]
+    for col in colunas_numericas:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+def calcular_valor_total(df: pd.DataFrame) -> pd.DataFrame:
+    """Calcula Valor Total = Valor da Ação * Inscritos, se aplicável."""
+    df = df.copy()
+    if "Valor da Ação" in df.columns and "Valor Total" in df.columns and "Inscritos" in df.columns:
+        # Garantir que são numéricos
+        df["Valor da Ação"] = pd.to_numeric(df["Valor da Ação"], errors="coerce")
+        df["Inscritos"] = pd.to_numeric(df["Inscritos"], errors="coerce")
+        df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce")
+        # Apenas onde Valor da Ação não é NaN e Valor Total é NaN
+        mask = (df["Valor da Ação"].notna()) & (df["Valor Total"].isna())
+        if mask.any():
+            df.loc[mask, "Valor Total"] = df.loc[mask, "Valor da Ação"] * df.loc[mask, "Inscritos"]
+    return df
+
+def normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica todas as normalizações: conversão numérica e cálculo do Valor Total."""
+    df = converter_colunas_numericas(df)
+    df = calcular_valor_total(df)
+    return df
 
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
 
-    # Todas as colunas de dados possíveis (exclui "Apagar")
     todas_colunas_dados = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
         "Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado",
         "Formador", "Valor da Ação", "Valor Total"
     ]
 
-    # --- Seletor de colunas (mantido no session_state) ---
     if "colunas_selecionadas" not in st.session_state:
-        st.session_state.colunas_selecionadas = todas_colunas_dados.copy()  # por padrão, todas
+        st.session_state.colunas_selecionadas = todas_colunas_dados.copy()
 
-    # Mostrar o multiselect na interface
     st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
     colunas_escolhidas = st.multiselect(
         "Selecione as colunas (a coluna 'Apagar' é sempre mostrada):",
@@ -24,94 +50,101 @@ def mostrar_cursos():
         key="seletor_colunas"
     )
 
-    # Se o utilizador alterou a seleção, atualizar o estado e ajustar a tabela
     if set(colunas_escolhidas) != set(st.session_state.colunas_selecionadas):
         st.session_state.colunas_selecionadas = colunas_escolhidas
-        # Reestruturar a tabela existente para conter apenas as colunas selecionadas
         if 'acoes_editaveis' in st.session_state and not st.session_state.acoes_editaveis.empty:
             df_atual = st.session_state.acoes_editaveis
-            # Preservar a coluna "Apagar" (primeira)
             if "Apagar" in df_atual.columns:
                 apagar = df_atual["Apagar"]
                 outras = {col: df_atual[col] for col in st.session_state.colunas_selecionadas if col in df_atual.columns}
-                # Criar novo DataFrame com as colunas selecionadas + Apagar
                 novo_df = pd.DataFrame(outras)
                 novo_df.insert(0, "Apagar", apagar)
-                st.session_state.acoes_editaveis = novo_df
+                st.session_state.acoes_editaveis = normalizar_dataframe(novo_df)
             else:
                 st.session_state.acoes_editaveis = pd.DataFrame(columns=["Apagar"] + st.session_state.colunas_selecionadas)
         st.rerun()
 
-    # A partir daqui, usamos st.session_state.colunas_selecionadas
     colunas_dados = st.session_state.colunas_selecionadas
     colunas_com_apagar = ["Apagar"] + colunas_dados
 
-    # Inicializar dados no session_state
     if 'acoes_editaveis' not in st.session_state:
         st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+    else:
+        # Garantir normalização dos dados existentes (útil para migração)
+        st.session_state.acoes_editaveis = normalizar_dataframe(st.session_state.acoes_editaveis)
 
-    # ---------- Carregar ficheiro (apenas colunas selecionadas) ----------
+    # ---------- Carregar ficheiro ----------
     st.subheader("📤 Carregar dados a partir de ficheiro")
     col1, col2 = st.columns(2)
     with col1:
         modo_carga = st.radio("Modo de carregamento:", ["Substituir dados existentes", "Adicionar ao final"], horizontal=True, key="modo_carga_acoes")
     with col2:
-        ficheiro_carga = st.file_uploader("Carregar Excel ou CSV", type=None, key="carga_acoes_upload")
+        ficheiros_carga = st.file_uploader(
+            "Carregar um ou mais ficheiros (Excel ou CSV)",
+            type=None,
+            accept_multiple_files=True,
+            key="carga_acoes_upload"
+        )
 
-    if ficheiro_carga is not None:
-        try:
-            nome_ficheiro = ficheiro_carga.name.lower()
-            if nome_ficheiro.endswith('.csv'):
-                df_novo = pd.read_csv(ficheiro_carga)
-            elif nome_ficheiro.endswith('.xlsx'):
-                df_novo = pd.read_excel(ficheiro_carga)
-            else:
-                st.error("Formato não suportado. Carregue um ficheiro .csv ou .xlsx")
-                st.stop()
+    if ficheiros_carga:
+        lista_dfs = []
+        for ficheiro in ficheiros_carga:
+            nome = ficheiro.name.lower()
+            try:
+                if nome.endswith('.csv'):
+                    df_parcial = pd.read_csv(ficheiro)
+                elif nome.endswith('.xlsx'):
+                    df_parcial = pd.read_excel(ficheiro)
+                else:
+                    st.warning(f"Ficheiro ignorado (formato não suportado): {ficheiro.name}")
+                    continue
 
-            df_novo.columns = df_novo.columns.str.strip()
-            mapeamento = {
-                'status': 'Status', 'acao': 'Ação',
-                'dataini': 'Data Inicial', 'datafim': 'Data Final',
-                'centro': 'Centro',
-                'inscritos': 'Inscritos', 'concluidos': 'Concluídos',
-                'avaliados': 'Avaliados', 'aprovados': 'Aprovados',
-                'planeado': 'Planeado', 'formador': 'Formador',
-                'valorAcao': 'Valor da Ação', 'valorTotal': 'Valor Total',
-            }
-            df_novo.rename(columns={k: v for k, v in mapeamento.items() if k in df_novo.columns}, inplace=True)
-            # Manter apenas as colunas que estão selecionadas e existem no ficheiro
-            colunas_importar = [c for c in colunas_dados if c in df_novo.columns]
-            df_novo = df_novo[colunas_importar]
-            # Adicionar colunas selecionadas que estejam em falta (com None)
-            for col in colunas_dados:
-                if col not in df_novo.columns:
-                    df_novo[col] = None
-            df_novo = df_novo[colunas_dados]  # reordena
-            df_novo.insert(0, "Apagar", False)
+                df_parcial.columns = df_parcial.columns.str.strip()
+                mapeamento = {
+                    'status': 'Status', 'acao': 'Ação',
+                    'dataini': 'Data Inicial', 'datafim': 'Data Final',
+                    'centro': 'Centro',
+                    'inscritos': 'Inscritos', 'concluidos': 'Concluídos',
+                    'avaliados': 'Avaliados', 'aprovados': 'Aprovados',
+                    'planeado': 'Planeado', 'formador': 'Formador',
+                    'valorAcao': 'Valor da Ação', 'valorTotal': 'Valor Total',
+                }
+                df_parcial.rename(columns={k: v for k, v in mapeamento.items() if k in df_parcial.columns}, inplace=True)
 
+                for col in colunas_dados:
+                    if col not in df_parcial.columns:
+                        df_parcial[col] = None
+                df_parcial = df_parcial[colunas_dados]
+                df_parcial.insert(0, "Apagar", False)
+
+                # Normalizar (converter números e calcular Valor Total)
+                df_parcial = normalizar_dataframe(df_parcial)
+                lista_dfs.append(df_parcial)
+            except Exception as e:
+                st.error(f"Erro ao ler {ficheiro.name}: {e}")
+
+        if lista_dfs:
+            df_novo = pd.concat(lista_dfs, ignore_index=True)
             if modo_carga == "Substituir dados existentes":
                 st.session_state.acoes_editaveis = df_novo
             else:
-                st.session_state.acoes_editaveis = pd.concat([st.session_state.acoes_editaveis, df_novo], ignore_index=True)
-            st.success(f"✅ Dados carregados com sucesso! ({len(df_novo)} linhas)")
+                st.session_state.acoes_editaveis = pd.concat(
+                    [st.session_state.acoes_editaveis, df_novo], ignore_index=True
+                )
+            st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
             st.rerun()
-        except Exception as e:
-            st.error(f"Erro ao ler o ficheiro: {e}")
 
     st.markdown("---")
     st.subheader("✏️ Editar tabela de ações")
 
-    # ---------- Adicionar linhas vazias (apenas colunas selecionadas) ----------
+    # ---------- Adicionar linhas vazias ----------
     st.subheader("➕ Adicionar múltiplas linhas")
     col_add1, col_add2 = st.columns([1, 2])
     with col_add1:
         num_linhas = st.number_input("Número de linhas a adicionar:", min_value=1, max_value=1000, value=5, step=1)
     with col_add2:
         if st.button("Adicionar linhas vazias"):
-            novas_linhas = pd.DataFrame(
-                {col: [None] * num_linhas for col in colunas_dados}
-            )
+            novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
             novas_linhas.insert(0, "Apagar", False)
             st.session_state.acoes_editaveis = pd.concat([st.session_state.acoes_editaveis, novas_linhas], ignore_index=True)
             st.rerun()
@@ -128,11 +161,10 @@ def mostrar_cursos():
             cols.insert(0, "Apagar")
             df_atual = df_atual[cols]
 
-    # Se houver colunas selecionadas que não estão no DataFrame (ex: adicionadas depois), adicioná‑las
     for col in colunas_dados:
         if col not in df_atual.columns:
             df_atual[col] = None
-    df_atual = df_atual[["Apagar"] + colunas_dados]  # reordena
+    df_atual = df_atual[["Apagar"] + colunas_dados]
 
     edited_df = st.data_editor(
         df_atual,
@@ -146,7 +178,9 @@ def mostrar_cursos():
     )
 
     if not edited_df.equals(df_atual):
-        st.session_state.acoes_editaveis = edited_df
+        # Normalizar os dados editados (converter números e recalcular Valor Total)
+        df_normalizado = normalizar_dataframe(edited_df)
+        st.session_state.acoes_editaveis = df_normalizado
         st.rerun()
 
     # ---------- Botões ----------
@@ -167,17 +201,18 @@ def mostrar_cursos():
                     df.drop(index=linhas_apagar, inplace=True)
                     df.reset_index(drop=True, inplace=True)
                     df["Apagar"] = False
-                    st.session_state.acoes_editaveis = df
+                    st.session_state.acoes_editaveis = normalizar_dataframe(df)
                     st.rerun()
                 else:
                     st.warning("Nenhuma linha marcada para apagar.")
             else:
                 st.warning("Coluna 'Apagar' não encontrada.")
 
-    # ---------- Métricas resumo (apenas com as colunas selecionadas) ----------
+    # ---------- Métricas resumo ----------
     df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
+    # Converter novamente (por segurança)
+    df_metricas = converter_colunas_numericas(df_metricas)
 
-    # Filtro robusto: elimina linhas sem "Ação" (se "Ação" estiver selecionada)
     if "Ação" in df_metricas.columns:
         df_metricas["Ação"] = df_metricas["Ação"].replace({"": None, "None": None, "nan": None, "NaN": None})
         df_metricas = df_metricas.dropna(subset=["Ação"])

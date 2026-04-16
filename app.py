@@ -6,10 +6,20 @@ from utils.data_utils import processar_questionarios_excel, get_col
 # --------------------------
 # CONFIGURAÇÃO DA PÁGINA
 # --------------------------
-st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
+st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide", initial_sidebar_state="collapsed")
+
+# Esconder o menu lateral automático do Streamlit
+st.markdown("""
+    <style>
+        [data-testid="stSidebarNav"] {
+            display: none;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
 
+# ... resto do código (autenticação, sidebar, etc.)
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO
 # ============================================
@@ -95,20 +105,6 @@ if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashbo
 st.sidebar.markdown("---")
 st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 
-# Uploads
-with st.sidebar.expander("📚 Dados de Cursos (Moodle)", expanded=True):
-    files_cursos = st.file_uploader("Upload CSV Cursos", type=["csv"], accept_multiple_files=True)
-    if files_cursos:
-        dfs = [pd.read_csv(f).rename(columns=lambda x: x.strip()) for f in files_cursos]
-        st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
-        st.sidebar.success(f"✅ {len(files_cursos)} ficheiro(s) carregado(s)")
-
-with st.sidebar.expander("📋 Dados de Questionários", expanded=True):
-    files_quest = st.file_uploader("Upload XLSX Questionários", type=["xlsx"], accept_multiple_files=True)
-    if files_quest:
-        dfs_q = [processar_questionarios_excel(f) for f in files_quest]
-        st.session_state.quest_df = pd.concat(dfs_q, ignore_index=True)
-        st.sidebar.success(f"✅ {len(files_quest)} ficheiro(s) carregado(s)")
 
 # Filtro global por Centro
 st.sidebar.markdown("---")
