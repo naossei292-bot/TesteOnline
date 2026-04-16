@@ -82,13 +82,16 @@ def mostrar_qualidade():
             c_aprov = get_col(df_cursos, "aprovados")
             t_aprov = (df_cursos[c_aprov].sum() / df_cursos[c_aval].sum() * 100) if c_aval and c_aprov else 0
             META_APROV = st.session_state.obj_aprovacao
-            
-            c_planeado = get_col(df_cursos, "planeado")
-            if c_planeado and c_conc:
-                t_plano = (df_cursos[c_conc].sum() / df_cursos[c_planeado].sum() * 100)
+            META_PLANO = st.session_state.obj_plano
+            if "Concluídos" in df_cursos.columns and "Planeado" in df_cursos.columns:
+                total_conc = df_cursos["Concluídos"].sum()
+                total_plan = df_cursos["Planeado"].sum()
+                if total_plan > 0:
+                    t_plano = (total_conc / total_plan) * 100
+                else:
+                    t_plano = None
             else:
                 t_plano = None
-            META_PLANO = st.session_state.obj_plano
         else:
             t_conc = t_aprov = 0
             t_plano = None
@@ -193,6 +196,59 @@ def mostrar_qualidade():
                     <div class="kpi-meta">⚠️ Adicione coluna "Planeado"</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # 👇 NOVO BOTÃO E TABELA EDITÁVEL
+            with st.expander("✏️ Editar formações realizadas / planeadas"):
+                if df_cursos is not None and not df_cursos.empty:
+                    # Verificar se as colunas necessárias existem
+                    col_id = get_col(df_cursos, "Ação")  # ou "Ação"
+                    col_conc = get_col(df_cursos, "Concluídos")
+                    col_plan = get_col(df_cursos, "Planeado")
+
+                    if col_id and col_conc and col_plan:
+                        # Criar um DataFrame apenas com as colunas de interesse
+                        df_edit = df_cursos[[col_id, col_conc, col_plan]].copy()
+                        df_edit.columns = ["ID Ação", "Formações Realizadas", "Formações Planeadas"]
+                        
+                        # Garantir que os valores são numéricos
+                        df_edit["Formações Realizadas"] = pd.to_numeric(df_edit["Formações Realizadas"], errors="coerce").fillna(0).astype(int)
+                        df_edit["Formações Planeadas"] = pd.to_numeric(df_edit["Formações Planeadas"], errors="coerce").fillna(0).astype(int)
+                        
+                        # Exibir tabela editável
+                        edited_df = st.data_editor(
+                            df_edit,
+                            use_container_width=True,
+                            num_rows="dynamic",  # permite adicionar/remover linhas se necessário
+                            column_config={
+                                "ID Ação": st.column_config.TextColumn("ID Ação", required=True),
+                                "Formações Realizadas": st.column_config.NumberColumn("Formações Realizadas", min_value=0, step=1),
+                                "Formações Planeadas": st.column_config.NumberColumn("Formações Planeadas", min_value=0, step=1),
+                            },
+                            key="planeamento_editor"
+                        )
+                        
+                        # Botão para guardar alterações
+                        if st.button("💾 Guardar alterações", key="save_planeamento"):
+                            # Atualizar o DataFrame original (df_cursos) com os valores editados
+                            for idx, row in edited_df.iterrows():
+                                acao_id = row["ID Ação"]
+                                novos_realizados = row["Formações Realizadas"]
+                                novos_planeados = row["Formações Planeadas"]
+                                
+                                # Encontrar a linha correspondente no df_cursos
+                                mask = df_cursos[col_id] == acao_id
+                                if mask.any():
+                                    df_cursos.loc[mask, col_conc] = novos_realizados
+                                    df_cursos.loc[mask, col_plan] = novos_planeados
+                            
+                            # Atualizar o session_state para persistir as alterações
+                            st.session_state.acoes_editaveis = df_cursos
+                            st.success("✅ Dados atualizados! A página vai recarregar para mostrar os novos KPIs.")
+                            st.rerun()
+                    else:
+                        st.warning("Colunas necessárias não encontradas. Verifique se existem 'Ação', 'Concluídos' e 'Planeado'.")
+                else:
+                    st.info("Nenhum curso carregado.")
         
         with col5:
             if media_formador is not None:
@@ -214,6 +270,171 @@ def mostrar_qualidade():
                 </div>
                 """, unsafe_allow_html=True)
         
+        st.markdown("---")  # separador opcional
+        col7, col8 = st.columns(2)
+
+        with col7:
+            # KPI 5.1 - Ações com mais de um formador
+            if has_cursos and "Formador" in df_cursos.columns:
+                # Função para contar formadores numa célula
+                def contar_formadores(valor):
+                    if pd.isna(valor):
+                        return 0
+                    valor_str = str(valor)
+                    # Separadores comuns: vírgula, ponto e vírgula, " e ", "/"
+                    if ',' in valor_str or ';' in valor_str or ' e ' in valor_str or '/' in valor_str:
+                        # Conta o número de nomes (simplificado)
+                        # Substituir separadores por vírgula e dividir
+                        for sep in [';', ' e ', '/']:
+                            valor_str = valor_str.replace(sep, ',')
+                        nomes = [n.strip() for n in valor_str.split(',') if n.strip()]
+                        return len(nomes)
+                    else:
+                        return 1 if valor_str.strip() else 0
+                
+                df_cursos['num_formadores'] = df_cursos['Formador'].apply(contar_formadores)
+                total_acoes = len(df_cursos)
+                acoes_multiformador = (df_cursos['num_formadores'] > 1).sum()
+                perc_multiformador = (acoes_multiformador / total_acoes * 100) if total_acoes > 0 else 0
+                
+                meta_multiformador = 20.0  # objetivo ajustável
+                delta_multiformador = perc_multiformador - meta_multiformador
+                delta_color = "▲" if delta_multiformador >= 0 else "▼"
+                
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">👥 Ações com >1 Formador</div>
+                    <div class="kpi-value">{acoes_multiformador} / {total_acoes}</div>
+                    <div class="kpi-meta">{perc_multiformador:.1f}% das ações | Meta: ≥ {meta_multiformador}% | {delta_color} {abs(delta_multiformador):.1f}%</div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">👥 Ações com >1 Formador</div>
+                    <div class="kpi-value">N/D</div>
+                    <div class="kpi-meta">⚠️ Coluna "Formador" não encontrada</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with col8:
+            # (pode deixar vazio ou colocar outro KPI, ex: média de formadores por ação)
+            if has_cursos and "Formador" in df_cursos.columns:
+                media_formadores = df_cursos['num_formadores'].mean()
+                st.markdown(f"""
+                <div class="kpi-card">
+                    <div class="kpi-title">📊 Média de Formadores por Ação</div>
+                    <div class="kpi-value">{media_formadores:.2f}</div>
+                    <div class="kpi-meta">Total de ações: {total_acoes}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ============================================
+        # KPI 5.1 – Taxa de Substituição de Formadores (CORRIGIDO)
+        # ============================================
+        st.markdown("---")
+        st.subheader("👥 Substituição de Formadores")
+
+        if has_cursos and "Formador" in df_cursos.columns and "Ação" in df_cursos.columns:
+            # Função de normalização
+            import unicodedata
+            def normalizar_string(texto):
+                if pd.isna(texto):
+                    return ""
+                texto = str(texto).strip().lower()
+                texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
+                return texto
+
+            # Guardar snapshot original (apenas na primeira vez)
+            if "formadores_originais" not in st.session_state:
+                originais = df_cursos[["Ação", "Formador"]].copy()
+                originais["Formador_Norm"] = originais["Formador"].apply(normalizar_string)
+                st.session_state.formadores_originais = originais
+                # Também guardar os valores originais para exibição (opcional)
+                st.session_state.formadores_originais_exibicao = df_cursos[["Ação", "Formador"]].copy()
+
+            # Preparar DataFrame para edição
+            df_edit_formadores = df_cursos[["Ação", "Formador"]].copy()
+            df_edit_formadores.columns = ["ID Ação", "Formador Atual"]
+            # Adicionar coluna com o original (apenas para referência visual)
+            original_map = st.session_state.formadores_originais_exibicao.set_index("Ação")["Formador"].to_dict()
+            df_edit_formadores["Formador Original"] = df_edit_formadores["ID Ação"].map(original_map)
+            df_edit_formadores = df_edit_formadores[["ID Ação", "Formador Original", "Formador Atual"]]
+
+            st.info("✏️ Edite o campo 'Formador Atual' para simular uma substituição. O KPI será atualizado automaticamente.")
+
+            # Data editor
+            edited_formadores = st.data_editor(
+                df_edit_formadores,
+                use_container_width=True,
+                column_config={
+                    "ID Ação": st.column_config.TextColumn("ID Ação", disabled=True),
+                    "Formador Original": st.column_config.TextColumn("Formador Original", disabled=True),
+                    "Formador Atual": st.column_config.TextColumn("Formador Atual"),
+                },
+                key="formadores_editor"
+            )
+
+            # Botão guardar
+            col_btn1, col_btn2 = st.columns([1, 5])
+            with col_btn1:
+                if st.button("💾 Guardar alterações de formadores", key="save_formadores"):
+                    for idx, row in edited_formadores.iterrows():
+                        acao = row["ID Ação"]
+                        novo_formador = row["Formador Atual"]
+                        mask = df_cursos["Ação"] == acao
+                        if mask.any():
+                            df_cursos.loc[mask, "Formador"] = novo_formador
+                    st.session_state.acoes_editaveis = df_cursos
+                    # Atualizar também o snapshot de exibição? Não, porque mantemos o original.
+                    st.success("✅ Formadores atualizados! A página vai recarregar.")
+                    st.rerun()
+
+            # Calcular substituições usando normalização (sem precisar de guardar novamente)
+            # Obter mapas normalizados
+            original_norm_map = st.session_state.formadores_originais.set_index("Ação")["Formador_Norm"].to_dict()
+            substituicoes = 0
+            total = len(edited_formadores)
+            for idx, row in edited_formadores.iterrows():
+                acao = row["ID Ação"]
+                atual = row["Formador Atual"]
+                atual_norm = normalizar_string(atual)
+                original_norm = original_norm_map.get(acao, "")
+                if atual_norm != original_norm:
+                    substituicoes += 1
+
+            taxa_substituicao = (substituicoes / total * 100) if total > 0 else 0
+            meta_subst = 10.0
+            delta_subst = taxa_substituicao - meta_subst
+            delta_str = f"▲ {delta_subst:.1f}%" if delta_subst > 0 else f"▼ {abs(delta_subst):.1f}%"
+
+            col_kpi1, col_kpi2 = st.columns(2)
+            with col_kpi1:
+                st.metric(
+                    label="🔄 Taxa de Substituição de Formadores",
+                    value=f"{taxa_substituicao:.1f}%",
+                    delta=delta_str,
+                    help="Percentagem de cursos onde o formador atual é diferente do original. Objetivo: ≤ 10%"
+                )
+            with col_kpi2:
+                st.metric(
+                    label="📊 Cursos com substituição",
+                    value=f"{substituicoes} / {total}",
+                    help="Número de cursos onde o formador foi trocado"
+                )
+
+            # Botão para redefinir base de comparação
+            if st.button("🔄 Redefinir formadores originais (basear nos atuais)"):
+                # Atualizar snapshot com os valores atuais normalizados
+                novos_originais = df_cursos[["Ação", "Formador"]].copy()
+                novos_originais["Formador_Norm"] = novos_originais["Formador"].apply(normalizar_string)
+                st.session_state.formadores_originais = novos_originais
+                st.session_state.formadores_originais_exibicao = df_cursos[["Ação", "Formador"]].copy()
+                st.success("Base de comparação redefinida. A taxa de substituição voltará a 0%.")
+                st.rerun()
+        else:
+            st.info("Carregue um ficheiro de cursos com as colunas 'Ação' e 'Formador' para calcular a taxa de substituição.")
+
         # ============================================
         # KPI 6 e 7 – Incidentes Operacionais e TMRP (COM PERSISTÊNCIA)
         # ============================================
