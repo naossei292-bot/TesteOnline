@@ -9,31 +9,7 @@ from utils.data_utils import processar_questionarios_excel, get_col
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
-# ============================================
-# MENU DE NAVEGAÇÃO
-# ============================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação")
 
-# Botões de navegação na sidebar
-if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-    st.session_state.pagina = "📚 Cursos"
-    st.rerun()
-
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
-    st.rerun()
-
-if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
-    st.session_state.pagina = "🎯 Gestão de Qualidade"
-    st.rerun()
-
-if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-    st.session_state.pagina = "⚔️ Comparador Versus"
-    st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO
 # ============================================
@@ -66,16 +42,13 @@ def verificar_autenticacao():
     
     return False
 
-# Verificar autenticação
+# Se não autenticado, mostra apenas o formulário de login (sem sidebar)
 if not verificar_autenticacao():
     st.stop()
 
-# Botão de logout
-col_logout1, col_logout2 = st.columns([6, 1])
-with col_logout2:
-    if st.button("🚪 Sair", help="Terminar sessão"):
-        st.session_state.clear()
-        st.rerun()
+# ============================================
+# A PARTIR DAQUI, UTILIZADOR AUTENTICADO
+# ============================================
 
 # ============================================
 # INICIALIZAÇÃO DO ESTADO
@@ -90,10 +63,35 @@ if 'pagina' not in st.session_state:
     st.session_state.pagina = "📚 Cursos"
 
 # ============================================
-# BARRA LATERAL
+# BARRA LATERAL (só aparece após login)
 # ============================================
+
 st.sidebar.title("📁 Gestão de Dados")
 
+# Menu de navegação
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação")
+
+if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
+    st.session_state.pagina = "📚 Cursos"
+    st.rerun()
+
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
+    st.rerun()
+
+if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
+    st.session_state.pagina = "🎯 Gestão de Qualidade"
+    st.rerun()
+
+if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+    st.session_state.pagina = "⚔️ Comparador Versus"
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
+
+# Uploads
 with st.sidebar.expander("📚 Dados de Cursos (Moodle)", expanded=True):
     files_cursos = st.file_uploader("Upload CSV Cursos", type=["csv"], accept_multiple_files=True)
     if files_cursos:
@@ -122,14 +120,17 @@ st.session_state.filtro_centro = st.sidebar.multiselect(
     default=st.session_state.filtro_centro
 )
 
-
+# Botão de logout (agora na sidebar, mais intuitivo)
+st.sidebar.markdown("---")
+if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
+    st.session_state.clear()
+    st.rerun()
 
 # ============================================
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
 # ============================================
 
 if st.session_state.pagina == "📚 Cursos":
-    # Importar e executar a página de cursos
     from Pages.cursos import mostrar_cursos
     mostrar_cursos()
 
