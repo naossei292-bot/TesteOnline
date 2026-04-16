@@ -7,19 +7,39 @@ from utils.data_utils import get_col, aplicar_filtros
 st.set_page_config(page_title="Gestão de Qualidade", layout="wide")
 
 def mostrar_qualidade():
-    """Função principal da página de qualidade"""
     st.header("🎯 Scorecard de Qualidade Pedagógica")
 
-    df_c_filt = aplicar_filtros(st.session_state.cursos_df)
-    df_q_filt = aplicar_filtros(st.session_state.quest_df)
+    # ----- Dados dos Cursos (da página "Análise de Formações") -----
+    df_cursos_raw = st.session_state.get("acoes_editaveis", None)
+    if df_cursos_raw is not None and not df_cursos_raw.empty:
+        if "Apagar" in df_cursos_raw.columns:
+            df_cursos_raw = df_cursos_raw.drop(columns=["Apagar"])
+        # Conversões de tipo
+        for col in ["Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado", "Valor da Ação", "Valor Total"]:
+            if col in df_cursos_raw.columns:
+                df_cursos_raw[col] = pd.to_numeric(df_cursos_raw[col], errors="coerce")
+        for col in ["Data Inicial", "Data Final"]:
+            if col in df_cursos_raw.columns:
+                df_cursos_raw[col] = pd.to_datetime(df_cursos_raw[col], errors="coerce", dayfirst=True)
+    else:
+        df_cursos_raw = None
 
-    # Inicializar objetivos
-    if 'cursos_df' not in st.session_state:
-        st.session_state.cursos_df = None
-    if 'quest_df' not in st.session_state:
-        st.session_state.quest_df = None
+    # ----- Dados dos Questionários (se existirem) -----
+    df_quest_raw = st.session_state.get("quest_df", None)
+
+    # Deve ser:
+    df_c_filt = aplicar_filtros(df_cursos_raw) if df_cursos_raw is not None else None
+    df_q_filt = aplicar_filtros(df_quest_raw) if df_quest_raw is not None else None
+
+    has_cursos = df_c_filt is not None and not df_c_filt.empty   # booleano
+    has_quest = df_q_filt is not None and not df_q_filt.empty
+
+    df_cursos = df_c_filt   # <--- NOVA variável para o DataFrame
+
+    # Inicializar objetivos (mantém o que já tinhas)
     if 'obj_satisfacao' not in st.session_state:
         st.session_state.obj_satisfacao = 4.2
+    # ... resto das inicializações
     if 'obj_conclusao' not in st.session_state:
         st.session_state.obj_conclusao = 85.0
     if 'obj_aprovacao' not in st.session_state:
@@ -41,8 +61,6 @@ def mostrar_qualidade():
     if "conformidade_filename" not in st.session_state:
         st.session_state.conformidade_filename = None
 
-    has_cursos = df_c_filt is not None and not df_c_filt.empty
-    has_quest = df_q_filt is not None and not df_q_filt.empty
 
     if has_cursos or has_quest:
         
@@ -55,19 +73,19 @@ def mostrar_qualidade():
             META_SAT = st.session_state.obj_satisfacao
         
         if has_cursos:
-            c_insc = get_col(df_c_filt, "inscritos")
-            c_conc = get_col(df_c_filt, "concluidos")
-            t_conc = (df_c_filt[c_conc].sum() / df_c_filt[c_insc].sum() * 100) if c_insc and c_conc else 0
+            c_insc = get_col(df_cursos, "inscritos")
+            c_conc = get_col(df_cursos, "concluidos")
+            t_conc = (df_cursos[c_conc].sum() / df_cursos[c_insc].sum() * 100) if c_insc and c_conc else 0
             META_CONC = st.session_state.obj_conclusao
             
-            c_aval = get_col(df_c_filt, "avaliados")
-            c_aprov = get_col(df_c_filt, "aprovados")
-            t_aprov = (df_c_filt[c_aprov].sum() / df_c_filt[c_aval].sum() * 100) if c_aval and c_aprov else 0
+            c_aval = get_col(df_cursos, "avaliados")
+            c_aprov = get_col(df_cursos, "aprovados")
+            t_aprov = (df_cursos[c_aprov].sum() / df_cursos[c_aval].sum() * 100) if c_aval and c_aprov else 0
             META_APROV = st.session_state.obj_aprovacao
             
-            c_planeado = get_col(df_c_filt, "planeado")
+            c_planeado = get_col(df_cursos, "planeado")
             if c_planeado and c_conc:
-                t_plano = (df_c_filt[c_conc].sum() / df_c_filt[c_planeado].sum() * 100)
+                t_plano = (df_cursos[c_conc].sum() / df_cursos[c_planeado].sum() * 100)
             else:
                 t_plano = None
             META_PLANO = st.session_state.obj_plano
@@ -356,7 +374,7 @@ def mostrar_qualidade():
                 df_recl = None
 
         # Calcular e exibir o KPI 8
-        if df_recl is not None and has_cursos:
+        if df_recl is not None and df_cursos is not None:
             # Aplicar filtro de centro se existir coluna 'Centro'
             if st.session_state.filtro_centro and 'Centro' in df_recl.columns:
                 df_recl = df_recl[df_recl['Centro'].isin(st.session_state.filtro_centro)]
@@ -364,9 +382,9 @@ def mostrar_qualidade():
             total_reclamacoes = len(df_recl)
             
             # Total de formandos (inscritos) a partir dos cursos filtrados
-            c_insc = get_col(df_c_filt, "inscritos")
+            c_insc = get_col(df_cursos, "inscritos")
             if c_insc:
-                total_formandos = df_c_filt[c_insc].sum()
+                total_formandos = df_cursos[c_insc].sum()
             else:
                 total_formandos = 0
             
