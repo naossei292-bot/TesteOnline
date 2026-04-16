@@ -525,13 +525,29 @@ def mostrar_qualidade():
 
 
 
-        # ============================================
+                # ============================================
         # KPI 10 – Conformidade Documental (DGERT/PSP)
         # ============================================
         st.markdown("---")
         st.subheader("📄 Conformidade Documental (DGERT/PSP)")
 
         # Inicializar estado para conformidade
+        if "conformidade_df" not in st.session_state:
+            st.session_state.conformidade_df = None
+        if "conformidade_filename" not in st.session_state:
+            st.session_state.conformidade_filename = None
+
+        # Função auxiliar para normalizar e verificar se é conforme
+        def is_conforme(valor):
+            if pd.isna(valor):
+                return False
+            # Converter para string, minúsculas e remover acentos
+            import unicodedata
+            valor_str = str(valor).lower()
+            # Remover acentos (ex: "não" -> "nao")
+            valor_str = unicodedata.normalize('NFKD', valor_str).encode('ASCII', 'ignore').decode('ASCII')
+            # Verificar se é considerado conforme
+            return valor_str in ['sim', 's', '1', 'true']
 
         # Persistência
         if st.session_state.conformidade_df is not None:
@@ -569,14 +585,8 @@ def mostrar_qualidade():
             
             if not df_conf.empty:
                 total_docs = len(df_conf)
-                # Contar conformes
-                if 'Conforme' in df_conf.columns:
-                    if df_conf['Conforme'].dtype == 'object':
-                        conformes = (df_conf['Conforme'].str.lower() == 'sim').sum()
-                    else:
-                        conformes = (df_conf['Conforme'] == 1).sum()
-                else:
-                    conformes = 0
+                # Contar conformes usando a função normalizada
+                conformes = df_conf['Conforme'].apply(is_conforme).sum()
                 
                 taxa_conformidade = (conformes / total_docs) * 100 if total_docs > 0 else 0
                 meta_conformidade = 100.0
@@ -592,8 +602,8 @@ def mostrar_qualidade():
                 
                 # Se não for 100%, mostrar detalhes das não conformidades
                 if taxa_conformidade < 100:
-                    st.warning(f"⚠️ Atenção: {total_docs - conformes} documento(s) não conforme(s). Ação corretiva necessária.")
-                    nao_conformes = df_conf[df_conf['Conforme'].astype(str).str.lower() != 'sim']
+                    nao_conformes = df_conf[~df_conf['Conforme'].apply(is_conforme)]
+                    st.warning(f"⚠️ Atenção: {len(nao_conformes)} documento(s) não conforme(s). Ação corretiva necessária.")
                     with st.expander("📋 Documentos não conformes"):
                         st.dataframe(nao_conformes, use_container_width=True)
                 else:
@@ -601,8 +611,8 @@ def mostrar_qualidade():
                 
                 # Gráfico de conformidade por curso (opcional)
                 if 'Curso' in df_conf.columns:
-                    conf_por_curso = df_conf.groupby('Curso')['Conforme'].apply(
-                        lambda x: (x.astype(str).str.lower() == 'sim').sum() / len(x) * 100
+                    conf_por_curso = df_conf.groupby('Curso').apply(
+                        lambda g: (g['Conforme'].apply(is_conforme).sum() / len(g)) * 100
                     ).reset_index(name='Taxa_Conformidade_%')
                     fig_conf = px.bar(
                         conf_por_curso,
@@ -621,7 +631,6 @@ def mostrar_qualidade():
                 st.info("Nenhum dado de conformidade após aplicação dos filtros.")
         else:
             st.info("⬆️ Carregue um ficheiro Excel com os dados de Conformidade Documental para visualizar o KPI 10.")
-
 
         # Visualizações adicionais
         if has_quest:
