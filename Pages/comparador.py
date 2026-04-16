@@ -11,6 +11,11 @@ def mostrar_comparador():
     """Função principal da página de comparador"""
     st.header("⚔️ Comparador entre Centros")
 
+    if 'cursos_df' not in st.session_state:
+        st.session_state.cursos_df = None
+    if 'quest_df' not in st.session_state:
+        st.session_state.quest_df = None
+
     df_c = st.session_state.cursos_df
     df_q = st.session_state.quest_df
 

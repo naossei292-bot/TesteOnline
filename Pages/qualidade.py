@@ -14,6 +14,10 @@ def mostrar_qualidade():
     df_q_filt = aplicar_filtros(st.session_state.quest_df)
 
     # Inicializar objetivos
+    if 'cursos_df' not in st.session_state:
+        st.session_state.cursos_df = None
+    if 'quest_df' not in st.session_state:
+        st.session_state.quest_df = None
     if 'obj_satisfacao' not in st.session_state:
         st.session_state.obj_satisfacao = 4.2
     if 'obj_conclusao' not in st.session_state:

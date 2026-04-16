@@ -88,6 +88,10 @@ if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="
     st.session_state.pagina = "⚔️ Comparador Versus"
     st.rerun()
 
+if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
+    st.session_state.pagina = "📊 Dashboard"
+    st.rerun()
+
 st.sidebar.markdown("---")
 st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 
@@ -145,3 +149,7 @@ elif st.session_state.pagina == "🎯 Gestão de Qualidade":
 elif st.session_state.pagina == "⚔️ Comparador Versus":
     from Pages.comparador import mostrar_comparador
     mostrar_comparador()
+
+elif st.session_state.pagina == "📊 Dashboard":
+    from Pages.dashboardformacoes import mostrar_dashboard
+    mostrar_dashboard()
