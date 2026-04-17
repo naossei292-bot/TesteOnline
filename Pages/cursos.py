@@ -35,6 +35,11 @@ def mostrar_cursos():
     if "editor_key_counter" not in st.session_state:
         st.session_state.editor_key_counter = 0
 
+    # Limpar o parâmetro de refresh após o carregamento
+    if "refresh_trigger" in st.query_params:
+        # Remove o parâmetro para não ficar na URL
+        del st.query_params["refresh_trigger"]
+
     todas_colunas_dados = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
         "Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado",
@@ -150,8 +155,20 @@ def mostrar_cursos():
             st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
             st.rerun()
 
-    st.markdown("---")
+        st.markdown("---")
     st.subheader("✏️ Editar tabela de ações")
+
+    # Botão para forçar atualização manual (recria o placeholder)
+    col_upd1, col_upd2 = st.columns([1, 5])
+    with col_upd1:
+        if st.button("🔄 Atualizar Tabela", use_container_width=True, key="btn_refresh"):
+            # Incrementa o parâmetro refresh na URL
+            import time
+
+            # Gera um timestamp único
+            timestamp = int(time.time())
+            st.query_params["refresh_trigger"] = str(timestamp)
+            st.rerun()
 
     # ---------- Adicionar linhas vazias ----------
     st.subheader("➕ Adicionar múltiplas linhas")
@@ -166,7 +183,10 @@ def mostrar_cursos():
             st.session_state.editor_key_counter += 1
             st.rerun()
 
-    # ---------- Tabela editável ----------
+    # ---------- Tabela editável (com placeholder) ----------
+    placeholder = st.empty()
+
+    # Preparar DataFrame
     df_atual = st.session_state.acoes_editaveis.copy()
     if "Apagar" not in df_atual.columns:
         df_atual.insert(0, "Apagar", False)
@@ -182,17 +202,18 @@ def mostrar_cursos():
             df_atual[col] = None
     df_atual = df_atual[["Apagar"] + colunas_dados]
 
-    # Usar key dinâmica para forçar recriação quando o contador muda
-    edited_df = st.data_editor(
-        df_atual,
-        use_container_width=True,
-        num_rows="dynamic",
-        height=400,
-        key=f"acoes_editor_{st.session_state.editor_key_counter}",
-        column_config={
-            "Apagar": st.column_config.CheckboxColumn("Apagar", default=False)
-        }
-    )
+    # Recriar o data_editor dentro do placeholder
+    with placeholder.container():
+        edited_df = st.data_editor(
+            df_atual,
+            use_container_width=True,
+            num_rows="dynamic",
+            height=400,
+            key=f"acoes_editor_{st.session_state.editor_key_counter}",
+            column_config={
+                "Apagar": st.column_config.CheckboxColumn("Apagar", default=False)
+            }
+        )
 
     if not edited_df.equals(df_atual):
         df_normalizado = normalizar_dataframe(edited_df)

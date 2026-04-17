@@ -109,10 +109,13 @@ st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
 # Filtro global por Centro
 st.sidebar.markdown("---")
 lista_centros = set()
-if st.session_state.cursos_df is not None:
-    lista_centros.update(st.session_state.cursos_df["Centro"].unique())
-if st.session_state.quest_df is not None:
-    lista_centros.update(st.session_state.quest_df["Centro"].unique())
+# Usar os DataFrames editáveis (onde os dados realmente estão)
+if st.session_state.get("acoes_editaveis") is not None and not st.session_state.acoes_editaveis.empty:
+    if "Centro" in st.session_state.acoes_editaveis.columns:
+        lista_centros.update(st.session_state.acoes_editaveis["Centro"].dropna().unique())
+if st.session_state.get("quest_editaveis") is not None and not st.session_state.quest_editaveis.empty:
+    if "Centro" in st.session_state.quest_editaveis.columns:
+        lista_centros.update(st.session_state.quest_editaveis["Centro"].dropna().unique())
 
 st.session_state.filtro_centro = st.sidebar.multiselect(
     "Filtrar por Centro", 

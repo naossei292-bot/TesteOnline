@@ -109,15 +109,17 @@ def mostrar_qualidade():
             META_FORMADOR = st.session_state.obj_formador
         
         # CSS
+# CSS adaptado para modo claro/escuro
         st.markdown("""
         <style>
         .kpi-card {
-            background-color: white;
+            background-color: var(--secondary-background-color);
             border-radius: 10px;
             padding: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 10px;
             transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
         }
         .kpi-card:hover {
             transform: translateY(-2px);
@@ -125,17 +127,20 @@ def mostrar_qualidade():
         }
         .kpi-title {
             font-size: 14px;
-            color: #666;
+            color: var(--text-color);
+            opacity: 0.7;
             margin-bottom: 5px;
         }
         .kpi-value {
             font-size: 28px;
             font-weight: bold;
             margin-bottom: 5px;
+            color: var(--text-color);
         }
         .kpi-meta {
             font-size: 12px;
-            color: #888;
+            color: var(--text-color);
+            opacity: 0.6;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -470,17 +475,17 @@ def mostrar_qualidade():
                 )
             with c3:
                 try:
-                    with open("assets/incidentes.xlsx", "rb") as f:
+                    with open("assets/Incidentes.xlsx", "rb") as f:
                         conteudo_inc = f.read()
                     st.download_button(
                         label="📥 Exemplo Incidentes (Excel)",
                         data=conteudo_inc,
-                        file_name="incidentes.xlsx",
+                        file_name="Incidentes.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
                 except FileNotFoundError:
-                    st.error("⚠️ Ficheiro de exemplo não encontrado: assets/incidentes.xlsx")
+                    st.error("⚠️ Ficheiro de exemplo não encontrado: assets/Incidentes.xlsx")
             if incidente_file is not None:
                 try:
                     df_inc = pd.read_excel(incidente_file)
