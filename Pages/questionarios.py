@@ -183,7 +183,7 @@ def mostrar_questionarios():
 
     # ── Carregar ficheiros ────────────────────────────────────
     st.subheader("📤 Carregar Relatórios Excel")
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     with c1:
         modo_carga = st.radio(
             "Modo:", ["Substituir dados existentes", "Adicionar ao final"],
@@ -194,6 +194,20 @@ def mostrar_questionarios():
             "Relatórios Excel (Relatório_Centro.xlsx)",
             type=None, accept_multiple_files=True, key="carga_quest_upload"
         )
+    with c3:
+        # Botão para descarregar o ficheiro de exemplo
+        try:
+            with open("assets/Relatório_Alverca.xlsx", "rb") as f:
+                conteudo_exemplo = f.read()
+            st.download_button(
+                label="📥 Descarregar ficheiro exemplo (Excel)",
+                data=conteudo_exemplo,
+                file_name="Relatório_Alverca.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/Relatório_Alverca.xlsx'.")
 
     if ficheiros:
         lista_dfs = []

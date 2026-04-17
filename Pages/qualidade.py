@@ -441,49 +441,61 @@ def mostrar_qualidade():
         # ============================================
         # KPI 6 e 7 – Incidentes Operacionais e TMRP (COM PERSISTÊNCIA)
         # ============================================
-        st.markdown("---")
+            st.markdown("---")
         st.subheader("⚠️ Incidentes Operacionais e Resolução")
 
-        # Inicializar estado para os dados de incidentes, se não existir
         if "incidentes_df" not in st.session_state:
             st.session_state.incidentes_df = None
         if "incidentes_filename" not in st.session_state:
             st.session_state.incidentes_filename = None
 
-        # Se já existirem dados carregados, mostrar um resumo e opção para trocar
         if st.session_state.incidentes_df is not None:
             st.success(f"📁 Ficheiro carregado: **{st.session_state.incidentes_filename}**")
             col1, col2 = st.columns([1, 5])
             with col1:
-                if st.button("🔄 Carregar novo ficheiro"):
+                if st.button("🔄 Carregar novo ficheiro", key="reset_incidentes"):
                     st.session_state.incidentes_df = None
                     st.session_state.incidentes_filename = None
-                    st.rerun()  # Recarrega a página para mostrar o uploader novamente
-            # Usar os dados já armazenados
+                    st.rerun()
             df_inc = st.session_state.incidentes_df.copy()
         else:
-            # Mostrar uploader apenas quando não há dados em memória
-            incidente_file = st.file_uploader(
-                "Carregar ficheiro de Incidentes (Excel)",
-                type=["xlsx", "xls"],
-                key="incidentes_upload"
-            )
+            # Três colunas: modo de carga, upload, download
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c1:
+                modo_carga_inc = st.radio("Modo:", ["Substituir", "Adicionar"], horizontal=True, key="modo_carga_inc")
+            with c2:
+                incidente_file = st.file_uploader(
+                    "Carregar ficheiro de Incidentes (Excel)",
+                    type=["xlsx", "xls"], key="incidentes_upload"
+                )
+            with c3:
+                try:
+                    with open("assets/incidentes.xlsx", "rb") as f:
+                        conteudo_inc = f.read()
+                    st.download_button(
+                        label="📥 Exemplo Incidentes (Excel)",
+                        data=conteudo_inc,
+                        file_name="incidentes.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except FileNotFoundError:
+                    st.error("⚠️ Ficheiro de exemplo não encontrado: assets/incidentes.xlsx")
             if incidente_file is not None:
                 try:
                     df_inc = pd.read_excel(incidente_file)
                     df_inc.columns = df_inc.columns.str.strip()
-                    # Guardar no session_state
                     st.session_state.incidentes_df = df_inc.copy()
                     st.session_state.incidentes_filename = incidente_file.name
-                    st.rerun()  # Recarrega a página para mostrar o estado persistido
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao processar ficheiro: {e}")
                     df_inc = None
             else:
                 df_inc = None
 
-        # Se não houver dados (nem novo nem persistido), mostrar info e sair
         if df_inc is None:
+
             st.info("⬆️ Carregue um ficheiro Excel com os dados de incidentes para visualizar os KPIs 6 e 7.")
         else:
             # Processamento dos dados de incidentes (conversão de datas, etc.)
@@ -568,22 +580,37 @@ def mostrar_qualidade():
         st.markdown("---")
         st.subheader("📢 Taxa de Reclamações")
 
-        # Persistência: mostrar dados já carregados ou uploader
         if st.session_state.reclamacoes_df is not None:
             st.success(f"📁 Ficheiro de reclamações carregado: **{st.session_state.reclamacoes_filename}**")
             col_reset1, _ = st.columns([1, 5])
             with col_reset1:
-                if st.button("🔄 Trocar ficheiro de reclamações"):
+                if st.button("🔄 Trocar ficheiro de reclamações", key="reset_recl"):
                     st.session_state.reclamacoes_df = None
                     st.session_state.reclamacoes_filename = None
                     st.rerun()
             df_recl = st.session_state.reclamacoes_df.copy()
         else:
-            recl_file = st.file_uploader(
-                "Carregar ficheiro de Reclamações (Excel)",
-                type=["xlsx", "xls"],
-                key="reclamacoes_upload"
-            )
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c1:
+                modo_carga_recl = st.radio("Modo:", ["Substituir", "Adicionar"], horizontal=True, key="modo_carga_recl")
+            with c2:
+                recl_file = st.file_uploader(
+                    "Carregar ficheiro de Reclamações (Excel)",
+                    type=["xlsx", "xls"], key="reclamacoes_upload"
+                )
+            with c3:
+                try:
+                    with open("assets/reclamacoes.xlsx", "rb") as f:
+                        conteudo_recl = f.read()
+                    st.download_button(
+                        label="📥 Exemplo Reclamações (Excel)",
+                        data=conteudo_recl,
+                        file_name="reclamacoes.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except FileNotFoundError:
+                    st.error("⚠️ Ficheiro de exemplo não encontrado: assets/reclamacoes.xlsx")
             if recl_file is not None:
                 try:
                     df_recl = pd.read_excel(recl_file)
@@ -597,7 +624,7 @@ def mostrar_qualidade():
             else:
                 df_recl = None
 
-        # Calcular e exibir o KPI 8
+        # Cálculo do KPI 8 (mantenha igual)
         if df_recl is not None and df_cursos is not None:
             # Aplicar filtro de centro se existir coluna 'Centro'
             if st.session_state.filtro_centro and 'Centro' in df_recl.columns:
@@ -662,22 +689,37 @@ def mostrar_qualidade():
         st.markdown("---")
         st.subheader("🔧 Ações de Melhoria e Recorrência")
 
-        # Persistência: mostrar dados já carregados ou uploader
         if st.session_state.acoes_df is not None:
             st.success(f"📁 Ficheiro de Ações de Melhoria carregado: **{st.session_state.acoes_filename}**")
             col_reset, _ = st.columns([1, 5])
             with col_reset:
-                if st.button("🔄 Trocar ficheiro de ações"):
+                if st.button("🔄 Trocar ficheiro de ações", key="reset_acoes"):
                     st.session_state.acoes_df = None
                     st.session_state.acoes_filename = None
                     st.rerun()
             df_acoes = st.session_state.acoes_df.copy()
         else:
-            acoes_file = st.file_uploader(
-                "Carregar ficheiro de Ações de Melhoria (Excel)",
-                type=["xlsx", "xls"],
-                key="acoes_upload"
-            )
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c1:
+                modo_carga_acoes = st.radio("Modo:", ["Substituir", "Adicionar"], horizontal=True, key="modo_carga_acoes")
+            with c2:
+                acoes_file = st.file_uploader(
+                    "Carregar ficheiro de Ações de Melhoria (Excel)",
+                    type=["xlsx", "xls"], key="acoes_upload"
+                )
+            with c3:
+                try:
+                    with open("assets/acoes_melhoria.xlsx", "rb") as f:
+                        conteudo_acoes = f.read()
+                    st.download_button(
+                        label="📥 Exemplo Ações de Melhoria (Excel)",
+                        data=conteudo_acoes,
+                        file_name="acoes_melhoria.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                except FileNotFoundError:
+                    st.error("⚠️ Ficheiro de exemplo não encontrado: assets/acoes_melhoria.xlsx")
             if acoes_file is not None:
                 try:
                     df_acoes = pd.read_excel(acoes_file)
@@ -773,13 +815,11 @@ def mostrar_qualidade():
         st.markdown("---")
         st.subheader("📄 Conformidade Documental (DGERT/PSP)")
 
-        # Inicializar estado para conformidade
         if "conformidade_df" not in st.session_state:
             st.session_state.conformidade_df = None
         if "conformidade_filename" not in st.session_state:
             st.session_state.conformidade_filename = None
 
-        # Função auxiliar para normalizar e verificar se é conforme
         def is_conforme(valor):
             if pd.isna(valor):
                 return False
@@ -792,35 +832,51 @@ def mostrar_qualidade():
             return valor_str in ['sim', 's', '1', 'true']
 
         # Persistência
-        if st.session_state.conformidade_df is not None:
-            st.success(f"📁 Ficheiro de Conformidade Documental carregado: **{st.session_state.conformidade_filename}**")
-            col_reset, _ = st.columns([1, 5])
-            with col_reset:
-                if st.button("🔄 Trocar ficheiro de conformidade"):
-                    st.session_state.conformidade_df = None
-                    st.session_state.conformidade_filename = None
-                    st.rerun()
-            df_conf = st.session_state.conformidade_df.copy()
-        else:
+    if st.session_state.conformidade_df is not None:
+        st.success(f"📁 Ficheiro de Conformidade Documental carregado: **{st.session_state.conformidade_filename}**")
+        col_reset, _ = st.columns([1, 5])
+        with col_reset:
+            if st.button("🔄 Trocar ficheiro de conformidade", key="reset_conf"):
+                st.session_state.conformidade_df = None
+                st.session_state.conformidade_filename = None
+                st.rerun()
+        df_conf = st.session_state.conformidade_df.copy()
+    else:
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c1:
+            modo_carga_conf = st.radio("Modo:", ["Substituir", "Adicionar"], horizontal=True, key="modo_carga_conf")
+        with c2:
             conf_file = st.file_uploader(
                 "Carregar ficheiro de Conformidade Documental (Excel)",
-                type=["xlsx", "xls"],
-                key="conformidade_upload"
+                type=["xlsx", "xls"], key="conformidade_upload"
             )
-            if conf_file is not None:
-                try:
-                    df_conf = pd.read_excel(conf_file)
-                    df_conf.columns = df_conf.columns.str.strip()
-                    st.session_state.conformidade_df = df_conf.copy()
-                    st.session_state.conformidade_filename = conf_file.name
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro ao processar ficheiro de conformidade: {e}")
-                    df_conf = None
-            else:
+        with c3:
+            try:
+                with open("assets/conformidade_documental.xlsx", "rb") as f:
+                    conteudo_conf = f.read()
+                st.download_button(
+                    label="📥 Exemplo Conformidade (Excel)",
+                    data=conteudo_conf,
+                    file_name="conformidade_documental.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except FileNotFoundError:
+                st.error("⚠️ Ficheiro de exemplo não encontrado: assets/conformidade_documental.xlsx")
+        if conf_file is not None:
+            try:
+                df_conf = pd.read_excel(conf_file)
+                df_conf.columns = df_conf.columns.str.strip()
+                st.session_state.conformidade_df = df_conf.copy()
+                st.session_state.conformidade_filename = conf_file.name
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao processar ficheiro de conformidade: {e}")
                 df_conf = None
+        else:
+            df_conf = None
 
-        if df_conf is not None:
+    if df_conf is not None:
             # Aplicar filtro de centro se existir
             if st.session_state.filtro_centro and 'Centro' in df_conf.columns:
                 df_conf = df_conf[df_conf['Centro'].isin(st.session_state.filtro_centro)]
@@ -871,11 +927,11 @@ def mostrar_qualidade():
                     st.dataframe(df_conf, use_container_width=True)
             else:
                 st.info("Nenhum dado de conformidade após aplicação dos filtros.")
-        else:
+    else:
             st.info("⬆️ Carregue um ficheiro Excel com os dados de Conformidade Documental para visualizar o KPI 10.")
 
         # Visualizações adicionais
-        if has_quest:
+    if has_quest:
             st.markdown("---")
             col_rad, col_bar = st.columns(2)
 

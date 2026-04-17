@@ -14,11 +14,9 @@ def calcular_valor_total(df: pd.DataFrame) -> pd.DataFrame:
     """Calcula Valor Total = Valor da Ação * Inscritos, se aplicável."""
     df = df.copy()
     if "Valor da Ação" in df.columns and "Valor Total" in df.columns and "Inscritos" in df.columns:
-        # Garantir que são numéricos
         df["Valor da Ação"] = pd.to_numeric(df["Valor da Ação"], errors="coerce")
         df["Inscritos"] = pd.to_numeric(df["Inscritos"], errors="coerce")
         df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce")
-        # Apenas onde Valor da Ação não é NaN e Valor Total é NaN
         mask = (df["Valor da Ação"].notna()) & (df["Valor Total"].isna())
         if mask.any():
             df.loc[mask, "Valor Total"] = df.loc[mask, "Valor da Ação"] * df.loc[mask, "Inscritos"]
@@ -32,6 +30,10 @@ def normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
+
+    # Inicializar contador para forçar recriação do data_editor
+    if "editor_key_counter" not in st.session_state:
+        st.session_state.editor_key_counter = 0
 
     todas_colunas_dados = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
@@ -70,12 +72,12 @@ def mostrar_cursos():
     if 'acoes_editaveis' not in st.session_state:
         st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
     else:
-        # Garantir normalização dos dados existentes (útil para migração)
         st.session_state.acoes_editaveis = normalizar_dataframe(st.session_state.acoes_editaveis)
 
     # ---------- Carregar ficheiro ----------
     st.subheader("📤 Carregar dados a partir de ficheiro")
-    col1, col2 = st.columns(2)
+
+    col1, col2, col3 = st.columns(3)
     with col1:
         modo_carga = st.radio("Modo de carregamento:", ["Substituir dados existentes", "Adicionar ao final"], horizontal=True, key="modo_carga_acoes")
     with col2:
@@ -85,6 +87,19 @@ def mostrar_cursos():
             accept_multiple_files=True,
             key="carga_acoes_upload"
         )
+    with col3:
+        try:
+            with open("assets/amostra_formacoes.xlsx", "rb") as f:
+                conteudo_exemplo = f.read()
+            st.download_button(
+                label="📥 Descarregar ficheiro exemplo (Excel)",
+                data=conteudo_exemplo,
+                file_name="amostra_formacoes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/amostra_formacoes.xlsx'.")
 
     if ficheiros_carga:
         lista_dfs = []
@@ -117,7 +132,6 @@ def mostrar_cursos():
                 df_parcial = df_parcial[colunas_dados]
                 df_parcial.insert(0, "Apagar", False)
 
-                # Normalizar (converter números e calcular Valor Total)
                 df_parcial = normalizar_dataframe(df_parcial)
                 lista_dfs.append(df_parcial)
             except Exception as e:
@@ -131,6 +145,8 @@ def mostrar_cursos():
                 st.session_state.acoes_editaveis = pd.concat(
                     [st.session_state.acoes_editaveis, df_novo], ignore_index=True
                 )
+            # Incrementar contador para forçar recriação do data_editor
+            st.session_state.editor_key_counter += 1
             st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
             st.rerun()
 
@@ -147,11 +163,11 @@ def mostrar_cursos():
             novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
             novas_linhas.insert(0, "Apagar", False)
             st.session_state.acoes_editaveis = pd.concat([st.session_state.acoes_editaveis, novas_linhas], ignore_index=True)
+            st.session_state.editor_key_counter += 1
             st.rerun()
 
     # ---------- Tabela editável ----------
     df_atual = st.session_state.acoes_editaveis.copy()
-    # Garantir que a coluna "Apagar" existe e é a primeira
     if "Apagar" not in df_atual.columns:
         df_atual.insert(0, "Apagar", False)
     else:
@@ -166,21 +182,22 @@ def mostrar_cursos():
             df_atual[col] = None
     df_atual = df_atual[["Apagar"] + colunas_dados]
 
+    # Usar key dinâmica para forçar recriação quando o contador muda
     edited_df = st.data_editor(
         df_atual,
         use_container_width=True,
         num_rows="dynamic",
         height=400,
-        key="acoes_editor",
+        key=f"acoes_editor_{st.session_state.editor_key_counter}",
         column_config={
             "Apagar": st.column_config.CheckboxColumn("Apagar", default=False)
         }
     )
 
     if not edited_df.equals(df_atual):
-        # Normalizar os dados editados (converter números e recalcular Valor Total)
         df_normalizado = normalizar_dataframe(edited_df)
         st.session_state.acoes_editaveis = df_normalizado
+        st.session_state.editor_key_counter += 1
         st.rerun()
 
     # ---------- Botões ----------
@@ -190,6 +207,7 @@ def mostrar_cursos():
     with col_bot1:
         if st.button("🗑️ Limpar todos os dados", use_container_width=True):
             st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+            st.session_state.editor_key_counter += 1
             st.rerun()
 
     with col_bot2:
@@ -202,6 +220,7 @@ def mostrar_cursos():
                     df.reset_index(drop=True, inplace=True)
                     df["Apagar"] = False
                     st.session_state.acoes_editaveis = normalizar_dataframe(df)
+                    st.session_state.editor_key_counter += 1
                     st.rerun()
                 else:
                     st.warning("Nenhuma linha marcada para apagar.")
@@ -210,7 +229,6 @@ def mostrar_cursos():
 
     # ---------- Métricas resumo ----------
     df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
-    # Converter novamente (por segurança)
     df_metricas = converter_colunas_numericas(df_metricas)
 
     if "Ação" in df_metricas.columns:
