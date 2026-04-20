@@ -2,17 +2,17 @@ import pandas as pd
 import os
 import argparse
 
-from docxtpl                   import DocxTemplate
-from jinja2                    import Environment, ChainableUndefined
-from pathlib                   import Path
-from Partes.parte1             import calcular_parte1
-from Partes.parte2             import gerar_tabela_acoes, gerar_tabela_cursos, calcular_totais_parte2
-from Partes.parte3             import calcular_parte3
-from Partes.parte4             import calcular_parte4
-from Partes.parte5             import calcular_parte5
-from Partes.parte6             import calcular_parte6
-from Partes.parte7             import calcular_parte7
-from Partes.PreencherRelatorio import preparar_dados_moodle
+from docxtpl                    import DocxTemplate
+from jinja2                     import Environment, ChainableUndefined
+from pathlib                    import Path
+from .Partes.parte1             import calcular_parte1
+from .Partes.parte2             import gerar_tabela_acoes, gerar_tabela_cursos, calcular_totais_parte2
+from .Partes.parte3             import calcular_parte3
+from .Partes.parte4             import calcular_parte4
+from .Partes.parte5             import calcular_parte5
+from .Partes.parte6             import calcular_parte6
+from .Partes.parte7             import calcular_parte7
+from .Partes.PreencherRelatorio import preparar_dados_moodle
 
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent
