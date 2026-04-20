@@ -80,23 +80,22 @@ st.sidebar.title("📁 Gestão de Dados")
 # Menu de navegação
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📌 Navegação - Balanços")
-# Menu de navegação
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação - Questionários")
-
 if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
     st.session_state.pagina = "📚 Relatórios"
     st.rerun()
+# Menu de navegação
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação - Questionários")
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
+    st.rerun()
+
 # Menu de navegação
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📌 Navegação - Qualidade")
 
 if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
     st.session_state.pagina = "📚 Cursos"
-    st.rerun()
-
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
     st.rerun()
 
 if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):

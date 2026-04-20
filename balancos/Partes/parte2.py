@@ -67,10 +67,10 @@ def gerar_tabela_acoes(df: pd.DataFrame, regiao: str) -> dict:
 
     print(f"   Coluna usada para filtro: '{col_deslocal}'")
 
-    # Limpeza forte da coluna
-    df[col_deslocal] = df[col_deslocal].astype(str).str.strip()
+    # Limpeza forte da coluna: substitui NaN por string vazia e converte para string
+    df[col_deslocal] = df[col_deslocal].fillna('').astype(str).str.strip()
 
-    # Mostrar valores únicos (útil para ver se há " Alverca ", "alverca", etc.)
+    # Mostrar valores únicos (já todos strings, ordenação segura)
     valores_unicos = sorted(df[col_deslocal].unique())
     print(f"   Valores únicos em Deslocal ({len(valores_unicos)}): {valores_unicos[:30]}")  # limita a 30
 
@@ -81,6 +81,7 @@ def gerar_tabela_acoes(df: pd.DataFrame, regiao: str) -> dict:
 
     if len(df_regiao) == 0:
         print(f"   ⚠️ AVISO: Nenhuma linha encontrada. Testando filtro parcial...")
+        # Usar contains para ver se há correspondência aproximada
         df_parcial = df[df[col_deslocal].str.contains(regiao, na=False, case=False)]
         print(f"   Linhas com contains '{regiao}': {len(df_parcial)}")
 
