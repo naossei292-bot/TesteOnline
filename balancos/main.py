@@ -38,55 +38,72 @@ def carregar_excel(ano):
 
 
 def gerar_balancos(ano):    
+    # Carregar dados uma única vez
+    df, df_notas, xls_centros = carregar_excel(ano)
+    
+    # DEBUG: Mostrar valores reais
+    print("🔍 Valores únicos na coluna 'Deslocal':", df['Deslocal'].unique())
+    print("🔍 Nomes das abas (regiões):", xls_centros.sheet_names)
+    
+    # Criar uma coluna normalizada para comparação (strip + lower)
+    df['Deslocal_norm'] = df['Deslocal'].astype(str).str.strip().str.lower()
+    
     balanco_dir = SCRIPT_DIR / "balanco"
     balanco_dir.mkdir(exist_ok=True)
-
-    df, df_notas, xls_centros = carregar_excel(ano)
-
+    
     regioes = xls_centros.sheet_names
     env = Environment(undefined=ChainableUndefined)
-
+    
     for regiao in regioes:
         print(f"\n{'='*60}")
         print(f"📍 A criar balanço para: {regiao}")
         print(f"{'='*60}")
-
-        # ====================== CARREGAR DADOS ======================
+        
+        # Normalizar o nome da região para comparação
+        regiao_norm = regiao.strip().lower()
+        
+        # Filtrar usando a coluna normalizada
+        df_acoes_regiao = df[df['Deslocal_norm'] == regiao_norm].copy()
+        
+        if df_acoes_regiao.empty:
+            print(f"⚠️ ATENÇÃO: Nenhuma linha encontrada para '{regiao}'.")
+            print(f"   Valores disponíveis em Deslocal: {df['Deslocal'].unique()}")
+            print(f"   (comparação normalizada: '{regiao_norm}')")
+        else:
+            print(f"📊 Dados de ações para {regiao}: {len(df_acoes_regiao)} registos")
+        
+        # Carregar a aba correspondente (mantém o nome original)
         df_centros = limpar_colunas(
             pd.read_excel(xls_centros, sheet_name=regiao, header=2)
         )
-
-        doc = DocxTemplate(SCRIPT_DIR /"Modelos"/ "Modelo.docx")
-
-        # ====================== PARTE 2 - TABELA DE AÇÕES + TOTAIS ======================
+        
+        doc = DocxTemplate(SCRIPT_DIR / "Modelos" / "Modelo.docx")
+        
+        # ====================== PARTE 2 ======================
+        # Nota: gerar_tabela_acoes pode internamente usar df e regiao.
+        # Para garantir, passamos o regiao original (pode ser que essa função também normalize).
         dados_acoes  = gerar_tabela_acoes(df, regiao)      # Tabela 1 - Ações da região
         dados_cursos = gerar_tabela_cursos(df_centros)     # Tabela 2 - Cursos por tipologia
-
-        # ←←← CÁLCULO DOS TOTAIS APENAS PARA ESTA REGIÃO
+        
         dados_totais_parte2 = calcular_totais_parte2(
             dados_acoes["acoes"], 
             dados_cursos["cursos"]
         )
-
-        # Converter para DataFrame só para debug
-        df_acoes_regiao = df[df["Deslocal"] == regiao].copy()
-
-        print(f"\n📊 Dados de ações para {regiao}: {len(df_acoes_regiao)} registos")
-
+        
         # ====================== OUTRAS PARTES ======================
+        # Passamos o DataFrame filtrado (df_acoes_regiao) para as funções que precisam,
+        # mas mantemos o regiao original para consistência.
         dados_parte1 = calcular_parte1(df, regiao)
         dados_parte3 = calcular_parte3(regiao, df_acoes_regiao, ano)
         dados_parte4 = calcular_parte4(regiao, ano)
         dados_parte5 = calcular_parte5(regiao, ano)
         dados_parte6 = calcular_parte6(df, df_notas, regiao)
         dados_parte7 = calcular_parte7(ano, regiao)
-
-        # ====================== CONTEXT ======================
+        
         context = {
             "REGIAO": regiao,
             "ANO": ano,
             "ANO_SEGUINTE": ano + 1,
-            
             **dados_parte1,
             **dados_acoes,
             **dados_cursos,
@@ -98,23 +115,21 @@ def gerar_balancos(ano):
             **dados_parte7,
         }
         
-        # ====================== DEBUG DOS TOTAIS ======================
+        # DEBUG dos totais
         print(f"\n🔢 TOTAIS CALCULADOS PARA {regiao.upper()}:")
         print(f"   Formandos Total    : {dados_totais_parte2.get('NUM_FORMANDOS_TOTAL', 0)}")
         print(f"   Desistências Total : {dados_totais_parte2.get('DESISTENCIAS_TOTAL', 0)}")
         print(f"   Horas Total        : {dados_totais_parte2.get('HORAS_FORMACAO_TOTAL', 0)}")
         print(f"   Volume Formação    : {dados_totais_parte2.get('VOLUME_FORMACAO_TOTAL', 0)}")
         print(f"   Nº Total Ações     : {dados_totais_parte2.get('NUM_TOTAL_ACOES', 0)}")
-
-        # ====================== GERAR DOCUMENTO ======================
+        
+        # Gerar documento
         doc.render(context, jinja_env=env)
-
         pasta_ano = SCRIPT_DIR / "balanco" / str(ano)
         pasta_ano.mkdir(parents=True, exist_ok=True)
-
         caminho = pasta_ano / f"BA_{regiao}_{ano}.docx"
         doc.save(str(caminho))
-
+        
         print(f"\n✅ Criado: {caminho}")
         print(f"{'='*60}\n")
 
