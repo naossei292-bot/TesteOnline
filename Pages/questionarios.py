@@ -1,3 +1,5 @@
+import io
+
 import streamlit as st
 import pandas as pd
 import re
@@ -212,17 +214,17 @@ def mostrar_questionarios():
     with c4:
         # Botão para descarregar o ficheiro de exemplo vazio
         try:
-            with open("assets/Modelo_Questionario.xlsx", "rb") as f:
+            with open("assets/Questionario_para_preencher.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
             st.download_button(
                 label="📥 Descarregar ficheiro exemplo vazio (Excel)",
                 data=conteudo_exemplo,
-                file_name="Modelo_Questionario.xlsx",
+                file_name="Questionario_para_preencher.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
         except FileNotFoundError:
-            st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Modelo_Questionario.xlsx'.")
+            st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Questionario_para_preencher.xlsx'.")
 
     if ficheiros:
         lista_dfs = []
@@ -324,18 +326,13 @@ def mostrar_questionarios():
             st.info("Carregue ficheiros para ativar os filtros.")
 
     # ── Adicionar linhas ──────────────────────────────────────
+# ── Adicionar linhas ──────────────────────────────────────
     st.markdown("---")
     st.subheader("➕ Adicionar linhas")
-    col_add1, col_add2, col_add3 = st.columns([1, 1, 2])
+    col_add1, col_add2 = st.columns([1, 2])   # CORRIGIDO: duas colunas com larguras 1 e 2
     with col_add1:
-        if st.button("➕ Inserir 1 linha", use_container_width=True):
-            nova_linha = pd.DataFrame({col: [None] for col in colunas_dados})
-            nova_linha.insert(0, "Apagar", False)
-            st.session_state.quest_editaveis = pd.concat([st.session_state.quest_editaveis, nova_linha], ignore_index=True)
-            st.rerun()
-    with col_add2:
         num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=10000, value=5, step=1, key="num_linhas_quest")
-    with col_add3:
+    with col_add2:
         if st.button("➕ Adicionar múltiplas linhas vazias", use_container_width=True):
             novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
             novas_linhas.insert(0, "Apagar", False)
@@ -378,6 +375,25 @@ def mostrar_questionarios():
             else:
                 st.warning("Nenhuma linha marcada.")
 
+    # ---------- Exportar dados ----------
+    st.markdown("---")
+    st.subheader("📎 Exportar dados")
+
+    # Botão de download direto (sem duplo clique)
+    df_export = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore")
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_export.to_excel(writer, index=False, sheet_name="Questionários")
+    output.seek(0)
+
+    st.download_button(
+        label="📥 Descarregar dados em Excel",
+        data=output,
+        file_name="dados_questionarios_exportados.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key="download_questionarios_excel"
+    )
     # ── Métricas ──────────────────────────────────────────────
     df_m = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore")
     df_m = df_m.dropna(subset=["Curso"])

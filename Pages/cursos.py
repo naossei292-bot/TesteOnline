@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import io
 
 def converter_colunas_numericas(df: pd.DataFrame) -> pd.DataFrame:
     """Converte colunas relevantes para numérico (float)."""
@@ -243,7 +244,7 @@ def mostrar_cursos():
             st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
             st.session_state.editor_key_counter += 1
             st.rerun()
-
+    
     with col_bot2:
         if st.button("✖️ Apagar selecionados", use_container_width=True):
             df = st.session_state.acoes_editaveis.copy()
@@ -261,7 +262,26 @@ def mostrar_cursos():
             else:
                 st.warning("Coluna 'Apagar' não encontrada.")
 
-    # ---------- Métricas resumo ----------
+    # ---------- Exportar dados ----------
+    st.markdown("---")
+    st.subheader("📎 Exportar dados")
+
+    # Botão de download direto (sem duplo clique)
+    df_export = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore")
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_export.to_excel(writer, index=False, sheet_name="Cursos")
+    output.seek(0)
+
+    st.download_button(
+        label="📥 Descarregar dados em Excel",
+        data=output,
+        file_name="cursos_exportados.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key="download_cursos_excel"
+    )
+    # ---------- Métricas resumo (FORA do with col_exp1) ----------
     df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
     df_metricas = converter_colunas_numericas(df_metricas)
 
@@ -275,7 +295,6 @@ def mostrar_cursos():
         st.subheader("📊 Resumo Geral")
 
         total_acoes = df_metricas["Ação"].nunique() if "Ação" in df_metricas.columns else 0
-
         total_inscricoes = (
             df_metricas["Inscritos"].sum()
             if "Inscritos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Inscritos"])
