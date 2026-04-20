@@ -77,10 +77,19 @@ if 'pagina' not in st.session_state:
 # ============================================
 
 st.sidebar.title("📁 Gestão de Dados")
-
 # Menu de navegação
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação")
+st.sidebar.markdown("### 📌 Navegação - Balanços")
+# Menu de navegação
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação - Questionários")
+
+if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
+    st.session_state.pagina = "📚 Relatórios"
+    st.rerun()
+# Menu de navegação
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação - Qualidade")
 
 if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
     st.session_state.pagina = "📚 Cursos"
@@ -94,17 +103,13 @@ if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key=
     st.session_state.pagina = "🎯 Gestão de Qualidade"
     st.rerun()
 
-if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+if st.sidebar.button("⚔️ Comparador Versus -  EM DESENVOLVIMENTO", use_container_width=True, key="nav_comparador"):
     st.session_state.pagina = "⚔️ Comparador Versus"
     st.rerun()
 
 if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
     st.session_state.pagina = "📊 Dashboard"
     st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
-
 
 # Filtro global por Centro
 st.sidebar.markdown("---")
@@ -136,6 +141,10 @@ if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sess�
 if st.session_state.pagina == "📚 Cursos":
     from Pages.cursos import mostrar_cursos
     mostrar_cursos()
+
+elif st.session_state.pagina == "📚 Relatórios":
+    from Pages.balancos_e_relatorios import mostrar_relatorios
+    mostrar_relatorios()
 
 elif st.session_state.pagina == "📋 Questionários":
     from Pages.questionarios import mostrar_questionarios
