@@ -82,7 +82,7 @@ def mostrar_cursos():
     # ---------- Carregar ficheiro ----------
     st.subheader("📤 Carregar dados a partir de ficheiro")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         modo_carga = st.radio("Modo de carregamento:", ["Substituir dados existentes", "Adicionar ao final"], horizontal=True, key="modo_carga_acoes")
     with col2:
@@ -105,6 +105,19 @@ def mostrar_cursos():
             )
         except FileNotFoundError:
             st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/amostra_formacoes.xlsx'.")
+    with col4:
+        try:
+            with open("assets/amostra_formacoes_vazio.xlsx", "rb") as f:
+                conteudo_exemplo = f.read()
+            st.download_button(
+                label="📥 Descarregar ficheiro exemplo vazio (Excel)",
+                data=conteudo_exemplo,
+                file_name="amostra_formacoes_vazio.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/amostra_formacoes_vazio.xlsx'.")
 
     if ficheiros_carga:
         lista_dfs = []
@@ -174,7 +187,7 @@ def mostrar_cursos():
     st.subheader("➕ Adicionar múltiplas linhas")
     col_add1, col_add2 = st.columns([1, 2])
     with col_add1:
-        num_linhas = st.number_input("Número de linhas a adicionar:", min_value=1, max_value=1000, value=5, step=1)
+        num_linhas = st.number_input("Número de linhas a adicionar:", min_value=1, max_value=10000, value=5, step=1)
     with col_add2:
         if st.button("Adicionar linhas vazias"):
             novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})

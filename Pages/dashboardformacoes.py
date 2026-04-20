@@ -280,7 +280,6 @@ def tabela_top_acoes(df: pd.DataFrame, n: int = 10):
             "% Conclusão": st.column_config.TextColumn("% Conclusão"),
         },
     )
-# ── Filtros laterais ──────────────────────────────────────────────────────────
 
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
@@ -299,18 +298,25 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             if status_sel:
                 df = df[df["Status"].isin(status_sel)]
 
-        # ---------- 2. Tipo de Ação (ex: VIG, ARD) ----------
-        # Se já tiveres uma coluna "Tipo", usa-a. Caso contrário, extrai do início da coluna "Ação"
+        # ---------- 2. Tipo de Ação (corrigido, sem duplicação) ----------
+        # Cria a coluna "Tipo" apenas se não existir e se a coluna "Ação" existir
         if "Tipo" not in df.columns and "Ação" in df.columns:
-            # Exemplo: extrair os primeiros 3 caracteres (ajusta conforme os teus dados)
-            df["Tipo"] = df["Ação"].astype(str).str[:3]
-        
+            def extrair_tipo(nome_acao: str) -> str:
+                """Extrai o tipo: 4 caracteres, mas se o 4º for '_' devolve só 3."""
+                nome_acao = str(nome_acao)
+                if len(nome_acao) >= 4 and nome_acao[3] == '_':
+                    return nome_acao[:3]
+                else:
+                    return nome_acao[:4]
+            df["Tipo"] = df["Ação"].astype(str).apply(extrair_tipo)
+
+        # Se a coluna "Tipo" existe (foi criada ou já estava), mostra o filtro
         if "Tipo" in df.columns:
             tipos_disponiveis = sorted(df["Tipo"].dropna().unique().tolist())
             if tipos_disponiveis:
                 tipo_sel = st.multiselect("Tipo de Ação", tipos_disponiveis,
                                           default=tipos_disponiveis,
-                                          key="dash_tipo")
+                                          key="dash_tipo")   # chave única
                 if tipo_sel:
                     df = df[df["Tipo"].isin(tipo_sel)]
 
@@ -333,14 +339,24 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             if centro_sel:
                 df = df[df["Centro"].isin(centro_sel)]
 
-        # ---------- 5. Intervalo de datas ----------
-        if "Data Inicial" in df.columns and not df["Data Inicial"].isna().all():
-            dmin = df["Data Inicial"].min().date()
-            dmax = df["Data Inicial"].max().date()
-            intervalo = st.date_input("Período (Data Inicial)",
-                                      value=(dmin, dmax),
-                                      min_value=dmin, max_value=dmax,
-                                      key="dash_datas")
+        # ---------- 5. Intervalo de datas (CORRIGIDO) ----------
+        todas_datas = pd.Series(dtype='datetime64[ns]')
+        if "Data Inicial" in df.columns:
+            todas_datas = pd.concat([todas_datas, df["Data Inicial"].dropna()])
+        if "Data Final" in df.columns:
+            todas_datas = pd.concat([todas_datas, df["Data Final"].dropna()])
+        
+        if not todas_datas.empty:
+            dmin = todas_datas.min().date()
+            dmax = todas_datas.max().date()
+            
+            intervalo = st.date_input(
+                "Período (Data Inicial ou Final)",
+                value=(dmin, dmax),
+                min_value=dmin,
+                max_value=dmax,
+                key="dash_datas"
+            )
             if isinstance(intervalo, (list, tuple)) and len(intervalo) == 2:
                 df = df[
                     (df["Data Inicial"].dt.date >= intervalo[0]) &

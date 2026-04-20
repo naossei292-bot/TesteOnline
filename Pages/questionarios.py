@@ -183,7 +183,7 @@ def mostrar_questionarios():
 
     # ── Carregar ficheiros ────────────────────────────────────
     st.subheader("📤 Carregar Relatórios Excel")
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         modo_carga = st.radio(
             "Modo:", ["Substituir dados existentes", "Adicionar ao final"],
@@ -208,6 +208,21 @@ def mostrar_questionarios():
             )
         except FileNotFoundError:
             st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/Relatório_Alverca.xlsx'.")
+
+    with c4:
+        # Botão para descarregar o ficheiro de exemplo vazio
+        try:
+            with open("assets/Modelo_Questionario.xlsx", "rb") as f:
+                conteudo_exemplo = f.read()
+            st.download_button(
+                label="📥 Descarregar ficheiro exemplo vazio (Excel)",
+                data=conteudo_exemplo,
+                file_name="Modelo_Questionario.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Modelo_Questionario.xlsx'.")
 
     if ficheiros:
         lista_dfs = []
@@ -319,7 +334,7 @@ def mostrar_questionarios():
             st.session_state.quest_editaveis = pd.concat([st.session_state.quest_editaveis, nova_linha], ignore_index=True)
             st.rerun()
     with col_add2:
-        num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=100, value=5, step=1, key="num_linhas_quest")
+        num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=10000, value=5, step=1, key="num_linhas_quest")
     with col_add3:
         if st.button("➕ Adicionar múltiplas linhas vazias", use_container_width=True):
             novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
