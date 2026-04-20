@@ -6,34 +6,20 @@ from utils.data_utils import processar_questionarios_excel, get_col
 # --------------------------
 # CONFIGURAÇÃO DA PÁGINA
 # --------------------------
-st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide")
+st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide", initial_sidebar_state="collapsed")
+
+# Esconder o menu lateral automático do Streamlit
+st.markdown("""
+    <style>
+        [data-testid="stSidebarNav"] {
+            display: none;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
-# ============================================
-# MENU DE NAVEGAÇÃO
-# ============================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação")
 
-# Botões de navegação na sidebar
-if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-    st.session_state.pagina = "📚 Cursos"
-    st.rerun()
-
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
-    st.rerun()
-
-if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
-    st.session_state.pagina = "🎯 Gestão de Qualidade"
-    st.rerun()
-
-if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-    st.session_state.pagina = "⚔️ Comparador Versus"
-    st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
+# ... resto do código (autenticação, sidebar, etc.)
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO
 # ============================================
@@ -66,16 +52,13 @@ def verificar_autenticacao():
     
     return False
 
-# Verificar autenticação
+# Se não autenticado, mostra apenas o formulário de login (sem sidebar)
 if not verificar_autenticacao():
     st.stop()
 
-# Botão de logout
-col_logout1, col_logout2 = st.columns([6, 1])
-with col_logout2:
-    if st.button("🚪 Sair", help="Terminar sessão"):
-        st.session_state.clear()
-        st.rerun()
+# ============================================
+# A PARTIR DAQUI, UTILIZADOR AUTENTICADO
+# ============================================
 
 # ============================================
 # INICIALIZAÇÃO DO ESTADO
@@ -90,31 +73,49 @@ if 'pagina' not in st.session_state:
     st.session_state.pagina = "📚 Cursos"
 
 # ============================================
-# BARRA LATERAL
+# BARRA LATERAL (só aparece após login)
 # ============================================
+
 st.sidebar.title("📁 Gestão de Dados")
 
-with st.sidebar.expander("📚 Dados de Cursos (Moodle)", expanded=True):
-    files_cursos = st.file_uploader("Upload CSV Cursos", type=["csv"], accept_multiple_files=True)
-    if files_cursos:
-        dfs = [pd.read_csv(f).rename(columns=lambda x: x.strip()) for f in files_cursos]
-        st.session_state.cursos_df = pd.concat(dfs, ignore_index=True)
-        st.sidebar.success(f"✅ {len(files_cursos)} ficheiro(s) carregado(s)")
+# Menu de navegação
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação")
 
-with st.sidebar.expander("📋 Dados de Questionários", expanded=True):
-    files_quest = st.file_uploader("Upload XLSX Questionários", type=["xlsx"], accept_multiple_files=True)
-    if files_quest:
-        dfs_q = [processar_questionarios_excel(f) for f in files_quest]
-        st.session_state.quest_df = pd.concat(dfs_q, ignore_index=True)
-        st.sidebar.success(f"✅ {len(files_quest)} ficheiro(s) carregado(s)")
+if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
+    st.session_state.pagina = "📚 Cursos"
+    st.rerun()
+
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
+    st.rerun()
+
+if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
+    st.session_state.pagina = "🎯 Gestão de Qualidade"
+    st.rerun()
+
+if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+    st.session_state.pagina = "⚔️ Comparador Versus"
+    st.rerun()
+
+if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
+    st.session_state.pagina = "📊 Dashboard"
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.caption("💡 Dica: Carregue os ficheiros nas secções acima")
+
 
 # Filtro global por Centro
 st.sidebar.markdown("---")
 lista_centros = set()
-if st.session_state.cursos_df is not None:
-    lista_centros.update(st.session_state.cursos_df["Centro"].unique())
-if st.session_state.quest_df is not None:
-    lista_centros.update(st.session_state.quest_df["Centro"].unique())
+# Usar os DataFrames editáveis (onde os dados realmente estão)
+if st.session_state.get("acoes_editaveis") is not None and not st.session_state.acoes_editaveis.empty:
+    if "Centro" in st.session_state.acoes_editaveis.columns:
+        lista_centros.update(st.session_state.acoes_editaveis["Centro"].dropna().unique())
+if st.session_state.get("quest_editaveis") is not None and not st.session_state.quest_editaveis.empty:
+    if "Centro" in st.session_state.quest_editaveis.columns:
+        lista_centros.update(st.session_state.quest_editaveis["Centro"].dropna().unique())
 
 st.session_state.filtro_centro = st.sidebar.multiselect(
     "Filtrar por Centro", 
@@ -122,14 +123,17 @@ st.session_state.filtro_centro = st.sidebar.multiselect(
     default=st.session_state.filtro_centro
 )
 
-
+# Botão de logout (agora na sidebar, mais intuitivo)
+st.sidebar.markdown("---")
+if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
+    st.session_state.clear()
+    st.rerun()
 
 # ============================================
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
 # ============================================
 
 if st.session_state.pagina == "📚 Cursos":
-    # Importar e executar a página de cursos
     from Pages.cursos import mostrar_cursos
     mostrar_cursos()
 
@@ -144,3 +148,7 @@ elif st.session_state.pagina == "🎯 Gestão de Qualidade":
 elif st.session_state.pagina == "⚔️ Comparador Versus":
     from Pages.comparador import mostrar_comparador
     mostrar_comparador()
+
+elif st.session_state.pagina == "📊 Dashboard":
+    from Pages.dashboardformacoes import mostrar_dashboard
+    mostrar_dashboard()
