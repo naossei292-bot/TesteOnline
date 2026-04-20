@@ -98,7 +98,7 @@ def mostrar_cursos():
             with open("assets/amostra_formacoes.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
             st.download_button(
-                label="📥 Descarregar ficheiro exemplo (Excel)",
+                label="📥 Descarregar ficheiro exemplo preenchido (Excel)",
                 data=conteudo_exemplo,
                 file_name="amostra_formacoes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
