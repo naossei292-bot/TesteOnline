@@ -158,7 +158,6 @@ def exibir_sec_ficheiros(titulo, ficheiros, chave_prefix):
                 os.remove(f["caminho"])
                 st.rerun()
 
-# ========================= NOVA FUNÇÃO PARA EXIBIR DADOS =========================
 def exibir_sec_dados():
     """
     Exibe a secção de ficheiros carregados (dados/<ano>)
@@ -242,123 +241,96 @@ def exibir_sec_dados():
                 os.remove(f["caminho"])
                 st.rerun()
 
-# ========================= INTERFACE PRINCIPAL =========================
-st.set_page_config(layout="wide", page_title="Gestão de Balanços e Relatórios")
-st.title("📁 Sistema de Gestão de Ficheiros")
+# ========================= FUNÇÃO PRINCIPAL (exportada) =========================
+def mostrar_relatorios():
+    """
+    Função que desenha a interface de gestão de balanços e relatórios.
+    Chamada a partir do app.py quando a página "Relatórios" é seleccionada.
+    """
+    # Não usar st.set_page_config (já está no app.py)
+    # Não verificar login (já feito no app.py)
+    st.title("📁 Sistema de Gestão de Ficheiros")
 
-# Verificação de login
-if not st.session_state.get("autenticado", False):
-    st.warning("Faça login para aceder a esta área.")
-    st.stop()
+    # ======================== BARRA LATERAL (Configurações) ========================
+    with st.sidebar:
+        st.header("⚙️ Configurações")
+        ano_exec = st.number_input("Ano", min_value=2000, max_value=2030, step=1, value=2025)
+        operacao = st.selectbox(
+            "Operação",
+            ["Gerar balanços e relatórios (completo)", "Apenas balanços", "Apenas relatórios"]
+        )
+        
+        st.divider()
+        st.subheader("📥 Carregar múltiplos ficheiros")
+        
+        ficheiros_carregados = st.file_uploader(
+            "Selecione um ou mais ficheiros (Excel/CSV)",
+            type=["xlsx", "xls", "csv"],
+            accept_multiple_files=True
+        )
+        
+        if st.button("🚀 EXECUTAR", type="primary"):
+            if not ficheiros_carregados:
+                st.error("Por favor, carregue pelo menos um ficheiro antes de executar.")
+            else:
+                with st.spinner("A processar ficheiros..."):
+                    dados_ano_dir = os.path.join(PASTA_DADOS, str(ano_exec))
+                    os.makedirs(dados_ano_dir, exist_ok=True)
+                    
+                    for ficheiro in ficheiros_carregados:
+                        caminho_destino = os.path.join(dados_ano_dir, ficheiro.name)
+                        with open(caminho_destino, "wb") as f:
+                            f.write(ficheiro.getbuffer())
+                        st.success(f"✓ {ficheiro.name} guardado em {caminho_destino}")
+                    
+                    try:
+                        if operacao in ["Gerar balanços e relatórios (completo)", "Apenas relatórios"]:
+                            preparar_dados_moodle(ano_exec)
+                            st.success(f"Relatórios Excel preparados para {ano_exec}!")
+                        if operacao in ["Gerar balanços e relatórios (completo)", "Apenas balanços"]:
+                            gerar_balancos(ano_exec)
+                            st.success(f"Balanços gerados para {ano_exec}!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro durante a execução: {e}")
 
-# ======================== BARRA LATERAL (Configurações) ========================
-# ============================================
-# MENU DE NAVEGAÇÃO
-# ============================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação")
+    # ======================== ÁREA DE FILTROS (Balanços e Relatórios) ========================
+    st.markdown("---")
+    st.subheader("🔍 Filtros rápidos")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        tipo_filtro = st.multiselect(
+            "Tipo de ficheiro",
+            ["Excel", "Word", "Balanços", "Relatórios", "Moodle"]
+        )
+    with col_f2:
+        anos_disponiveis = {"Todos"}
+        for pasta in [PASTA_BALANCO, PASTA_RELATORIOS]:
+            if os.path.exists(pasta):
+                for root, dirs, _ in os.walk(pasta):
+                    for d in dirs:
+                        if d.isdigit() and len(d) == 4:
+                            anos_disponiveis.add(d)
+                    for f in glob(os.path.join(root, "*.*")):
+                        ano = extrair_ano_do_caminho(f, pasta)
+                        if ano != "Desconhecido":
+                            anos_disponiveis.add(ano)
+        ano_filtro = st.selectbox("Filtrar por Ano", sorted(anos_disponiveis))
+    with col_f3:
+        pesquisa = st.text_input("Pesquisar por nome", placeholder="digite parte do nome...")
 
-# Botões de navegação na sidebar
-if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-    st.session_state.pagina = "📚 Cursos"
-    st.rerun()
+    # ======================== CARREGAR FICHEIROS (Balanços e Relatórios) ========================
+    balancos_raw = listar_ficheiros(PASTA_BALANCO, extensoes=["*.docx"])
+    relatorios_raw = listar_ficheiros(PASTA_RELATORIOS, extensoes=["*.xlsx", "*.xls"])
 
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
-    st.rerun()
+    balancos_filtrados = aplicar_filtros(balancos_raw, tipo_filtro, ano_filtro, pesquisa)
+    relatorios_filtrados = aplicar_filtros(relatorios_raw, tipo_filtro, ano_filtro, pesquisa)
 
-if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
-    st.session_state.pagina = "🎯 Gestão de Qualidade"
-    st.rerun()
+    # ======================== EXIBIR SECÇÕES ========================
+    st.markdown("---")
+    exibir_sec_ficheiros("📄 BALANÇOS", balancos_filtrados, "balancos")
+    st.markdown("---")
+    exibir_sec_ficheiros("📊 RELATÓRIOS EXCEL", relatorios_filtrados, "relatorios")
 
-if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-    st.session_state.pagina = "⚔️ Comparador Versus"
-    st.rerun()
-
-with st.sidebar:
-    st.header("⚙️ Configurações")
-    ano_exec = st.number_input("Ano", min_value=2000, max_value=2030, step=1, value=2025)
-    operacao = st.selectbox(
-        "Operação",
-        ["Gerar balanços e relatórios (completo)", "Apenas balanços", "Apenas relatórios"]
-    )
-    
-    st.divider()
-    st.subheader("📥 Carregar múltiplos ficheiros")
-    
-    # Permite selecionar vários ficheiros de uma vez
-    ficheiros_carregados = st.file_uploader(
-        "Selecione um ou mais ficheiros (Excel/CSV)",
-        type=["xlsx", "xls", "csv"],
-        accept_multiple_files=True
-    )
-    
-    if st.button("🚀 EXECUTAR", type="primary"):
-        if not ficheiros_carregados:
-            st.error("Por favor, carregue pelo menos um ficheiro antes de executar.")
-        else:
-            with st.spinner("A processar ficheiros..."):
-                # Garantir que a pasta de dados do ano existe
-                dados_ano_dir = os.path.join(PASTA_DADOS, str(ano_exec))
-                os.makedirs(dados_ano_dir, exist_ok=True)
-                
-                # Guardar cada ficheiro carregado
-                for ficheiro in ficheiros_carregados:
-                    caminho_destino = os.path.join(dados_ano_dir, ficheiro.name)
-                    with open(caminho_destino, "wb") as f:
-                        f.write(ficheiro.getbuffer())
-                    st.success(f"✓ {ficheiro.name} guardado em {caminho_destino}")
-                
-                # Agora executar as funções principais
-                try:
-                    if operacao in ["Gerar balanços e relatórios (completo)", "Apenas relatórios"]:
-                        preparar_dados_moodle(ano_exec)
-                        st.success(f"Relatórios Excel preparados para {ano_exec}!")
-                    if operacao in ["Gerar balanços e relatórios (completo)", "Apenas balanços"]:
-                        gerar_balancos(ano_exec)
-                        st.success(f"Balanços gerados para {ano_exec}!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro durante a execução: {e}")
-
-# ======================== ÁREA DE FILTROS (Balanços e Relatórios) ========================
-st.markdown("---")
-st.subheader("🔍 Filtros rápidos")
-col_f1, col_f2, col_f3 = st.columns(3)
-with col_f1:
-    tipo_filtro = st.multiselect(
-        "Tipo de ficheiro",
-        ["Excel", "Word", "Balanços", "Relatórios", "Moodle"]
-    )
-with col_f2:
-    # Obter anos disponíveis a partir das pastas de balanços e relatórios
-    anos_disponiveis = {"Todos"}
-    for pasta in [PASTA_BALANCO, PASTA_RELATORIOS]:
-        if os.path.exists(pasta):
-            for root, dirs, _ in os.walk(pasta):
-                for d in dirs:
-                    if d.isdigit() and len(d) == 4:
-                        anos_disponiveis.add(d)
-                for f in glob(os.path.join(root, "*.*")):
-                    ano = extrair_ano_do_caminho(f, pasta)
-                    if ano != "Desconhecido":
-                        anos_disponiveis.add(ano)
-    ano_filtro = st.selectbox("Filtrar por Ano", sorted(anos_disponiveis))
-with col_f3:
-    pesquisa = st.text_input("Pesquisar por nome", placeholder="digite parte do nome...")
-
-# ======================== CARREGAR FICHEIROS (Balanços e Relatórios) ========================
-balancos_raw = listar_ficheiros(PASTA_BALANCO, extensoes=["*.docx"])
-relatorios_raw = listar_ficheiros(PASTA_RELATORIOS, extensoes=["*.xlsx", "*.xls"])
-
-balancos_filtrados = aplicar_filtros(balancos_raw, tipo_filtro, ano_filtro, pesquisa)
-relatorios_filtrados = aplicar_filtros(relatorios_raw, tipo_filtro, ano_filtro, pesquisa)
-
-# ======================== EXIBIR SECÇÕES ========================
-st.markdown("---")
-exibir_sec_ficheiros("📄 BALANÇOS", balancos_filtrados, "balancos")
-st.markdown("---")
-exibir_sec_ficheiros("📊 RELATÓRIOS EXCEL", relatorios_filtrados, "relatorios")
-
-# ======================== NOVA SECÇÃO: DADOS CARREGADOS ========================
-exibir_sec_dados()
+    # ======================== NOVA SECÇÃO: DADOS CARREGADOS ========================
+    exibir_sec_dados()
