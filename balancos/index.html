@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Relatórios - Live Update</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-led {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: none;
+        }
+
+        .status-led.processing {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        .status-led.error {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.3; transform: scale(0.8); }
+        }
+
+        .toolbar {
+            padding: 20px;
+            background: #f8f9fa;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3em;
+            border-left: 4px solid #667eea;
+            padding-left: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .card-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .card-buttons .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        /* Garantir que todos os botões sm tenham o mesmo tamanho */
+        .btn-sm {
+            padding: 5px 12px !important;
+            font-size: 12px !important;
+            min-width: auto;
+            height: auto;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .upload-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .message {
+            margin: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            display: block;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            display: block;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            display: block;
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3em;
+            border-left: 4px solid #667eea;
+            padding-left: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-count {
+            font-size: 0.8em;
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 20px;
+        }
+
+        .file-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            border: 1px solid #e0e0e0;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .file-item.new {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        .file-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+
+        .file-meta {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .progress-container {
+            margin: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background-color: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .progress-status {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+        }
+
+        .auto-refresh-info {
+            font-size: 12px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .toolbar {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+            
+            .upload-group {
+                flex-direction: column;
+            }
+        }
+
+        .file-item {
+            cursor: default;
+            transition: all 0.2s;
+        }
+
+        .file-item[onclick] {
+            cursor: pointer;
+        }
+
+        .file-item[onclick]:hover {
+            background: #e3f2fd;
+            transform: translateX(5px);
+        }
+
+        .btn-filtro-rapido {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        
+        .btn-filtro-rapido:hover {
+            background: rgba(255,255,255,0.4);
+            transform: scale(1.05);
+        }
+        
+        .destaque-pesquisa {
+            background-color: #ffeb3b;
+            color: #333;
+            font-weight: bold;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Gestor de Relatórios</h1>
+            <p>Sistema Automático de Gestão de Documentos - Atualização em Tempo Real</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-led" id="statusLed"></div>
+                <span id="statusText">✅ Sistema pronto a usar!</span>
+            </div>
+            <div class="auto-refresh-info">
+                🔄 Atualização automática: <span id="refreshCount">0</span> atualizações
+            </div>
+        </div>
+        
+        <div class="config-panel" style="background: #f8f9fa; padding: 20px; margin: 0 20px; border-radius: 8px;">
+            <h3>⚙️ Configurações</h3>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                    <label style="display: block; margin-bottom: 5px;">📅 Ano:</label>
+                    <input type="number" id="anoInput" value="2024" min="2020" max="2030" 
+                        style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 5px;">🎯 Operação:</label>
+                    <select id="opcaoSelect" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                        <option value="3">✅ Gerar relatórios e balanços (completo)</option>
+                        <option value="1">📄 Apenas gerar balanços</option>
+                        <option value="2">📊 Apenas preencher relatórios</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-primary" onclick="executarMain()" id="executarBtn">
+                        🚀 EXECUTAR
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="progressContainer" class="progress-container">
+            <div class="progress-status" id="progressStatus">A aguardar início da execução...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+        </div>
+
+        <!-- BARRA DE PESQUISA GLOBAL -->
+        <div style="margin: 20px 20px 0 20px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 250px;">
+                    <div style="position: relative;">
+                        <input type="text" 
+                            id="pesquisaInput" 
+                            placeholder="🔍 Pesquisar por nome de ficheiro, local, ano..." 
+                            style="width: 100%; padding: 12px 15px; border: none; border-radius: 25px; font-size: 16px; padding-right: 50px; outline: none;">
+                        <span id="limparPesquisa" 
+                            style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 18px; display: none; color: #999;">
+                        ✖️
+                        </span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 20px;">
+                        <span style="color: white;">📊 Resultados: </span>
+                        <strong id="resultadosContagem" style="color: white; font-size: 18px;">0</strong>
+                    </div>
+                    <button id="limparPesquisaBtn" class="btn btn-secondary" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid white;" onclick="limparPesquisa()">
+                        🗑️ Limpar
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Filtros rápidos -->
+            <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <span style="color: white; font-size: 12px;">🔖 Filtros rápidos:</span>
+                <button class="btn-filtro-rapido" data-filtro=".xlsx">📊 Excel</button>
+                <button class="btn-filtro-rapido" data-filtro=".docx">📄 Word</button>
+                <button class="btn-filtro-rapido" data-filtro="BA_">📑 Balanços</button>
+                <button class="btn-filtro-rapido" data-filtro="Relatório">📈 Relatórios</button>
+                <button class="btn-filtro-rapido" data-filtro="moodle">📚 Moodle</button>
+            </div>
+        </div>
+
+        <div style="margin: 0 20px 20px 20px; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 1.2em;">🔍</span>
+                    <strong style="color: #333;">Filtrar por Ano:</strong>
+                </div>
+                <select id="filtroAno" style="padding: 8px 15px; border-radius: 8px; border: 2px solid #667eea; background: white; font-size: 14px; cursor: pointer; min-width: 150px;">
+                    <option value="todos">📅 Todos os Anos</option>
+                </select>
+                <div id="filtroStatus" style="font-size: 12px; color: #666; margin-left: auto;">
+                    <span id="filtroContagem">0</span> itens visíveis
+                </div>
+                <button id="limparFiltroBtn" class="btn btn-sm btn-secondary" style="padding: 8px 15px;" onclick="limparFiltro()">
+                    🗑️ Limpar Filtro
+                </button>
+            </div>
+        </div>
+        
+        <div id="message" class="message"></div>
+        
+        <div class="dashboard">
+            <div class="card">
+                <h2>📦 MODELOS DISPONÍVEIS 
+                    <span id="modelosCount" class="file-count">0</span>
+                    <div class="card-buttons">
+                        <button class="btn btn-sm btn-info" onclick="mostrarUploadModelo()">
+                            ➕ Adicionar
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="downloadModelos()">
+                            📥 Download Modelos
+                        </button>
+                    </div>
+                </h2>
+                <div id="modelos-list" class="file-list">
+                    <div class="empty">A carregar modelos...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📁 DADOS CARREGADOS 
+                    <span id="dadosCount" class="file-count">0</span>
+                    <div class="card-buttons">
+                        <button class="btn btn-sm btn-info" onclick="mostrarUploadDados()">
+                            📁 Ver Pastas
+                        </button>
+                    </div>
+                </h2>
+                <div id="dados-list" class="file-list">
+                    <div class="empty">A carregar...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>📄 BALANÇOS 
+                    <span id="balancoCount" class="file-count">0</span>
+                    <div class="card-buttons">
+                        <button class="btn btn-sm btn-info" onclick="downloadBalanco()">
+                            📥 Download Balanços
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="apagarTodosBalanco()">
+                            🗑️ Apagar Todos
+                        </button>
+                    </div>
+                </h2>
+                <div id="balanco-list" class="file-list">
+                    <div class="empty">A carregar...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📊 RELATÓRIOS EXCEL 
+                    <span id="relatoriosCount" class="file-count">0</span>
+                    <div class="card-buttons">
+                        <button class="btn btn-sm btn-info" onclick="downloadRelatorios()">
+                            📥 Download Relatórios
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="apagarTodosRelatorios()">
+                            🗑️ Apagar Todos
+                        </button>
+                    </div>
+                </h2>
+                <div id="relatorios-list" class="file-list">
+                    <div class="empty">A carregar...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para upload de modelos -->
+        <div id="uploadModeloModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
+                <h3 style="margin-bottom: 20px;">📤 Carregar Novo Modelo</h3>
+                <input type="file" id="modeloFileInput" accept=".xlsx,.xls,.docx,.doc,.pdf,.txt,.csv" style="margin-bottom: 20px; width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="fecharUploadModelo()">Cancelar</button>
+                    <button class="btn btn-success" onclick="uploadModelo()">Carregar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para upload de dados com gestão de pastas -->
+        <div id="uploadDadosModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+            <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <h3 style="margin-bottom: 20px;">📁 Gestor de Ficheiros de Dados</h3>
+                
+                <!-- Navegação de pastas -->
+                <div style="margin-bottom: 20px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-secondary" onclick="navegarPasta('')" id="btnRaiz">🏠 Raiz</button>
+                        <button class="btn btn-sm btn-secondary" onclick="voltarPasta()" id="btnVoltar" style="display: none;">⬅️ Voltar</button>
+                        <div style="flex: 1;">
+                            <span style="font-size: 12px; color: #666;">Pasta atual:</span>
+                            <strong id="pastaAtualLabel">/</strong>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Criar nova pasta -->
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <input type="text" id="novaPastaNome" placeholder="Nome da nova pasta (apenas números)" 
+                        style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 5px;"
+                        oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                        pattern="[0-9]*"
+                        title="Apenas números são permitidos">
+                    <button class="btn btn-success" onclick="criarNovaPasta()">
+                        📁 Criar Pasta
+                    </button>
+                </div>
+                
+                <!-- Lista de arquivos e pastas -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 10px;">📂 Conteúdo da pasta:</h4>
+                    <div id="conteudoPasta" style="max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px;">
+                        <div class="empty">A carregar...</div>
+                    </div>
+                </div>
+                
+                <!-- Upload de ficheiros -->
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <h4 style="margin-bottom: 10px;">📤 Carregar Ficheiros</h4>
+                    <input type="file" id="dadosFileInput" multiple accept=".xlsx,.xls,.docx,.doc,.pdf,.txt,.csv,.png,.jpg,.jpeg" 
+                        style="margin-bottom: 10px; width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <button class="btn btn-primary" onclick="uploadDadosParaPasta()" style="width: 100%;">
+                        📤 Carregar Ficheiros
+                    </button>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="fecharUploadDados()">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        let lastFileStates = {
+            dados: [],
+            balanco: [],
+            relatorios: []
+        };
+        let refreshCounter = 0;
+        let isProcessing = false;
+        let executionStartTime = null;
+        let modelosAtuais = [];
+
+        // Carregar lista de ficheiros com deteção de novos ficheiros
+        async function carregarFicheiros() {
+            try {
+                const response = await fetch('/listar_ficheiros');
+                const data = await response.json();
+                
+                // Detetar novos ficheiros
+                detectarNovosFicheiros('dados', data.dados, lastFileStates.dados);
+                detectarNovosFicheiros('balanco', data.balanco, lastFileStates.balanco);
+                detectarNovosFicheiros('relatorios', data.relatorios, lastFileStates.relatorios);
+                
+                // Atualizar estados
+                lastFileStates.dados = data.dados || [];
+                lastFileStates.balanco = data.balanco || [];
+                lastFileStates.relatorios = data.relatorios || [];
+                
+                renderizarFicheiros('dados-list', data.dados, 'dados');
+                renderizarFicheiros('balanco-list', data.balanco, 'balanco');
+                renderizarFicheiros('relatorios-list', data.relatorios, 'relatorios');
+                
+                // Atualizar contadores
+                document.getElementById('dadosCount').textContent = data.dados?.length || 0;
+                document.getElementById('balancoCount').textContent = data.balanco?.length || 0;
+                document.getElementById('relatoriosCount').textContent = data.relatorios?.length || 0;
+                
+                refreshCounter++;
+                const refreshCountElem = document.getElementById('refreshCount');
+                if (refreshCountElem) {
+                    refreshCountElem.textContent = refreshCounter;
+                }
+                
+                // Se está em processamento, verificar se já terminou
+                if (isProcessing) {
+                    verificarFimProcessamento(data);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar ficheiros:', error);
+                mostrarMensagem('Erro ao carregar ficheiros: ' + error.message, 'error');
+            }
+        }
+
+        function detectarNovosFicheiros(tipo, novosFicheiros, ficheirosAntigos) {
+            if (!novosFicheiros || !ficheirosAntigos) return;
+            
+            const novosNomes = novosFicheiros.map(f => f.nome);
+            const antigosNomes = ficheirosAntigos.map(f => f.nome);
+            
+            const adicionados = novosNomes.filter(nome => !antigosNomes.includes(nome));
+            
+            if (adicionados.length > 0 && isProcessing) {
+                mostrarMensagem(`✨ Novo ${tipo === 'dados' ? 'ficheiro carregado' : (tipo === 'balanco' ? 'balanço gerado' : 'relatório gerado')}: ${adicionados.join(', ')}`, 'info');
+            }
+        }
+
+        function renderizarFicheiros(elementId, files, tipo) {
+            const container = document.getElementById(elementId);
+            
+            if (!files || files.length === 0) {
+                container.innerHTML = '<div class="empty">📭 Nenhum ficheiro encontrado</div>';
+                return;
+            }
+            
+            // Ordenar por data modificação (mais recente primeiro)
+            const sortedFiles = [...files].sort((a, b) => b.modificado - a.modificado);
+            
+            container.innerHTML = sortedFiles.map(file => {
+                const isNew = isRecentlyCreated(file.modificado);
+                
+                // Extrair o ano do caminho (ex: "2022/Relatório_Lisboa.xlsx" -> "2022")
+                let ano = '';
+                let nomeExibicao = file.nome_apenas || file.nome;
+                
+                if (file.nome.includes('/')) {
+                    const partes = file.nome.split('/');
+                    ano = partes[0];
+                    nomeExibicao = partes[partes.length - 1];
+                }
+                
+                return `
+                <div class="file-item ${isNew ? 'new' : ''}">
+                    <div class="file-info">
+                        <div class="file-name">📄 ${escapeHtml(nomeExibicao)}</div>
+                        <div class="file-meta">
+                            ${formatarTamanho(file.tamanho)} • ${formatarData(file.modificado)}
+                            ${ano ? ` • 📁 ${ano}` : ''}
+                            ${isNew ? ' • 🆕 Novo!' : ''}
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button onclick="descarregar('${tipo}', '${escapeHtml(file.nome)}')" 
+                                class="btn btn-success" style="padding: 5px 10px;" title="Descarregar">
+                            ⬇️
+                        </button>
+                        <button onclick="apagar('${tipo}', '${escapeHtml(file.nome)}')" 
+                                class="btn btn-danger" style="padding: 5px 10px;" title="Apagar">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+            
+            // Remover a classe new após 3 segundos
+            setTimeout(() => {
+                document.querySelectorAll('.file-item.new').forEach(el => {
+                    el.classList.remove('new');
+                });
+            }, 3000);
+        }
+
+        function isRecentlyCreated(timestamp) {
+            const now = Date.now() / 1000;
+            const diff = now - timestamp;
+            return diff < 10;
+        }
+
+        function formatarTamanho(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatarData(timestamp) {
+            const data = new Date(timestamp * 1000);
+            return data.toLocaleDateString('pt-PT') + ' ' + data.toLocaleTimeString('pt-PT');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function mostrarMensagem(texto, tipo) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = `message ${tipo}`;
+            messageDiv.innerHTML = texto;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function uploadFiles() {
+            const files = document.getElementById('fileInput').files;
+            if (files.length === 0) {
+                mostrarMensagem('⚠️ Por favor, selecione ficheiros para carregar', 'error');
+                return;
+            }
+            
+            let sucessos = 0;
+            
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        sucessos++;
+                    } else {
+                        mostrarMensagem(`❌ Erro: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    mostrarMensagem(`❌ Erro ao carregar ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (sucessos > 0) {
+                mostrarMensagem(`✅ ${sucessos} ficheiros carregados com sucesso!`, 'success');
+                await carregarFicheiros();
+            }
+            
+            document.getElementById('fileInput').value = '';
+        }
+
+        async function executarMain() {
+            const ano = document.getElementById('anoInput').value;
+            const operacao = document.getElementById('opcaoSelect').value;
+            const executarBtn = document.getElementById('executarBtn');
+            
+            executarBtn.disabled = true;
+            executarBtn.textContent = '⏳ PROCESSANDO...';
+            
+            const progressContainer = document.getElementById('progressContainer');
+            progressContainer.style.display = 'block';
+            
+            atualizarStatus('processing', '🔄 Processando ficheiros...');
+            isProcessing = true;
+            executionStartTime = Date.now();
+            
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(() => {
+                carregarFicheiros();
+            }, 1000);
+            
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                if (isProcessing) {
+                    progress = Math.min(progress + Math.random() * 5, 90);
+                    atualizarBarraProgresso(progress, 'Processando ficheiros...');
+                } else {
+                    clearInterval(progressInterval);
+                }
+            }, 1000);
+            
+            try {
+                const response = await fetch('/executar_main', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ano: parseInt(ano),
+                        operacao: parseInt(operacao)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarMensagem('✅ ' + data.success, 'success');
+                    atualizarBarraProgresso(100, 'Processamento concluído com sucesso!');
+                    
+                    setTimeout(() => {
+                        clearInterval(progressInterval);
+                        clearInterval(autoRefreshInterval);
+                        autoRefreshInterval = setInterval(() => {
+                            carregarFicheiros();
+                            carregarModelos();
+                        }, 3000);
+                        isProcessing = false;
+                        atualizarStatus('ready', '✅ Processamento concluído!');
+                        executarBtn.disabled = false;
+                        executarBtn.textContent = '🚀 EXECUTAR';
+                        
+                        setTimeout(() => {
+                            document.getElementById('progressContainer').style.display = 'none';
+                        }, 3000);
+                    }, 10000);
+                } else {
+                    mostrarMensagem('❌ ' + data.error, 'error');
+                    clearInterval(progressInterval);
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = setInterval(() => {
+                        carregarFicheiros();
+                        carregarModelos();
+                    }, 3000);
+                    isProcessing = false;
+                    atualizarStatus('error', '❌ Erro no processamento');
+                    executarBtn.disabled = false;
+                    executarBtn.textContent = '🚀 EXECUTAR';
+                    
+                    setTimeout(() => {
+                        document.getElementById('progressContainer').style.display = 'none';
+                    }, 3000);
+                }
+            } catch (error) {
+                mostrarMensagem('❌ Erro: ' + error.message, 'error');
+                clearInterval(progressInterval);
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = setInterval(() => {
+                    carregarFicheiros();
+                    carregarModelos();
+                }, 3000);
+                isProcessing = false;
+                atualizarStatus('error', '❌ Erro na comunicação');
+                executarBtn.disabled = false;
+                executarBtn.textContent = '🚀 EXECUTAR';
+                
+                setTimeout(() => {
+                    document.getElementById('progressContainer').style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function atualizarBarraProgresso(percent, status) {
+            const progressFill = document.getElementById('progressFill');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            percent = Math.min(100, Math.max(0, percent));
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = Math.round(percent) + '%';
+            progressStatus.textContent = status;
+        }
+
+        function verificarFimProcessamento(data) {
+            const totalFicheiros = (data.dados?.length || 0) + (data.balanco?.length || 0) + (data.relatorios?.length || 0);
+            const tempoDecorrido = (Date.now() - executionStartTime) / 1000;
+            
+            if (tempoDecorrido > 5 && totalFicheiros > 0) {
+                const progresso = Math.min(90, (totalFicheiros / 10) * 100);
+                atualizarBarraProgresso(progresso, `Gerados ${totalFicheiros} ficheiros até agora...`);
+            }
+        }
+
+        function atualizarStatus(status, texto) {
+            const led = document.getElementById('statusLed');
+            const statusText = document.getElementById('statusText');
+            
+            led.className = 'status-led';
+            if (status === 'processing') {
+                led.classList.add('processing');
+            } else if (status === 'error') {
+                led.classList.add('error');
+            }
+            
+            statusText.textContent = texto;
+        }
+
+        async function descarregar(tipo, filename) {
+            window.open(`/download/${tipo}/${encodeURIComponent(filename)}`, '_blank');
+        }
+
+        async function apagar(tipo, filename) {
+            if (confirm(`⚠️ Tem certeza que deseja apagar "${filename}"?`)) {
+                try {
+                    const response = await fetch(`/apagar/${tipo}/${encodeURIComponent(filename)}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        mostrarMensagem(data.success, 'success');
+                        await carregarFicheiros();
+                    } else {
+                        mostrarMensagem(data.error, 'error');
+                    }
+                } catch (error) {
+                    mostrarMensagem('❌ Erro ao apagar: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // Funções para gestão de modelos
+        async function carregarModelos() {
+            try {
+                const response = await fetch('/listar_modelos');
+                const data = await response.json();
+                
+                if (data.success) {
+                    modelosAtuais = data.arquivos;
+                    renderizarModelos(data.arquivos);
+                    document.getElementById('modelosCount').textContent = data.total;
+                } else {
+                    console.error('Erro ao carregar modelos:', data.error);
+                    document.getElementById('modelos-list').innerHTML = '<div class="empty">❌ Erro ao carregar modelos</div>';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar modelos:', error);
+                document.getElementById('modelos-list').innerHTML = '<div class="empty">❌ Erro ao carregar modelos</div>';
+            }
+        }
+
+        function renderizarModelos(modelos) {
+            const container = document.getElementById('modelos-list');
+            
+            if (!modelos || modelos.length === 0) {
+                container.innerHTML = '<div class="empty">📭 Nenhum modelo encontrado. Clique em "Adicionar" para carregar novos modelos.</div>';
+                return;
+            }
+            
+            function getIcone(extensao) {
+                const icons = {
+                    '.xlsx': '📊',
+                    '.xls': '📊',
+                    '.docx': '📄',
+                    '.doc': '📄',
+                    '.pdf': '📑',
+                    '.txt': '📝',
+                    '.csv': '📈'
+                };
+                return icons[extensao] || '📁';
+            }
+            
+            container.innerHTML = modelos.map(modelo => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <div class="file-name">
+                            ${getIcone(modelo.extensao)} ${escapeHtml(modelo.nome)}
+                        </div>
+                        <div class="file-meta">
+                            ${formatarTamanho(modelo.tamanho)} • ${formatarData(modelo.modificado)}
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button onclick="descarregarModelo('${escapeHtml(modelo.nome)}')" 
+                                class="btn btn-success" style="padding: 5px 10px;" title="Descarregar">
+                            ⬇️
+                        </button>
+                        <button onclick="apagarModelo('${escapeHtml(modelo.nome)}')" 
+                                class="btn btn-danger" style="padding: 5px 10px;" title="Apagar">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function mostrarUploadModelo() {
+            document.getElementById('uploadModeloModal').style.display = 'flex';
+            document.getElementById('modeloFileInput').value = '';
+        }
+
+        function fecharUploadModelo() {
+            document.getElementById('uploadModeloModal').style.display = 'none';
+        }
+
+        async function uploadModelo() {
+            const fileInput = document.getElementById('modeloFileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                mostrarMensagem('⚠️ Por favor, selecione um ficheiro para carregar', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                mostrarMensagem(`🔄 A carregar "${file.name}"...`, 'info');
+                
+                const response = await fetch('/upload_modelo', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    fecharUploadModelo();
+                    await carregarModelos();
+                } else {
+                    mostrarMensagem('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro no upload:', error);
+                mostrarMensagem('❌ Erro ao carregar modelo: ' + error.message, 'error');
+            }
+        }
+
+        async function descarregarModelo(filename) {
+            try {
+                window.open(`/download_modelo/${encodeURIComponent(filename)}`, '_blank');
+                mostrarMensagem(`✅ Download de "${filename}" iniciado`, 'success');
+            } catch (error) {
+                console.error('Erro no download:', error);
+                mostrarMensagem('❌ Erro ao descarregar modelo: ' + error.message, 'error');
+            }
+        }
+
+        async function apagarModelo(filename) {
+            if (confirm(`⚠️ Tem certeza que deseja apagar o modelo "${filename}"?\n\nEsta ação não pode ser desfeita.`)) {
+                try {
+                    const response = await fetch(`/apagar_modelo/${encodeURIComponent(filename)}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        mostrarMensagem(data.message, 'success');
+                        await carregarModelos();
+                    } else {
+                        mostrarMensagem('❌ ' + data.error, 'error');
+                    }
+                } catch (error) {
+                    console.error('Erro ao apagar:', error);
+                    mostrarMensagem('❌ Erro ao apagar modelo: ' + error.message, 'error');
+                }
+            }
+        }
+
+        async function downloadModelos() {
+            try {
+                mostrarMensagem('🔄 A preparar download dos modelos...', 'info');
+                
+                const response = await fetch('/download_modelos', {
+                    method: 'GET'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'modelos.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                mostrarMensagem('✅ Download dos modelos iniciado com sucesso!', 'success');
+            } catch (error) {
+                console.error('Erro no download:', error);
+                mostrarMensagem('❌ Erro ao fazer download dos modelos: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadBalanco() {
+            try {
+                mostrarMensagem('🔄 A preparar download da pasta de balanços...', 'info');
+                
+                const response = await fetch('/download_pasta/balanco', {
+                    method: 'GET'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || `Erro HTTP: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'balancos.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                mostrarMensagem('✅ Download da pasta de balanços iniciado com sucesso!', 'success');
+            } catch (error) {
+                console.error('Erro no download:', error);
+                mostrarMensagem('❌ Erro ao fazer download dos balanços: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadRelatorios() {
+            try {
+                mostrarMensagem('🔄 A preparar download da pasta de relatórios...', 'info');
+                
+                const response = await fetch('/download_pasta/relatorios', {
+                    method: 'GET'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || `Erro HTTP: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'relatorios.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                mostrarMensagem('✅ Download da pasta de relatórios iniciado com sucesso!', 'success');
+            } catch (error) {
+                console.error('Erro no download:', error);
+                mostrarMensagem('❌ Erro ao fazer download dos relatórios: ' + error.message, 'error');
+            }
+        }
+
+        // NOVAS FUNÇÕES PARA UPLOAD DE DADOS
+        function mostrarUploadDados() {
+            pastaAtualDados = '';
+            document.getElementById('uploadDadosModal').style.display = 'flex';
+            carregarConteudoPasta();
+        }
+
+        function fecharUploadDados() {
+            document.getElementById('uploadDadosModal').style.display = 'none';
+        }
+
+        async function uploadDados() {
+            const fileInput = document.getElementById('dadosFileInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                mostrarMensagem('⚠️ Por favor, selecione ficheiros para carregar', 'error');
+                return;
+            }
+            
+            let sucessos = 0;
+            let erros = 0;
+            
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    mostrarMensagem(`🔄 A carregar "${file.name}"...`, 'info');
+                    
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        sucessos++;
+                    } else {
+                        erros++;
+                        mostrarMensagem(`❌ Erro ao carregar ${file.name}: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    erros++;
+                    mostrarMensagem(`❌ Erro ao carregar ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (sucessos > 0) {
+                mostrarMensagem(`✅ ${sucessos} ficheiros carregados com sucesso!${erros > 0 ? ` (${erros} erros)` : ''}`, 'success');
+                fecharUploadDados();
+                await carregarFicheiros();
+            } else if (erros > 0) {
+                mostrarMensagem(`❌ Falha ao carregar ${erros} ficheiros.`, 'error');
+            }
+            
+            document.getElementById('dadosFileInput').value = '';
+        }
+
+        async function apagarTodosBalanco() {
+            // Confirmar com o usuário
+            const confirmar = confirm(
+                '⚠️ ATENÇÃO! ⚠️\n\n' +
+                'Esta ação irá apagar TODOS os ficheiros da pasta de BALANÇOS.\n\n' +
+                'Esta operação é IRREVERSÍVEL e os ficheiros apagados não poderão ser recuperados.\n\n' +
+                'Tem certeza que deseja continuar?'
+            );
+            
+            if (!confirmar) {
+                mostrarMensagem('❌ Operação cancelada pelo utilizador', 'info');
+                return;
+            }
+            
+            // Segunda confirmação para maior segurança
+            const confirmarNovamente = confirm(
+                '⚠️ ÚLTIMO AVISO! ⚠️\n\n' +
+                'Você está prestes a apagar TODOS os balanços.\n\n' +
+                'Digite "CONFIRMAR" no campo abaixo para prosseguir:'
+            );
+            
+            if (!confirmarNovamente) {
+                mostrarMensagem('❌ Operação cancelada pelo utilizador', 'info');
+                return;
+            }
+            
+            const confirmacaoTexto = prompt('Digite "CONFIRMAR" para confirmar a exclusão de TODOS os balanços:');
+            
+            if (confirmacaoTexto !== 'CONFIRMAR') {
+                mostrarMensagem('❌ Confirmação incorreta. Operação cancelada.', 'error');
+                return;
+            }
+            
+            try {
+                mostrarMensagem('🔄 A apagar todos os balanços...', 'info');
+                
+                const response = await fetch('/apagar_todos/balanco', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    await carregarFicheiros(); // Recarregar a lista
+                } else {
+                    mostrarMensagem('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao apagar balanços:', error);
+                mostrarMensagem('❌ Erro ao apagar balanços: ' + error.message, 'error');
+            }
+        }
+
+        async function apagarTodosRelatorios() {
+            // Confirmar com o usuário
+            const confirmar = confirm(
+                '⚠️ ATENÇÃO! ⚠️\n\n' +
+                'Esta ação irá apagar TODOS os ficheiros da pasta de RELATÓRIOS.\n\n' +
+                'Esta operação é IRREVERSÍVEL e os ficheiros apagados não poderão ser recuperados.\n\n' +
+                'Tem certeza que deseja continuar?'
+            );
+            
+            if (!confirmar) {
+                mostrarMensagem('❌ Operação cancelada pelo utilizador', 'info');
+                return;
+            }
+            
+            // Segunda confirmação para maior segurança
+            const confirmarNovamente = confirm(
+                '⚠️ ÚLTIMO AVISO! ⚠️\n\n' +
+                'Você está prestes a apagar TODOS os relatórios.\n\n' +
+                'Digite "CONFIRMAR" no campo abaixo para prosseguir:'
+            );
+            
+            if (!confirmarNovamente) {
+                mostrarMensagem('❌ Operação cancelada pelo utilizador', 'info');
+                return;
+            }
+            
+            const confirmacaoTexto = prompt('Digite "CONFIRMAR" para confirmar a exclusão de TODOS os relatórios:');
+            
+            if (confirmacaoTexto !== 'CONFIRMAR') {
+                mostrarMensagem('❌ Confirmação incorreta. Operação cancelada.', 'error');
+                return;
+            }
+            
+            try {
+                mostrarMensagem('🔄 A apagar todos os relatórios...', 'info');
+                
+                const response = await fetch('/apagar_todos/relatorios', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    await carregarFicheiros(); // Recarregar a lista
+                } else {
+                    mostrarMensagem('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao apagar relatórios:', error);
+                mostrarMensagem('❌ Erro ao apagar relatórios: ' + error.message, 'error');
+            }
+        }
+
+        let pastaAtualDados = '';
+        let conteudoPastaAtual = [];
+
+        async function carregarConteudoPasta() {
+            try {
+                const response = await fetch(`/listar_dados_com_pastas?pasta=${encodeURIComponent(pastaAtualDados)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    conteudoPastaAtual = data.itens;
+                    renderizarConteudoPasta(data.itens);
+                    document.getElementById('pastaAtualLabel').textContent = pastaAtualDados || '/';
+                    
+                    // Controlar visibilidade do botão voltar
+                    const btnVoltar = document.getElementById('btnVoltar');
+                    if (pastaAtualDados) {
+                        btnVoltar.style.display = 'inline-block';
+                    } else {
+                        btnVoltar.style.display = 'none';
+                    }
+                } else {
+                    mostrarMensagem('❌ Erro ao carregar conteúdo: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar pasta:', error);
+                mostrarMensagem('❌ Erro ao carregar conteúdo da pasta', 'error');
+            }
+        }
+
+        function renderizarConteudoPasta(itens) {
+            const container = document.getElementById('conteudoPasta');
+            
+            if (!itens || itens.length === 0) {
+                container.innerHTML = '<div class="empty">📭 Pasta vazia</div>';
+                return;
+            }
+            
+            container.innerHTML = itens.map(item => {
+                if (item.tipo === 'pasta') {
+                    return `
+                        <div class="file-item" style="cursor: pointer;" onclick="navegarPasta('${item.caminho}')">
+                            <div class="file-info">
+                                <div class="file-name">📁 ${escapeHtml(item.nome)}</div>
+                                <div class="file-meta">
+                                    Pasta • ${formatarData(item.modificado)}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button onclick="event.stopPropagation(); apagarItem('${item.caminho}', 'pasta')" 
+                                        class="btn btn-danger" style="padding: 5px 10px;" title="Apagar pasta e conteúdo">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="file-item">
+                            <div class="file-info">
+                                <div class="file-name">📄 ${escapeHtml(item.nome)}</div>
+                                <div class="file-meta">
+                                    ${formatarTamanho(item.tamanho)} • ${formatarData(item.modificado)}
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button onclick="descarregar('dados', '${escapeHtml(item.caminho)}')" 
+                                        class="btn btn-success" style="padding: 5px 10px;" title="Descarregar">
+                                    ⬇️
+                                </button>
+                                <button onclick="apagarItem('${escapeHtml(item.caminho)}', 'arquivo')" 
+                                        class="btn btn-danger" style="padding: 5px 10px;" title="Apagar">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        async function criarNovaPasta() {
+            const nomePasta = document.getElementById('novaPastaNome').value.trim();
+            
+            if (!nomePasta) {
+                mostrarMensagem('⚠️ Por favor, insira um nome para a pasta', 'error');
+                return;
+            }
+            
+            // Validar se contém apenas números
+            if (!/^\d+$/.test(nomePasta)) {
+                mostrarMensagem('⚠️ O nome da pasta deve conter apenas números!', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/criar_pasta', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        nome_pasta: nomePasta,
+                        pasta_atual: pastaAtualDados
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    document.getElementById('novaPastaNome').value = '';
+                    await carregarConteudoPasta();
+                } else {
+                    mostrarMensagem('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao criar pasta:', error);
+                mostrarMensagem('❌ Erro ao criar pasta: ' + error.message, 'error');
+            }
+        }
+
+        async function uploadDadosParaPasta() {
+            const fileInput = document.getElementById('dadosFileInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                mostrarMensagem('⚠️ Por favor, selecione ficheiros para carregar', 'error');
+                return;
+            }
+            
+            let sucessos = 0;
+            let erros = 0;
+            
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('pasta_destino', pastaAtualDados);
+                
+                try {
+                    mostrarMensagem(`🔄 A carregar "${file.name}"...`, 'info');
+                    
+                    const response = await fetch('/upload_para_pasta', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        sucessos++;
+                    } else {
+                        erros++;
+                        mostrarMensagem(`❌ Erro ao carregar ${file.name}: ${data.error}`, 'error');
+                    }
+                } catch (error) {
+                    erros++;
+                    mostrarMensagem(`❌ Erro ao carregar ${file.name}: ${error.message}`, 'error');
+                }
+            }
+            
+            if (sucessos > 0) {
+                mostrarMensagem(`✅ ${sucessos} ficheiros carregados com sucesso!${erros > 0 ? ` (${erros} erros)` : ''}`, 'success');
+                await carregarConteudoPasta();
+                await carregarFicheiros(); // Recarregar lista principal
+            } else if (erros > 0) {
+                mostrarMensagem(`❌ Falha ao carregar ${erros} ficheiros.`, 'error');
+            }
+            
+            document.getElementById('dadosFileInput').value = '';
+        }
+
+        async function apagarItem(caminho, tipo) {
+            let mensagemConfirmacao = tipo === 'pasta' 
+                ? `⚠️ Tem certeza que deseja apagar a pasta "${caminho}" e TODO o seu conteúdo?\n\nEsta ação é IRREVERSÍVEL!`
+                : `⚠️ Tem certeza que deseja apagar o ficheiro "${caminho.split('/').pop()}"?`;
+            
+            if (confirm(mensagemConfirmacao)) {
+                try {
+                    const response = await fetch('/apagar_item', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            caminho: caminho,
+                            tipo: tipo
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        mostrarMensagem(data.message, 'success');
+                        await carregarConteudoPasta();
+                        await carregarFicheiros(); // Recarregar lista principal
+                    } else {
+                        mostrarMensagem('❌ ' + data.error, 'error');
+                    }
+                } catch (error) {
+                    console.error('Erro ao apagar:', error);
+                    mostrarMensagem('❌ Erro ao apagar: ' + error.message, 'error');
+                }
+            }
+        }
+
+        // ============================================
+        // SISTEMA DE FILTRAGEM POR ANO
+        // ============================================
+
+        let anoFiltroAtual = 'todos';
+        let dadosOriginais = { dados: [], balanco: [], relatorios: [] };
+
+        // Função para extrair ano de diferentes tipos de ficheiros
+        function extrairAnoDoFicheiro(ficheiro, tipo) {
+            if (tipo === 'dados') {
+                // Para dados: verificar se está dentro de uma pasta com nome de ano (ex: "2021/ficheiro.xlsx")
+                if (ficheiro.nome && ficheiro.nome.includes('/')) {
+                    const ano = ficheiro.nome.split('/')[0];
+                    if (/^\d{4}$/.test(ano)) {
+                        return ano;
+                    }
+                }
+                return null;
+            } 
+            else if (tipo === 'balanco') {
+                // Para balanços: formato "BA_Nome_2021.docx" ou "BA_Nome_2021.xlsx"
+                const nome = ficheiro.nome_apenas || ficheiro.nome;
+                const match = nome.match(/_(\d{4})\./);
+                if (match) {
+                    return match[1];
+                }
+                return null;
+            }
+            else if (tipo === 'relatorios') {
+                // Para relatórios: verificar pasta ou nome do ficheiro
+                if (ficheiro.nome && ficheiro.nome.includes('/')) {
+                    const ano = ficheiro.nome.split('/')[0];
+                    if (/^\d{4}$/.test(ano)) {
+                        return ano;
+                    }
+                }
+                const nome = ficheiro.nome_apenas || ficheiro.nome;
+                const match = nome.match(/_(\d{4})\./);
+                if (match) {
+                    return match[1];
+                }
+                return null;
+            }
+            return null;
+        }
+
+        // Função para extrair todos os anos disponíveis nos dados atuais
+        function extrairAnosDisponiveis() {
+            const anos = new Set();
+            
+            // Adicionar anos dos dados
+            if (dadosOriginais.dados) {
+                dadosOriginais.dados.forEach(item => {
+                    const ano = extrairAnoDoFicheiro(item, 'dados');
+                    if (ano) anos.add(ano);
+                });
+            }
+            
+            // Adicionar anos dos balanços
+            if (dadosOriginais.balanco) {
+                dadosOriginais.balanco.forEach(item => {
+                    const ano = extrairAnoDoFicheiro(item, 'balanco');
+                    if (ano) anos.add(ano);
+                });
+            }
+            
+            // Adicionar anos dos relatórios
+            if (dadosOriginais.relatorios) {
+                dadosOriginais.relatorios.forEach(item => {
+                    const ano = extrairAnoDoFicheiro(item, 'relatorios');
+                    if (ano) anos.add(ano);
+                });
+            }
+            
+            return Array.from(anos).sort().reverse();
+        }
+
+        // Atualizar a dropdown com os anos disponíveis
+        function atualizarDropdownAnos() {
+            const anos = extrairAnosDisponiveis();
+            const select = document.getElementById('filtroAno');
+            const valorAtual = select.value;
+            
+            // Manter a opção "todos"
+            let options = '<option value="todos">📅 Todos os Anos</option>';
+            
+            // Adicionar anos encontrados
+            anos.forEach(ano => {
+                const selected = (valorAtual === ano) ? 'selected' : '';
+                options += `<option value="${ano}" ${selected}>📁 ${ano}</option>`;
+            });
+            
+            select.innerHTML = options;
+            
+            // Se não há anos disponíveis, desabilitar o filtro
+            if (anos.length === 0) {
+                select.disabled = true;
+                document.getElementById('filtroStatus').innerHTML = '<span style="color: #999;">📭 Nenhum ano disponível</span>';
+            } else {
+                select.disabled = false;
+            }
+        }
+
+        // Função principal de filtragem
+        function aplicarFiltro() {
+            const anoSelecionado = document.getElementById('filtroAno').value;
+            anoFiltroAtual = anoSelecionado;
+            
+            let totalVisiveis = 0;
+            
+            // Filtrar dados
+            if (anoSelecionado === 'todos') {
+                // Mostrar todos os ficheiros originais
+                renderizarFicheiros('dados-list', dadosOriginais.dados, 'dados');
+                renderizarFicheiros('balanco-list', dadosOriginais.balanco, 'balanco');
+                renderizarFicheiros('relatorios-list', dadosOriginais.relatorios, 'relatorios');
+                
+                totalVisiveis = (dadosOriginais.dados?.length || 0) + 
+                                (dadosOriginais.balanco?.length || 0) + 
+                                (dadosOriginais.relatorios?.length || 0);
+            } else {
+                // Filtrar por ano
+                const dadosFiltrados = dadosOriginais.dados?.filter(item => 
+                    extrairAnoDoFicheiro(item, 'dados') === anoSelecionado
+                ) || [];
+                
+                const balancoFiltrados = dadosOriginais.balanco?.filter(item => 
+                    extrairAnoDoFicheiro(item, 'balanco') === anoSelecionado
+                ) || [];
+                
+                const relatoriosFiltrados = dadosOriginais.relatorios?.filter(item => 
+                    extrairAnoDoFicheiro(item, 'relatorios') === anoSelecionado
+                ) || [];
+                
+                renderizarFicheiros('dados-list', dadosFiltrados, 'dados');
+                renderizarFicheiros('balanco-list', balancoFiltrados, 'balanco');
+                renderizarFicheiros('relatorios-list', relatoriosFiltrados, 'relatorios');
+                
+                totalVisiveis = dadosFiltrados.length + balancoFiltrados.length + relatoriosFiltrados.length;
+            }
+            
+            // Atualizar contagem
+            document.getElementById('filtroContagem').textContent = totalVisiveis;
+            
+            // Mostrar mensagem de filtro ativo
+            if (anoSelecionado !== 'todos') {
+                const mensagemFiltro = document.getElementById('message');
+                if (mensagemFiltro) {
+                    mostrarMensagem(`🔍 Filtro ativo: mostrando apenas ficheiros do ano ${anoSelecionado} (${totalVisiveis} itens)`, 'info');
+                }
+            }
+        }
+
+        // Limpar filtro
+        function limparFiltro() {
+            const select = document.getElementById('filtroAno');
+            select.value = 'todos';
+            aplicarFiltro();
+            mostrarMensagem('🔓 Filtro removido. A mostrar todos os ficheiros.', 'info');
+        }
+
+        // Sobrescrever a função carregarFicheiros original para guardar os dados originais
+        const carregarFicheirosOriginal = carregarFicheiros;
+        carregarFicheiros = async function() {
+            try {
+                const response = await fetch('/listar_ficheiros');
+                const data = await response.json();
+                
+                // Guardar dados originais
+                dadosOriginais.dados = data.dados || [];
+                dadosOriginais.balanco = data.balanco || [];
+                dadosOriginais.relatorios = data.relatorios || [];
+                
+                // Detetar novos ficheiros
+                detectarNovosFicheiros('dados', dadosOriginais.dados, lastFileStates.dados);
+                detectarNovosFicheiros('balanco', dadosOriginais.balanco, lastFileStates.balanco);
+                detectarNovosFicheiros('relatorios', dadosOriginais.relatorios, lastFileStates.relatorios);
+                
+                // Atualizar estados
+                lastFileStates.dados = dadosOriginais.dados;
+                lastFileStates.balanco = dadosOriginais.balanco;
+                lastFileStates.relatorios = dadosOriginais.relatorios;
+                
+                // Atualizar dropdown de anos
+                atualizarDropdownAnos();
+                
+                // Aplicar filtro atual (se houver)
+                aplicarFiltro();
+                
+                // Atualizar contadores nos cards (usando dados originais)
+                document.getElementById('dadosCount').textContent = dadosOriginais.dados?.length || 0;
+                document.getElementById('balancoCount').textContent = dadosOriginais.balanco?.length || 0;
+                document.getElementById('relatoriosCount').textContent = dadosOriginais.relatorios?.length || 0;
+                
+                refreshCounter++;
+                const refreshCountElem = document.getElementById('refreshCount');
+                if (refreshCountElem) {
+                    refreshCountElem.textContent = refreshCounter;
+                }
+                
+                // Se está em processamento, verificar se já terminou
+                if (isProcessing) {
+                    verificarFimProcessamento(data);
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar ficheiros:', error);
+                mostrarMensagem('Erro ao carregar ficheiros: ' + error.message, 'error');
+            }
+        };
+
+        // Adicionar evento à dropdown
+        document.addEventListener('DOMContentLoaded', function() {
+            const filtroSelect = document.getElementById('filtroAno');
+            if (filtroSelect) {
+                filtroSelect.addEventListener('change', aplicarFiltro);
+            }
+            
+            // Adicionar estilos para indicar filtro ativo
+            const style = document.createElement('style');
+            style.textContent = `
+                .filtro-ativo {
+                    background: #667eea20 !important;
+                    border-left: 4px solid #667eea !important;
+                }
+            `;
+            document.head.appendChild(style);
+        });
+
+        // ============================================
+        // SISTEMA DE PESQUISA GLOBAL
+        // ============================================
+
+        let termoPesquisaAtual = '';
+        let pesquisaTimeout = null;
+
+        // Inicializar pesquisa
+        function inicializarPesquisa() {
+            const inputPesquisa = document.getElementById('pesquisaInput');
+            if (!inputPesquisa) return;
+            
+            inputPesquisa.addEventListener('input', function(e) {
+                termoPesquisaAtual = e.target.value.trim();
+                
+                // Mostrar/esconder botão de limpar
+                const limparBtn = document.getElementById('limparPesquisa');
+                if (limparBtn) {
+                    limparBtn.style.display = termoPesquisaAtual ? 'inline-block' : 'none';
+                }
+                
+                // Debounce para não sobrecarregar
+                if (pesquisaTimeout) clearTimeout(pesquisaTimeout);
+                pesquisaTimeout = setTimeout(() => {
+                    aplicarPesquisaGlobal();
+                }, 300);
+            });
+            
+            // Tecla ESC para limpar pesquisa
+            inputPesquisa.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    limparPesquisa();
+                }
+            });
+            
+            // Filtros rápidos
+            document.querySelectorAll('.btn-filtro-rapido').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const filtro = this.getAttribute('data-filtro');
+                    inputPesquisa.value = filtro;
+                    termoPesquisaAtual = filtro;
+                    aplicarPesquisaGlobal();
+                });
+            });
+        }
+
+        // Função principal de pesquisa global
+        function aplicarPesquisaGlobal() {
+            if (!termoPesquisaAtual) {
+                // Se não há termo de pesquisa, mostrar tudo
+                renderizarFicheiros('dados-list', dadosOriginais.dados, 'dados');
+                renderizarFicheiros('balanco-list', dadosOriginais.balanco, 'balanco');
+                renderizarFicheiros('relatorios-list', dadosOriginais.relatorios, 'relatorios');
+                document.getElementById('resultadosContagem').textContent = 
+                    (dadosOriginais.dados?.length || 0) + 
+                    (dadosOriginais.balanco?.length || 0) + 
+                    (dadosOriginais.relatorios?.length || 0);
+                return;
+            }
+            
+            const termo = termoPesquisaAtual.toLowerCase();
+            let totalEncontrados = 0;
+            
+            // Filtrar dados
+            const dadosFiltrados = dadosOriginais.dados?.filter(item => {
+                const nomeCompleto = (item.nome_apenas || item.nome).toLowerCase();
+                const caminho = item.nome.toLowerCase();
+                return nomeCompleto.includes(termo) || caminho.includes(termo);
+            }) || [];
+            
+            // Filtrar balanços
+            const balancoFiltrados = dadosOriginais.balanco?.filter(item => {
+                const nomeCompleto = (item.nome_apenas || item.nome).toLowerCase();
+                return nomeCompleto.includes(termo);
+            }) || [];
+            
+            // Filtrar relatórios
+            const relatoriosFiltrados = dadosOriginais.relatorios?.filter(item => {
+                const nomeCompleto = (item.nome_apenas || item.nome).toLowerCase();
+                const caminho = item.nome.toLowerCase();
+                return nomeCompleto.includes(termo) || caminho.includes(termo);
+            }) || [];
+            
+            totalEncontrados = dadosFiltrados.length + balancoFiltrados.length + relatoriosFiltrados.length;
+            
+            // Renderizar com destaque
+            renderizarFicheirosComDestaque('dados-list', dadosFiltrados, 'dados', termo);
+            renderizarFicheirosComDestaque('balanco-list', balancoFiltrados, 'balanco', termo);
+            renderizarFicheirosComDestaque('relatorios-list', relatoriosFiltrados, 'relatorios', termo);
+            
+            // Atualizar contagem
+            document.getElementById('resultadosContagem').textContent = totalEncontrados;
+            
+            // Mostrar mensagem
+            if (totalEncontrados === 0) {
+                mostrarMensagem(`🔍 Nenhum resultado encontrado para "${termoPesquisaAtual}"`, 'info');
+            } else {
+                console.log(`🔍 Encontrados ${totalEncontrados} resultados para "${termoPesquisaAtual}"`);
+            }
+        }
+
+        // Função para destacar texto
+        function destacarTexto(texto, termo) {
+            if (!termo || !texto) return texto;
+            const regex = new RegExp(`(${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return texto.replace(regex, '<span class="destaque-pesquisa">$1</span>');
+        }
+
+        // Renderizar com destaque na pesquisa
+        function renderizarFicheirosComDestaque(elementId, files, tipo, termo) {
+            const container = document.getElementById(elementId);
+            
+            if (!files || files.length === 0) {
+                container.innerHTML = '<div class="empty">📭 Nenhum ficheiro encontrado</div>';
+                return;
+            }
+            
+            const sortedFiles = [...files].sort((a, b) => b.modificado - a.modificado);
+            
+            container.innerHTML = sortedFiles.map(file => {
+                let ano = '';
+                let nomeExibicao = file.nome_apenas || file.nome;
+                let caminhoExibicao = file.nome;
+                
+                if (file.nome.includes('/')) {
+                    const partes = file.nome.split('/');
+                    ano = partes[0];
+                    nomeExibicao = partes[partes.length - 1];
+                }
+                
+                // Destacar o termo pesquisado
+                const nomeDestacado = destacarTexto(escapeHtml(nomeExibicao), termo);
+                
+                return `
+                    <div class="file-item">
+                        <div class="file-info">
+                            <div class="file-name">📄 ${nomeDestacado}</div>
+                            <div class="file-meta">
+                                ${formatarTamanho(file.tamanho)} • ${formatarData(file.modificado)}
+                                ${ano ? ` • 📁 ${ano}` : ''}
+                                ${termo ? ` • 🔍 "${termo}"` : ''}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button onclick="descarregar('${tipo}', '${escapeHtml(file.nome)}')" 
+                                    class="btn btn-success" style="padding: 5px 10px;" title="Descarregar">
+                                ⬇️
+                            </button>
+                            <button onclick="apagar('${tipo}', '${escapeHtml(file.nome)}')" 
+                                    class="btn btn-danger" style="padding: 5px 10px;" title="Apagar">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function limparPesquisa() {
+            const inputPesquisa = document.getElementById('pesquisaInput');
+            if (inputPesquisa) {
+                inputPesquisa.value = '';
+                termoPesquisaAtual = '';
+                aplicarPesquisaGlobal();
+                mostrarMensagem('🔓 Pesquisa limpa. A mostrar todos os ficheiros.', 'info');
+            }
+        }
+
+        // Modificar a função carregarFicheiros original para suportar pesquisa
+        const carregarFicheirosComPesquisa = carregarFicheiros;
+        carregarFicheiros = async function() {
+            await carregarFicheirosComPesquisa();
+            // Reaplicar pesquisa se houver termo ativo
+            if (termoPesquisaAtual) {
+                aplicarPesquisaGlobal();
+            }
+        };
+
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            inicializarPesquisa();
+        });
+
+        function navegarPasta(caminho) {
+            pastaAtualDados = caminho;
+            carregarConteudoPasta();
+        }
+
+        function voltarPasta() {
+            if (pastaAtualDados) {
+                const partes = pastaAtualDados.split('/');
+                partes.pop();
+                pastaAtualDados = partes.join('/');
+                carregarConteudoPasta();
+            }
+        }
+
+        // Iniciar atualização automática
+        function iniciarAutoRefresh() {
+            carregarFicheiros();
+            carregarModelos();
+            autoRefreshInterval = setInterval(() => {
+                carregarFicheiros();
+                carregarModelos();
+            }, 3000);
+        }
+
+        // Carregar ficheiros quando a página abrir e iniciar auto-refresh
+        iniciarAutoRefresh();
+    </script>
+</body>
+</html>
