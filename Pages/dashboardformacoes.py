@@ -135,20 +135,44 @@ def painel_detalhe_satisfacao(df: pd.DataFrame):
     col_sat = "Taxa de satisfação Final"
     if col_sat not in df.columns or "Ação" not in df.columns:
         return
+    
     df_sat = df[["Ação", "Centro", col_sat]].dropna(subset=[col_sat])
     if df_sat.empty:
         st.info("Sem dados de satisfação.")
         return
-    melhor = df_sat.sort_values(col_sat, ascending=False)
-    pior = df_sat.sort_values(col_sat, ascending=True)
+
+    st.markdown("#### 🎯 Divisão por Objetivo de Satisfação")
+    
+    # Definir o objetivo (threshold) com um slider
+    valor_min = df_sat[col_sat].min()
+    valor_max = df_sat[col_sat].max()
+    objetivo = st.slider(
+        "Defina o objetivo (valor mínimo para considerar 'acima'):",
+        min_value=float(valor_min),
+        max_value=float(valor_max),
+        value=3.0,  # valor padrão, pode ser ajustado
+        step=0.1,
+        key="objetivo_satisfacao"
+    )
+    
+    # Separar os dados
+    df_acima = df_sat[df_sat[col_sat] >= objetivo].sort_values(col_sat, ascending=False)
+    df_abaixo = df_sat[df_sat[col_sat] < objetivo].sort_values(col_sat, ascending=True)
+    
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("#### ⭐ Melhores Taxas de Satisfação")
-        st.dataframe(melhor, use_container_width=True, hide_index=True)
+        st.markdown(f"#### ✅ Acima do objetivo (≥ {objetivo})")
+        if df_acima.empty:
+            st.info("Nenhuma ação atinge este objetivo.")
+        else:
+            st.dataframe(df_acima, use_container_width=True, hide_index=True)
     with col2:
-        st.markdown("#### ❌ Piores Taxas de Satisfação")
-        st.dataframe(pior, use_container_width=True, hide_index=True)
-
+        st.markdown(f"#### ❌ Abaixo do objetivo (< {objetivo})")
+        if df_abaixo.empty:
+            st.info("Nenhuma ação está abaixo deste objetivo.")
+        else:
+            st.dataframe(df_abaixo, use_container_width=True, hide_index=True)
+            
 def painel_detalhe_valor_recebido(df: pd.DataFrame):
     if "Valor Total Recebido" not in df.columns or "Ação" not in df.columns:
         return
@@ -518,37 +542,41 @@ def grafico_receita(df: pd.DataFrame):
                       yaxis=dict(showgrid=False), legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig, use_container_width=True)
 
-# ── TABELA GERAL (substitui a antiga "Top Ações") ─────────────────────────────
 def tabela_geral_acoes(df: pd.DataFrame):
     """
     Exibe a tabela completa de todas as ações (após filtros) com possibilidade de selecionar colunas.
+    A ordem de exibição segue a mesma estrutura da página de cursos (todas_colunas_dados).
     """
     if df.empty:
         st.info("Nenhum dado para exibir.")
         return
 
-    # Lista de colunas disponíveis (excluímos colunas que não interessam)
-    colunas_excluir = ["Apagar", "_Tipo", "Data Inicial", "Data Final"]  # Data serão tratadas à parte
-    colunas_disponiveis = [c for c in df.columns if c not in colunas_excluir and not c.startswith("_")]
+    # Ordem canónica das colunas (igual à usada na página "Análise de Formações")
+    ordem_canonica = [
+        "Status", "Ação", "Data Inicial", "Data Final", "Centro",
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
+        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
+        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
+        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
+        "Taxa de satisfação Final", "Nacionalidades(Portugueses/Estrangeiros)",
+        "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
+    ]
 
-    # Se existirem colunas de data, adicionamo‑las formatadas
-    colunas_data = []
-    for data_col in ["Data Inicial", "Data Final"]:
-        if data_col in df.columns:
-            colunas_data.append(data_col)
-            colunas_disponiveis.append(data_col)  # para aparecer na seleção
-
-    # Ordenar colunas para melhor apresentação
-    colunas_disponiveis.sort()
+    # Filtrar apenas as colunas que realmente existem no DataFrame
+    colunas_existentes = [col for col in ordem_canonica if col in df.columns]
+    # Também incluir eventuais colunas adicionais que não estejam na ordem canónica (por segurança)
+    colunas_adicionais = [col for col in df.columns if col not in ordem_canonica and col not in ["Apagar", "_Tipo"]]
+    todas_colunas_opcoes = colunas_existentes + colunas_adicionais
 
     st.markdown("---")
     st.markdown(f'<p style="font-size:.95rem;font-weight:600;color:{COR_PRIMARIA};margin-bottom:6px;">📋 Todas as Ações ({len(df)} registos)</p>', unsafe_allow_html=True)
 
-    # Seletor de colunas
+    # Seletor de colunas (as opções aparecem na ordem canónica)
     colunas_selecionadas = st.multiselect(
         "Escolha as colunas a exibir:",
-        options=colunas_disponiveis,
-        default=colunas_disponiveis[:10],  # mostra as primeiras 10 por padrão
+        options=todas_colunas_opcoes,
+        default=colunas_existentes[:10],  # mostra as primeiras 10 da ordem canónica por padrão
         key="tabela_geral_colunas"
     )
 
@@ -556,11 +584,15 @@ def tabela_geral_acoes(df: pd.DataFrame):
         st.warning("Selecione pelo menos uma coluna.")
         return
 
+    # Reordenar as colunas selecionadas conforme a ordem canónica (primeiro as existentes na ordem, depois as adicionais)
+    colunas_ordenadas = [col for col in ordem_canonica if col in colunas_selecionadas]
+    colunas_ordenadas += [col for col in colunas_selecionadas if col not in ordem_canonica]
+
     # Construir DataFrame a exibir
-    df_exibir = df[colunas_selecionadas].copy()
+    df_exibir = df[colunas_ordenadas].copy()
 
     # Formatar colunas de data (se estiverem presentes e forem datetime)
-    for data_col in colunas_data:
+    for data_col in ["Data Inicial", "Data Final"]:
         if data_col in df_exibir.columns and pd.api.types.is_datetime64_any_dtype(df_exibir[data_col]):
             df_exibir[data_col] = df_exibir[data_col].dt.strftime("%d/%m/%Y")
 
@@ -569,7 +601,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
         if "Valor" in col and pd.api.types.is_numeric_dtype(df_exibir[col]):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
 
-    # Configuração de colunas para o st.dataframe
+    # Configuração de colunas para o st.dataframe (barras de progresso para números inteiros)
     column_config = {}
     for col in df_exibir.columns:
         if col in ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"]:
@@ -591,7 +623,6 @@ def tabela_geral_acoes(df: pd.DataFrame):
         column_config=column_config,
         height=min(600, 35 + len(df_exibir) * 35)
     )
-
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
