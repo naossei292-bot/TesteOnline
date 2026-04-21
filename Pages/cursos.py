@@ -2,53 +2,97 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+import re
 
 def converter_colunas_numericas(df: pd.DataFrame) -> pd.DataFrame:
     """Converte colunas relevantes para numérico (float)."""
-    colunas_numericas = ["Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado", "Valor da Ação", "Valor Total"]
+    colunas_numericas = [
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
+        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
+        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
+        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
+        "Taxa de satisfação Final", "Valor total a receber", "Valor Total Recebido",
+        "Avaliação formador"
+    ]
     for col in colunas_numericas:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
-def calcular_valor_total(df: pd.DataFrame) -> pd.DataFrame:
-    """Calcula Valor Total = Valor da Ação * Inscritos, se aplicável."""
-    df = df.copy()
-    if "Valor da Ação" in df.columns and "Valor Total" in df.columns and "Inscritos" in df.columns:
-        df["Valor da Ação"] = pd.to_numeric(df["Valor da Ação"], errors="coerce")
-        df["Inscritos"] = pd.to_numeric(df["Inscritos"], errors="coerce")
-        df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce")
-        mask = (df["Valor da Ação"].notna()) & (df["Valor Total"].isna())
-        if mask.any():
-            df.loc[mask, "Valor Total"] = df.loc[mask, "Valor da Ação"] * df.loc[mask, "Inscritos"]
+def normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica normalizações: conversão numérica."""
+    df = converter_colunas_numericas(df)
     return df
 
-def normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Aplica todas as normalizações: conversão numérica e cálculo do Valor Total."""
-    df = converter_colunas_numericas(df)
-    df = calcular_valor_total(df)
-    return df
+def obter_max_mes_satisfacao(df: pd.DataFrame) -> int:
+    if df.empty:
+        return 2
+    padrao = re.compile(r"Taxa de Satisfação M(\d{2})")
+    max_mes = 2
+    for col in df.columns:
+        match = padrao.match(col)
+        if match:
+            mes = int(match.group(1))
+            if df[col].notna().any():
+                if mes > max_mes:
+                    max_mes = mes
+    return max_mes
+
+def atualizar_colunas_satisfacao():
+    if 'acoes_editaveis' not in st.session_state or st.session_state.acoes_editaveis.empty:
+        max_mes = 2
+    else:
+        df_temp = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore")
+        max_mes = obter_max_mes_satisfacao(df_temp)
+
+    colunas_satisfacao = [f"Taxa de Satisfação M{i:02d}" for i in range(1, max_mes + 1)]
+
+    atuais = st.session_state.get("colunas_selecionadas", [])
+    outras_colunas = [col for col in atuais if not col.startswith("Taxa de Satisfação M")]
+    novas_selecionadas = outras_colunas + [col for col in colunas_satisfacao if col not in outras_colunas]
+    todas_opcoes = [
+        "Status", "Ação", "Data Inicial", "Data Final", "Centro",
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
+        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
+        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
+        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
+        "Taxa de satisfação Final", "Nacionalidades(Portugueses/Estrangeiros)",
+        "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
+    ]
+    novas_selecionadas = [col for col in todas_opcoes if col in novas_selecionadas]
+
+    if set(novas_selecionadas) != set(st.session_state.colunas_selecionadas):
+        st.session_state.colunas_selecionadas = novas_selecionadas
+        return True
+    return False
 
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
 
-    # Inicializar contador para forçar recriação do data_editor
     if "editor_key_counter" not in st.session_state:
         st.session_state.editor_key_counter = 0
 
-    # Limpar o parâmetro de refresh após o carregamento
     if "refresh_trigger" in st.query_params:
-        # Remove o parâmetro para não ficar na URL
         del st.query_params["refresh_trigger"]
 
     todas_colunas_dados = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Concluídos", "Avaliados", "Aprovados", "Planeado",
-        "Formador", "Valor da Ação", "Valor Total"
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
+        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
+        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
+        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
+        "Taxa de satisfação Final", "Nacionalidades(Portugueses/Estrangeiros)",
+        "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
     ]
 
     if "colunas_selecionadas" not in st.session_state:
-        st.session_state.colunas_selecionadas = todas_colunas_dados.copy()
+        st.session_state.colunas_selecionadas = [
+            col for col in todas_colunas_dados
+            if not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"]
+        ]
 
     st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
     colunas_escolhidas = st.multiselect(
@@ -80,6 +124,9 @@ def mostrar_cursos():
     else:
         st.session_state.acoes_editaveis = normalizar_dataframe(st.session_state.acoes_editaveis)
 
+    if atualizar_colunas_satisfacao():
+        st.rerun()
+
     # ---------- Carregar ficheiro ----------
     st.subheader("📤 Carregar dados a partir de ficheiro")
 
@@ -94,31 +141,33 @@ def mostrar_cursos():
             key="carga_acoes_upload"
         )
     with col3:
+        # FIX 1: Removido o espaço extra no caminho ("assets/ " → "assets/")
         try:
-            with open("assets/amostra_formacoes.xlsx", "rb") as f:
+            with open("assets/Modelo_Acoes_Preenchido.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
             st.download_button(
                 label="📥 Descarregar ficheiro exemplo preenchido (Excel)",
                 data=conteudo_exemplo,
-                file_name="amostra_formacoes.xlsx",
+                file_name="Modelo_Acoes_Preenchido.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
         except FileNotFoundError:
-            st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/amostra_formacoes.xlsx'.")
+            st.error("⚠️ Ficheiro de exemplo preenchido não encontrado. Verifique o caminho 'assets/Modelo_Acoes_Preenchido.xlsx'.")
+
     with col4:
         try:
-            with open("assets/amostra_formacoes_vazio.xlsx", "rb") as f:
+            with open("assets/Modelo_Acoes.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
             st.download_button(
                 label="📥 Descarregar ficheiro exemplo vazio (Excel)",
                 data=conteudo_exemplo,
-                file_name="amostra_formacoes_vazio.xlsx",
+                file_name="Modelo_Acoes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
         except FileNotFoundError:
-            st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/amostra_formacoes_vazio.xlsx'.")
+            st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Modelo_Acoes.xlsx'.")
 
     if ficheiros_carga:
         lista_dfs = []
@@ -127,28 +176,64 @@ def mostrar_cursos():
             try:
                 if nome.endswith('.csv'):
                     df_parcial = pd.read_csv(ficheiro)
+                    df_parcial.columns = df_parcial.columns.str.strip()
+
                 elif nome.endswith('.xlsx'):
-                    df_parcial = pd.read_excel(ficheiro)
+                    # FIX 2: header=1 para saltar a linha em branco do topo do ficheiro Excel
+                    df_parcial = pd.read_excel(ficheiro, header=1)
+                    df_parcial.columns = df_parcial.columns.str.strip()
+
+                    # FIX 3: Juntar colunas "Portugueses" e "Estrangeiros" numa só coluna
+                    if 'Portugueses' in df_parcial.columns and 'Estrangeiros' in df_parcial.columns:
+                        df_parcial['Nacionalidades(Portugueses/Estrangeiros)'] = (
+                            df_parcial['Portugueses'].fillna('').astype(str).str.strip()
+                            + '/'
+                            + df_parcial['Estrangeiros'].fillna('').astype(str).str.strip()
+                        )
+                        df_parcial.drop(columns=['Portugueses', 'Estrangeiros'], inplace=True)
+
+                    # Limpar espaços em colunas de texto
+                    for col in ['Ação', 'Status', 'Centro', 'Formador']:
+                        if col in df_parcial.columns:
+                            df_parcial[col] = df_parcial[col].astype(str).str.strip()
+                            df_parcial[col] = df_parcial[col].replace('nan', None)
+
                 else:
                     st.warning(f"Ficheiro ignorado (formato não suportado): {ficheiro.name}")
                     continue
 
-                df_parcial.columns = df_parcial.columns.str.strip()
                 mapeamento = {
                     'status': 'Status', 'acao': 'Ação',
                     'dataini': 'Data Inicial', 'datafim': 'Data Final',
                     'centro': 'Centro',
-                    'inscritos': 'Inscritos', 'concluidos': 'Concluídos',
-                    'avaliados': 'Avaliados', 'aprovados': 'Aprovados',
-                    'planeado': 'Planeado', 'formador': 'Formador',
-                    'valorAcao': 'Valor da Ação', 'valorTotal': 'Valor Total',
+                    'inscritos': 'Inscritos', 'aptos': 'Aptos',
+                    'inaptos': 'Inaptos', 'desistentes': 'Desistentes',
+                    'devedores': 'Devedores',
+                    'taxa_satisfacao_m01': 'Taxa de Satisfação M01',
+                    'taxa_satisfacao_m02': 'Taxa de Satisfação M02',
+                    'taxa_satisfacao_m03': 'Taxa de Satisfação M03',
+                    'taxa_satisfacao_m04': 'Taxa de Satisfação M04',
+                    'taxa_satisfacao_m05': 'Taxa de Satisfação M05',
+                    'taxa_satisfacao_m06': 'Taxa de Satisfação M06',
+                    'taxa_satisfacao_m07': 'Taxa de Satisfação M07',
+                    'taxa_satisfacao_m08': 'Taxa de Satisfação M08',
+                    'taxa_satisfacao_m09': 'Taxa de Satisfação M09',
+                    'taxa_satisfacao_m10': 'Taxa de Satisfação M10',
+                    'taxa_satisfacao_m11': 'Taxa de Satisfação M11',
+                    'taxa_satisfacao_m12': 'Taxa de Satisfação M12',
+                    'taxa_final': 'Taxa de satisfação Final',
+                    'nacionalidades': 'Nacionalidades(Portugueses/Estrangeiros)',
+                    'valor_total_receber': 'Valor total a receber',
+                    'valor_total_recebido': 'Valor Total Recebido',
+                    'formador': 'Formador',
+                    'avaliacao_formador': 'Avaliação formador'
                 }
                 df_parcial.rename(columns={k: v for k, v in mapeamento.items() if k in df_parcial.columns}, inplace=True)
 
-                for col in colunas_dados:
+                for col in todas_colunas_dados:
                     if col not in df_parcial.columns:
                         df_parcial[col] = None
-                df_parcial = df_parcial[colunas_dados]
+                df_parcial = df_parcial[todas_colunas_dados]
                 df_parcial.insert(0, "Apagar", False)
 
                 df_parcial = normalizar_dataframe(df_parcial)
@@ -164,22 +249,18 @@ def mostrar_cursos():
                 st.session_state.acoes_editaveis = pd.concat(
                     [st.session_state.acoes_editaveis, df_novo], ignore_index=True
                 )
-            # Incrementar contador para forçar recriação do data_editor
             st.session_state.editor_key_counter += 1
             st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
             st.rerun()
 
         st.markdown("---")
+
     st.subheader("✏️ Editar tabela de ações")
 
-    # Botão para forçar atualização manual (recria o placeholder)
     col_upd1, col_upd2 = st.columns([1, 5])
     with col_upd1:
         if st.button("🔄 Atualizar Tabela", use_container_width=True, key="btn_refresh"):
-            # Incrementa o parâmetro refresh na URL
             import time
-
-            # Gera um timestamp único
             timestamp = int(time.time())
             st.query_params["refresh_trigger"] = str(timestamp)
             st.rerun()
@@ -191,16 +272,15 @@ def mostrar_cursos():
         num_linhas = st.number_input("Número de linhas a adicionar:", min_value=1, max_value=10000, value=5, step=1)
     with col_add2:
         if st.button("Adicionar linhas vazias"):
-            novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
+            novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in todas_colunas_dados})
             novas_linhas.insert(0, "Apagar", False)
             st.session_state.acoes_editaveis = pd.concat([st.session_state.acoes_editaveis, novas_linhas], ignore_index=True)
             st.session_state.editor_key_counter += 1
             st.rerun()
 
-    # ---------- Tabela editável (com placeholder) ----------
+    # ---------- Tabela editável ----------
     placeholder = st.empty()
 
-    # Preparar DataFrame
     df_atual = st.session_state.acoes_editaveis.copy()
     if "Apagar" not in df_atual.columns:
         df_atual.insert(0, "Apagar", False)
@@ -211,12 +291,12 @@ def mostrar_cursos():
             cols.insert(0, "Apagar")
             df_atual = df_atual[cols]
 
+    colunas_para_mostrar = ["Apagar"] + [col for col in colunas_dados if col in df_atual.columns]
     for col in colunas_dados:
         if col not in df_atual.columns:
             df_atual[col] = None
-    df_atual = df_atual[["Apagar"] + colunas_dados]
+    df_atual = df_atual[colunas_para_mostrar]
 
-    # Recriar o data_editor dentro do placeholder
     with placeholder.container():
         edited_df = st.data_editor(
             df_atual,
@@ -230,7 +310,13 @@ def mostrar_cursos():
         )
 
     if not edited_df.equals(df_atual):
-        df_normalizado = normalizar_dataframe(edited_df)
+        df_completo = st.session_state.acoes_editaveis.copy()
+        for col in edited_df.columns:
+            if col != "Apagar":
+                df_completo[col] = edited_df[col].values
+        if "Apagar" in edited_df.columns:
+            df_completo["Apagar"] = edited_df["Apagar"].values
+        df_normalizado = normalizar_dataframe(df_completo)
         st.session_state.acoes_editaveis = df_normalizado
         st.session_state.editor_key_counter += 1
         st.rerun()
@@ -242,9 +328,13 @@ def mostrar_cursos():
     with col_bot1:
         if st.button("🗑️ Limpar todos os dados", use_container_width=True):
             st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+            st.session_state.colunas_selecionadas = [
+                col for col in todas_colunas_dados
+                if not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"]
+            ]
             st.session_state.editor_key_counter += 1
             st.rerun()
-    
+
     with col_bot2:
         if st.button("✖️ Apagar selecionados", use_container_width=True):
             df = st.session_state.acoes_editaveis.copy()
@@ -266,7 +356,6 @@ def mostrar_cursos():
     st.markdown("---")
     st.subheader("📎 Exportar dados")
 
-    # Botão de download direto (sem duplo clique)
     df_export = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore")
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -281,7 +370,8 @@ def mostrar_cursos():
         use_container_width=True,
         key="download_cursos_excel"
     )
-    # ---------- Métricas resumo (FORA do with col_exp1) ----------
+
+    # ---------- Métricas resumo ----------
     df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
     df_metricas = converter_colunas_numericas(df_metricas)
 
@@ -300,17 +390,24 @@ def mostrar_cursos():
             if "Inscritos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Inscritos"])
             else 0
         )
-        total_conc = (
-            df_metricas["Concluídos"].sum()
-            if "Concluídos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Concluídos"])
+        total_aptos = (
+            df_metricas["Aptos"].sum()
+            if "Aptos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Aptos"])
             else 0
         )
-        taxa_conc = (total_conc / total_inscricoes * 100) if total_inscricoes > 0 else 0
+        taxa_aprovacao = (total_aptos / total_inscricoes * 100) if total_inscricoes > 0 else 0
 
-        col1, col2, col3 = st.columns(3)
+        media_satisfacao = (
+            df_metricas["Taxa de satisfação Final"].mean()
+            if "Taxa de satisfação Final" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Taxa de satisfação Final"])
+            else 0
+        )
+
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total de Ações", total_acoes)
         col2.metric("Total de Inscrições", f"{total_inscricoes:,.0f}".replace(",", "."))
-        col3.metric("Taxa de Conclusão Média", f"{taxa_conc:.1f}%")
+        col3.metric("Taxa de Aprovação (Aptos)", f"{taxa_aprovacao:.1f}%")
+        col4.metric("Satisfação Final Média", f"{media_satisfacao:.1f}%")
     else:
         st.info("ℹ️ Tabela sem dados válidos. Adicione ou carregue dados.")
 

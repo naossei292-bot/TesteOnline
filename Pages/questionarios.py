@@ -18,11 +18,13 @@ SHEET_META = {
     "24b": {"Respondente": "Coordenação Pedagógica","Modalidade": "À Distância",  "Tipo": "Tutor"},
 }
 
-RE_PERGUNTA = re.compile(r'^[A-Z]\d{2}\s*[-–]')
+RE_PERGUNTA  = re.compile(r'^[A-Z]\d{2}\s*[-–]')
 RE_CATEGORIA = re.compile(r'^([A-Z])\d{2}')
-IGNORAR = {"FIM DE TABELA", "começo de tabela", "Column1", "Categorias/Subcategorias",
-           "Resultados por categoria", "Nº total de Formandos",
-           "Nº de respostas:", "% Respostas:", "Ref. da ação"}
+IGNORAR = {
+    "FIM DE TABELA", "começo de tabela", "Column1", "Categorias/Subcategorias",
+    "Resultados por categoria", "Nº total de Formandos",
+    "Nº de respostas:", "% Respostas:", "Ref. da ação",
+}
 
 
 def _extrair_uma_coluna(df: pd.DataFrame, col_pergunta: int, col_media: int,
@@ -30,11 +32,11 @@ def _extrair_uma_coluna(df: pd.DataFrame, col_pergunta: int, col_media: int,
     meta = SHEET_META.get(sheet_name, {"Respondente": sheet_name,
                                        "Modalidade": "?", "Tipo": "?"})
     registos = []
-    curso_atual = None
-    n_formandos = None
-    n_respostas = None
+    curso_atual   = None
+    n_formandos   = None
+    n_respostas   = None
     pct_respostas = None
-    dentro_bloco = False
+    dentro_bloco  = False
 
     for _, row in df.iterrows():
         cel0 = row[col_pergunta]
@@ -66,7 +68,7 @@ def _extrair_uma_coluna(df: pd.DataFrame, col_pergunta: int, col_media: int,
             except: pass
             continue
 
-        if s0 in ("FIM DE TABELA",) or s0.startswith("FIM DE TABELA"):
+        if s0.startswith("FIM DE TABELA"):
             dentro_bloco = False
             curso_atual  = None
             continue
@@ -80,26 +82,23 @@ def _extrair_uma_coluna(df: pd.DataFrame, col_pergunta: int, col_media: int,
             categoria = m.group(1) if m else "Outra"
             try:
                 media_val = float(cel1)
-                if "%" in s0:
-                    media_exibida = f"{media_val:.0f}%"
-                else:
-                    media_exibida = media_val
+                media_exibida = f"{media_val:.0f}%" if "%" in s0 else media_val
             except:
                 media_exibida = None
 
             registos.append({
-                "Centro":        centro,
-                "Curso":         curso_atual,
-                "Folha":         sheet_name,
-                "Respondente":   meta["Respondente"],
-                "Modalidade":    meta["Modalidade"],
-                "Tipo":          meta["Tipo"],
-                "Categoria":     categoria,
-                "Pergunta":      s0,
-                "Média":         media_exibida,
-                "Nº Formandos":  n_formandos,
-                "Nº Respostas":  n_respostas,
-                "% Respostas":   pct_respostas,
+                "Centro":       centro,
+                "Curso":        curso_atual,
+                "Folha":        sheet_name,
+                "Respondente":  meta["Respondente"],
+                "Modalidade":   meta["Modalidade"],
+                "Tipo":         meta["Tipo"],
+                "Categoria":    categoria,
+                "Pergunta":     s0,
+                "Média":        media_exibida,
+                "Nº Formandos": n_formandos,
+                "Nº Respostas": n_respostas,
+                "% Respostas":  pct_respostas,
             })
     return registos
 
@@ -116,8 +115,8 @@ def extrair_centro_do_nome(nome: str) -> str:
 
 def processar_relatorio(ficheiro, modo="left_only") -> pd.DataFrame:
     centro = extrair_centro_do_nome(ficheiro.name)
-    xls = pd.ExcelFile(ficheiro)
-    todos = []
+    xls    = pd.ExcelFile(ficheiro)
+    todos  = []
 
     for sheet_name in xls.sheet_names:
         if sheet_name not in SHEET_META:
@@ -149,7 +148,18 @@ def mostrar_questionarios():
     ]
     COLUNAS_COM_APAGAR = ["Apagar"] + COLUNAS_DADOS
 
-    # --- Seletor de colunas (persistente) ---
+    # ── Inicializar contadores de key ──────────────────────────
+    # quest_uploader_key: muda a key do file_uploader após cada upload,
+    #   fazendo o Streamlit criar um widget novo e limpar os ficheiros.
+    #   Sem isto, após st.rerun() o uploader ainda "vê" os ficheiros
+    #   e processa-os de novo em loop infinito.
+    # quest_editor_key: muda a key do data_editor para forçar
+    #   re-renderização com os dados novos.
+    for key in ("quest_uploader_key", "quest_editor_key"):
+        if key not in st.session_state:
+            st.session_state[key] = 0
+
+    # --- Seletor de colunas ---
     if "colunas_quest_selecionadas" not in st.session_state:
         st.session_state.colunas_quest_selecionadas = COLUNAS_DADOS.copy()
 
@@ -158,46 +168,47 @@ def mostrar_questionarios():
         "Selecione as colunas (a coluna 'Apagar' é sempre mostrada):",
         options=COLUNAS_DADOS,
         default=st.session_state.colunas_quest_selecionadas,
-        key="seletor_colunas_quest"
+        key="seletor_colunas_quest",
     )
 
-    # Botão para remover colunas não selecionadas (efetivamente elimina as outras)
     if st.button("🗑️ Remover colunas não selecionadas", use_container_width=True):
         st.session_state.colunas_quest_selecionadas = colunas_escolhidas
-        if 'quest_editaveis' in st.session_state and not st.session_state.quest_editaveis.empty:
-            df_atual = st.session_state.quest_editaveis
-            if "Apagar" in df_atual.columns:
-                apagar = df_atual["Apagar"]
-                outras = {col: df_atual[col] for col in st.session_state.colunas_quest_selecionadas if col in df_atual.columns}
+        if "quest_editaveis" in st.session_state and not st.session_state.quest_editaveis.empty:
+            df_at = st.session_state.quest_editaveis
+            if "Apagar" in df_at.columns:
+                apagar  = df_at["Apagar"]
+                outras  = {c: df_at[c] for c in st.session_state.colunas_quest_selecionadas if c in df_at.columns}
                 novo_df = pd.DataFrame(outras)
                 novo_df.insert(0, "Apagar", apagar)
                 st.session_state.quest_editaveis = novo_df
             else:
-                st.session_state.quest_editaveis = pd.DataFrame(columns=["Apagar"] + st.session_state.colunas_quest_selecionadas)
+                st.session_state.quest_editaveis = pd.DataFrame(columns=COLUNAS_COM_APAGAR)
+        st.session_state.quest_editor_key += 1
         st.rerun()
 
-    # Atualizar colunas_dados com a seleção atual
-    colunas_dados = st.session_state.colunas_quest_selecionadas
+    colunas_dados      = st.session_state.colunas_quest_selecionadas
     colunas_com_apagar = ["Apagar"] + colunas_dados
 
-    if 'quest_editaveis' not in st.session_state:
+    if "quest_editaveis" not in st.session_state:
         st.session_state.quest_editaveis = pd.DataFrame(columns=colunas_com_apagar)
 
-    # ── Carregar ficheiros ────────────────────────────────────
+    # ── Carregar ficheiros ──────────────────────────────────────
     st.subheader("📤 Carregar Relatórios Excel")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         modo_carga = st.radio(
             "Modo:", ["Substituir dados existentes", "Adicionar ao final"],
-            horizontal=True, key="modo_carga_quest"
+            horizontal=True, key="modo_carga_quest",
         )
     with c2:
+        # KEY DINÂMICA — essencial para limpar o uploader após cada upload
         ficheiros = st.file_uploader(
             "Relatórios Excel (Relatório_Centro.xlsx)",
-            type=None, accept_multiple_files=True, key="carga_quest_upload"
+            type=None,
+            accept_multiple_files=True,
+            key=f"carga_quest_upload_{st.session_state.quest_uploader_key}",
         )
     with c3:
-        # Botão para descarregar o ficheiro de exemplo
         try:
             with open("assets/Relatório_Alverca.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
@@ -206,13 +217,11 @@ def mostrar_questionarios():
                 data=conteudo_exemplo,
                 file_name="Relatório_Alverca.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
             )
         except FileNotFoundError:
             st.error("⚠️ Ficheiro de exemplo não encontrado. Verifique o caminho 'assets/Relatório_Alverca.xlsx'.")
-
     with c4:
-        # Botão para descarregar o ficheiro de exemplo vazio
         try:
             with open("assets/Questionario_para_preencher.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
@@ -221,7 +230,7 @@ def mostrar_questionarios():
                 data=conteudo_exemplo,
                 file_name="Questionario_para_preencher.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
             )
         except FileNotFoundError:
             st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Questionario_para_preencher.xlsx'.")
@@ -239,7 +248,7 @@ def mostrar_questionarios():
                     for col in COLUNAS_DADOS:
                         if col not in df_novo.columns:
                             df_novo[col] = None
-                    df_novo = df_novo[colunas_dados]  # usar colunas selecionadas
+                    df_novo = df_novo[colunas_dados]
                     df_novo.insert(0, "Apagar", False)
                     lista_dfs.append(df_novo)
                     st.success(f"✅ {f.name} → {len(df_novo)} perguntas de {df_novo['Curso'].nunique()} cursos")
@@ -265,33 +274,38 @@ def mostrar_questionarios():
                 st.session_state.quest_editaveis = pd.concat(
                     [st.session_state.quest_editaveis, df_total], ignore_index=True
                 )
+            # Incrementar AMBAS as keys antes do rerun:
+            # uploader_key → o file_uploader vai ter uma key nova na próxima
+            #                renderização, aparecendo vazio (sem os ficheiros antigos)
+            # editor_key   → o data_editor vai ser recriado com os dados novos
+            st.session_state.quest_uploader_key += 1
+            st.session_state.quest_editor_key   += 1
             st.rerun()
 
-    # ── DataFrame atual (para edição e filtros) ───────────────
+    # ── DataFrame atual ────────────────────────────────────────
     df_atual = st.session_state.quest_editaveis.copy()
     if "Apagar" not in df_atual.columns:
         df_atual.insert(0, "Apagar", False)
 
-    # ── Filtros de visualização (apenas consulta) ─────────────
+    # ── Filtros de visualização ────────────────────────────────
     with st.expander("🔍 Filtrar visualização (consulta apenas)"):
         if not df_atual.empty:
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                modalidades = sorted(df_atual["Modalidade"].dropna().unique()) if "Modalidade" in df_atual else []
+                modalidades = sorted(df_atual["Modalidade"].dropna().unique()) if "Modalidade" in df_atual.columns else []
                 filtro_modalidade = st.multiselect("Modalidade", modalidades, default=modalidades, key="filtro_modalidade")
             with col_f2:
-                respondentes = sorted(df_atual["Respondente"].dropna().unique()) if "Respondente" in df_atual else []
+                respondentes = sorted(df_atual["Respondente"].dropna().unique()) if "Respondente" in df_atual.columns else []
                 filtro_respondente = st.multiselect("Respondente", respondentes, default=respondentes, key="filtro_respondente")
 
             col_f3, col_f4 = st.columns(2)
             with col_f3:
-                cursos = sorted(df_atual["Curso"].dropna().unique()) if "Curso" in df_atual else []
+                cursos = sorted(df_atual["Curso"].dropna().unique()) if "Curso" in df_atual.columns else []
                 filtro_curso = st.multiselect("Curso", cursos, default=cursos, key="filtro_curso")
             with col_f4:
-                categorias = sorted(df_atual["Categoria"].dropna().unique()) if "Categoria" in df_atual else []
+                categorias = sorted(df_atual["Categoria"].dropna().unique()) if "Categoria" in df_atual.columns else []
                 filtro_categoria = st.multiselect("Categoria", categorias, default=categorias, key="filtro_categoria")
 
-            # Perguntas dependentes
             df_temp = df_atual.copy()
             if filtro_modalidade:
                 df_temp = df_temp[df_temp["Modalidade"].isin(filtro_modalidade)]
@@ -301,19 +315,11 @@ def mostrar_questionarios():
                 df_temp = df_temp[df_temp["Curso"].isin(filtro_curso)]
             if filtro_categoria:
                 df_temp = df_temp[df_temp["Categoria"].isin(filtro_categoria)]
-            perguntas = sorted(df_temp["Pergunta"].dropna().unique()) if "Pergunta" in df_temp else []
+
+            perguntas = sorted(df_temp["Pergunta"].dropna().unique()) if "Pergunta" in df_temp.columns else []
             filtro_pergunta = st.multiselect("Pergunta", perguntas, default=perguntas, key="filtro_pergunta")
 
-            # Aplicar todos os filtros
-            df_filtrado = df_atual.copy()
-            if filtro_modalidade:
-                df_filtrado = df_filtrado[df_filtrado["Modalidade"].isin(filtro_modalidade)]
-            if filtro_respondente:
-                df_filtrado = df_filtrado[df_filtrado["Respondente"].isin(filtro_respondente)]
-            if filtro_curso:
-                df_filtrado = df_filtrado[df_filtrado["Curso"].isin(filtro_curso)]
-            if filtro_categoria:
-                df_filtrado = df_filtrado[df_filtrado["Categoria"].isin(filtro_categoria)]
+            df_filtrado = df_temp.copy()
             if filtro_pergunta:
                 df_filtrado = df_filtrado[df_filtrado["Pergunta"].isin(filtro_pergunta)]
 
@@ -325,21 +331,24 @@ def mostrar_questionarios():
         else:
             st.info("Carregue ficheiros para ativar os filtros.")
 
-    # ── Adicionar linhas ──────────────────────────────────────
-# ── Adicionar linhas ──────────────────────────────────────
+    # ── Adicionar linhas ───────────────────────────────────────
     st.markdown("---")
     st.subheader("➕ Adicionar linhas")
-    col_add1, col_add2 = st.columns([1, 2])   # CORRIGIDO: duas colunas com larguras 1 e 2
+    col_add1, col_add2 = st.columns([1, 2])
     with col_add1:
-        num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=10000, value=5, step=1, key="num_linhas_quest")
+        num_linhas = st.number_input("Nº de linhas", min_value=1, max_value=10000,
+                                     value=5, step=1, key="num_linhas_quest")
     with col_add2:
         if st.button("➕ Adicionar múltiplas linhas vazias", use_container_width=True):
             novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in colunas_dados})
             novas_linhas.insert(0, "Apagar", False)
-            st.session_state.quest_editaveis = pd.concat([st.session_state.quest_editaveis, novas_linhas], ignore_index=True)
+            st.session_state.quest_editaveis = pd.concat(
+                [st.session_state.quest_editaveis, novas_linhas], ignore_index=True
+            )
+            st.session_state.quest_editor_key += 1
             st.rerun()
 
-    # ── Tabela editável ───────────────────────────────────────
+    # ── Tabela editável ────────────────────────────────────────
     st.markdown("---")
     st.subheader("✏️ Tabela de questionários (edição completa)")
 
@@ -348,20 +357,22 @@ def mostrar_questionarios():
         use_container_width=True,
         num_rows="dynamic",
         height=420,
-        key="quest_editor",
+        key=f"quest_editor_{st.session_state.quest_editor_key}",
         column_config={"Apagar": st.column_config.CheckboxColumn("Apagar", default=False)},
     )
 
     if not edited_df.equals(df_atual):
         st.session_state.quest_editaveis = edited_df
+        st.session_state.quest_editor_key += 1
         st.rerun()
 
-    # ── Botões de eliminação ──────────────────────────────────
+    # ── Botões de eliminação ───────────────────────────────────
     st.markdown("---")
     cb1, cb2 = st.columns(2)
     with cb1:
         if st.button("🗑️ Limpar todos os dados", use_container_width=True):
             st.session_state.quest_editaveis = pd.DataFrame(columns=colunas_com_apagar)
+            st.session_state.quest_editor_key += 1
             st.rerun()
     with cb2:
         if st.button("✖️ Apagar selecionados", use_container_width=True):
@@ -371,18 +382,18 @@ def mostrar_questionarios():
                 df = df[~mask].reset_index(drop=True)
                 df["Apagar"] = False
                 st.session_state.quest_editaveis = df
+                st.session_state.quest_editor_key += 1
                 st.rerun()
             else:
                 st.warning("Nenhuma linha marcada.")
 
-    # ---------- Exportar dados ----------
+    # ── Exportar dados ─────────────────────────────────────────
     st.markdown("---")
     st.subheader("📎 Exportar dados")
 
-    # Botão de download direto (sem duplo clique)
     df_export = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore")
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df_export.to_excel(writer, index=False, sheet_name="Questionários")
     output.seek(0)
 
@@ -392,21 +403,23 @@ def mostrar_questionarios():
         file_name="dados_questionarios_exportados.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
-        key="download_questionarios_excel"
+        key="download_questionarios_excel",
     )
-    # ── Métricas ──────────────────────────────────────────────
+
+    # ── Métricas ───────────────────────────────────────────────
     df_m = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore")
-    df_m = df_m.dropna(subset=["Curso"])
-    df_m = df_m[df_m["Curso"].astype(str).str.strip().isin(["", "None", "nan"]) == False]
+    if "Curso" in df_m.columns:
+        df_m = df_m[df_m["Curso"].notna()]
+        df_m = df_m[~df_m["Curso"].astype(str).str.strip().isin(["", "None", "nan"])]
 
     if not df_m.empty:
         st.markdown("---")
         st.subheader("📊 Resumo Geral")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Centros",   df_m["Centro"].nunique() if "Centro" in df_m else 0)
-        m2.metric("Cursos",    df_m["Curso"].nunique())
-        m3.metric("Registos",  len(df_m))
-        media_col = pd.to_numeric(df_m["Média"], errors="coerce").dropna()
+        m1.metric("Centros",  df_m["Centro"].nunique() if "Centro" in df_m.columns else 0)
+        m2.metric("Cursos",   df_m["Curso"].nunique())
+        m3.metric("Registos", len(df_m))
+        media_col   = pd.to_numeric(df_m["Média"], errors="coerce").dropna()
         media_geral = media_col.mean() if not media_col.empty else 0
         m4.metric("Média Geral", f"{media_geral:.2f}")
 
@@ -416,6 +429,7 @@ def mostrar_questionarios():
                 st.caption(f"🏢 Centros carregados: {', '.join(centros)}")
 
         if all(c in df_m.columns for c in ["Centro", "Respondente", "Categoria"]):
+            df_m = df_m.copy()
             df_m["Média_num"] = pd.to_numeric(df_m["Média"], errors="coerce")
             resumo = (
                 df_m.groupby(["Centro", "Respondente", "Categoria"])["Média_num"]

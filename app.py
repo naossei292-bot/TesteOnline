@@ -81,14 +81,9 @@ st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📌 Navegação - Balanços")
 if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
-    st.session_state.pagina = "📚 Relatórios"
+    st.session_state.pagina = "📚 Relatórios E Balanços"
     st.rerun()
-# Menu de navegação
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação - Questionários")
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
-    st.rerun()
+
 
 # Menu de navegação
 st.sidebar.markdown("---")
@@ -96,6 +91,10 @@ st.sidebar.markdown("### 📌 Navegação - Qualidade")
 
 if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
     st.session_state.pagina = "📚 Cursos"
+    st.rerun()
+
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
     st.rerun()
 
 if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
@@ -110,28 +109,9 @@ if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashbo
     st.session_state.pagina = "📊 Dashboard"
     st.rerun()
 
-# Filtro global por Centro
-st.sidebar.markdown("---")
-lista_centros = set()
-# Usar os DataFrames editáveis (onde os dados realmente estão)
-if st.session_state.get("acoes_editaveis") is not None and not st.session_state.acoes_editaveis.empty:
-    if "Centro" in st.session_state.acoes_editaveis.columns:
-        lista_centros.update(st.session_state.acoes_editaveis["Centro"].dropna().unique())
-if st.session_state.get("quest_editaveis") is not None and not st.session_state.quest_editaveis.empty:
-    if "Centro" in st.session_state.quest_editaveis.columns:
-        lista_centros.update(st.session_state.quest_editaveis["Centro"].dropna().unique())
 
-st.session_state.filtro_centro = st.sidebar.multiselect(
-    "Filtrar por Centro", 
-    sorted(list(lista_centros)), 
-    default=st.session_state.filtro_centro
-)
 
-# Botão de logout (agora na sidebar, mais intuitivo)
-st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
-    st.session_state.clear()
-    st.rerun()
+
 
 # ============================================
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
@@ -160,3 +140,11 @@ elif st.session_state.pagina == "⚔️ Comparador Versus":
 elif st.session_state.pagina == "📊 Dashboard":
     from Pages.dashboardformacoes import mostrar_dashboard
     mostrar_dashboard()
+
+
+    # Botão de logout (agora na sidebar, mais intuitivo)
+st.sidebar.markdown("---")
+if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
+    st.session_state.clear()
+    st.rerun()
+st.sidebar.markdown("---")
