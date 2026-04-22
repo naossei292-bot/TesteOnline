@@ -311,7 +311,7 @@ def mostrar_relatorios():
         caminho_modelos = os.path.join(BALANCOS_DIR, "Modelos")
         if os.path.exists(caminho_modelos) and os.path.isdir(caminho_modelos):
             # Botão que aciona a criação do ZIP
-            if st.button("⬇️ Descarregar * pasta 'Modelos' (ZIP)", key="download_modelos_btn"):
+            if st.button("⬇️ Descarregar pasta 'Modelos' (ZIP)", key="download_modelos_btn"):
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
                     for root, dirs, files in os.walk(caminho_modelos):
