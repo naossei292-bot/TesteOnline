@@ -91,7 +91,8 @@ def mostrar_cursos():
     if "colunas_selecionadas" not in st.session_state:
         st.session_state.colunas_selecionadas = [
             col for col in todas_colunas_dados
-            if not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"]
+            if (not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"])
+            and col != "Nacionalidades(Portugueses/Estrangeiros)"   # excluir esta coluna da pré-seleção
         ]
 
     st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
