@@ -241,7 +241,7 @@ def mostrar_qualidade():
     </style>
     """, unsafe_allow_html=True)
 
-    st.subheader("📊 KPIs Essenciais")
+    st.subheader("📊 KPI's Essenciais")
 
     # Estado para controlar qual detalhe está aberto (None = nenhum)
     if 'detalhe_ativo' not in st.session_state:
