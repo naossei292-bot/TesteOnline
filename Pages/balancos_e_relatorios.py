@@ -304,8 +304,33 @@ def mostrar_relatorios():
             "Operação",
             ["Gerar balanços e relatórios (completo)", "Apenas balanços", "Apenas relatórios"]
         )
-        
         st.divider()
+
+        # ========== NOVO BOTÃO PARA DESCARREGAR A PASTA "Modelos" ==========
+        st.subheader("📁 Descarregar modelos")
+        caminho_modelos = os.path.join(BALANCOS_DIR, "Modelos")
+        if os.path.exists(caminho_modelos) and os.path.isdir(caminho_modelos):
+            # Botão que aciona a criação do ZIP
+            if st.button("⬇️ Descarregar pasta 'Modelos' (ZIP)", key="download_modelos_btn"):
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    for root, dirs, files in os.walk(caminho_modelos):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            # Guarda na ZIP com o caminho relativo a "Modelos"
+                            arcname = os.path.relpath(file_path, start=BALANCOS_DIR)
+                            zipf.write(file_path, arcname=arcname)
+                zip_buffer.seek(0)
+                st.download_button(
+                    label="✅ Clique para descarregar",
+                    data=zip_buffer,
+                    file_name="Modelos.zip",
+                    key="download_modelos_zip"
+                )
+        else:
+            st.info("Pasta 'Modelos' não encontrada dentro de 'balancos'.", icon="⚠️")
+        st.divider()
+
         st.subheader("📥 Carregar múltiplos ficheiros")
         
         ficheiros_carregados = st.file_uploader(
