@@ -81,9 +81,8 @@ st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📌 Navegação - Balanços")
 if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
-    st.session_state.pagina = "📚 Relatórios E Balanços"
+    st.session_state.pagina = "📚 Relatórios"   # sem "E Balanços"
     st.rerun()
-
 
 # Menu de navegação
 st.sidebar.markdown("---")
