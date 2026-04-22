@@ -182,7 +182,7 @@ def painel_detalhe_valor_recebido(df: pd.DataFrame):
     df_val = df[cols].dropna(subset=["Valor Total Recebido"])
     df_val = df_val[df_val["Valor Total Recebido"] > 0]
     df_top = df_val.sort_values("Valor Total Recebido", ascending=False).copy()
-    st.markdown("### 💰 Ações com maior valor recebido")
+    st.markdown("### 💰 Valor Recebido e Valor Total a Receber")
     df_top["Valor Total Recebido"] = df_top["Valor Total Recebido"].apply(lambda x: f"€{x:,.0f}".replace(",", "."))
     if "Valor total a receber" in df_top.columns:
         df_top["Valor total a receber"] = df_top["Valor total a receber"].apply(lambda x: f"€{x:,.0f}".replace(",", ".") if pd.notna(x) else "—")
