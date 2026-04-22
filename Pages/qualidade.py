@@ -87,7 +87,7 @@ def mostrar_qualidade():
         st.session_state.obj_conformidade = 100.0
 
     # Expander para editar as metas
-    with st.expander("⚙️ Definir Objetivos (Metas) dos KPIs", expanded=False):
+    with st.expander("⚙️ Definir Objetivos (Metas) dos KPI's", expanded=False):
         st.markdown("Ajuste os valores desejados para cada indicador:")
         col1, col2 = st.columns(2)
         with col1:
