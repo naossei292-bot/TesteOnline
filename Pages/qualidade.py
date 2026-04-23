@@ -352,18 +352,18 @@ def mostrar_qualidade():
                 df_sat['Média'] = pd.to_numeric(df_sat['Média'], errors='coerce')
                 meta_sat = st.session_state.obj_satisfacao
                 
-                # Função para colorir a célula da coluna 'Média' se abaixo da meta
-                def highlight_below_meta(val, meta):
-                    if pd.notna(val) and val < meta:
-                        return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                def highlight_by_goal(val, meta):
+                    if pd.notna(val):
+                        if val < meta:
+                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'   # vermelho
+                        else:
+                            return 'background-color: #d4edda; border-left: 4px solid #28a745;'   # verde claro
                     return ''
-                
-                # Aplicar estilo apenas na coluna 'Média'
+
                 styled_sat = df_sat.style.map(
-                    lambda x: highlight_below_meta(x, meta_sat),
+                    lambda x: highlight_by_goal(x, meta_sat),
                     subset=['Média']
                 )
-                st.dataframe(styled_sat, use_container_width=True)
                 
                 st.markdown("**Filtros:**")
                 col_f1, col_f2 = st.columns(2)
@@ -378,7 +378,7 @@ def mostrar_qualidade():
                     df_filt = df_filt[df_filt['Categoria'].isin(categorias)]
                 # Reaplicar estilo no DataFrame filtrado
                 styled_filt = df_filt.style.map(
-                    lambda x: highlight_below_meta(x, meta_sat),
+                    lambda x: highlight_by_goal(x, meta_sat),
                     subset=['Média']
                 )
                 st.dataframe(styled_filt, use_container_width=True)
@@ -390,13 +390,16 @@ def mostrar_qualidade():
                     df_sat_cursos['Taxa de satisfação Final'] = pd.to_numeric(df_sat_cursos['Taxa de satisfação Final'], errors='coerce')
                     meta_sat = st.session_state.obj_satisfacao
                     
-                    def highlight_below_meta_sat(val):
-                        if pd.notna(val) and val < meta_sat:
-                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                    def highlight_by_goal_sat(val):
+                        if pd.notna(val):
+                            if val < meta_sat:
+                                return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'   # vermelho
+                            else:
+                                return 'background-color: #d4edda; border-left: 4px solid #28a745;'   # verde claro 
                         return ''
                     
                     styled_cursos = df_sat_cursos.style.map(
-                        highlight_below_meta_sat,
+                        highlight_by_goal_sat,
                         subset=['Taxa de satisfação Final']
                     )
                     st.dataframe(styled_cursos, use_container_width=True)
@@ -409,12 +412,13 @@ def mostrar_qualidade():
                 df_conc['Taxa_Conclusão_%'] = (df_conc['Concluíram'] / df_conc['Inscritos'] * 100).round(1)
                 meta_conc = st.session_state.obj_conclusao
                 
-                # Destacar linhas onde a taxa de conclusão < meta
                 def highlight_row(row):
-                    if pd.notna(row['Taxa_Conclusão_%']) and row['Taxa_Conclusão_%'] < meta_conc:
-                        return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
-                    else:
-                        return [''] * len(row)
+                    if pd.notna(row['Taxa_Conclusão_%']):
+                        if row['Taxa_Conclusão_%'] < meta_conc:
+                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)  # vermelho
+                        else:
+                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)  # verde claro
+                    return [''] * len(row)
                 
                 styled_conc = df_conc.style.apply(highlight_row, axis=1)
                 st.dataframe(styled_conc, use_container_width=True)
@@ -445,13 +449,28 @@ def mostrar_qualidade():
                 df_aprov['Taxa_Aprovação_%'] = (df_aprov['Aptos'] / df_aprov['Avaliados'] * 100).round(1)
                 meta_aprov = st.session_state.obj_aprovacao
                 
-                def highlight_row(row):
-                    if pd.notna(row['Taxa_Aprovação_%']) and row['Taxa_Aprovação_%'] < meta_aprov:
-                        return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
-                    return [''] * len(row)
-                
-                styled_aprov = df_aprov.style.apply(highlight_row, axis=1)
-                st.dataframe(styled_aprov, use_container_width=True)
+                # Taxa de Aprovação
+                if st.session_state.detalhe_ativo == 'aprov':
+                    with st.expander("📊 Detalhe da Taxa de Aprovação", expanded=True):
+                        if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Aptos', 'Inaptos']):
+                            df_aprov = df_cursos[['Ação', 'Centro', 'Aptos', 'Inaptos']].copy()
+                            df_aprov['Avaliados'] = df_aprov['Aptos'] + df_aprov['Inaptos']
+                            df_aprov['Taxa_Aprovação_%'] = (df_aprov['Aptos'] / df_aprov['Avaliados'] * 100).round(1)
+                            meta_aprov = st.session_state.obj_aprovacao
+                            
+                            # CORREÇÃO: agora usa a coluna correta e pinta verde se >= meta
+                            def highlight_row(row):
+                                if pd.notna(row['Taxa_Aprovação_%']):
+                                    if row['Taxa_Aprovação_%'] < meta_aprov:
+                                        return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)  # vermelho
+                                    else:
+                                        return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)  # verde claro
+                                return [''] * len(row)
+                            
+                            styled_aprov = df_aprov.style.apply(highlight_row, axis=1)
+                            st.dataframe(styled_aprov, use_container_width=True)
+                            
+                            # ... resto do código (filtros, etc.) mantém-se igual ...
                 
                 st.markdown("**Filtros:**")
                 col_f1, col_f2 = st.columns(2)
@@ -504,18 +523,21 @@ def mostrar_qualidade():
                     df_avf['Média'] = pd.to_numeric(df_avf['Média'], errors='coerce')
                     meta_avf = st.session_state.obj_formador
                     
-                    def highlight_below(val):
-                        if pd.notna(val) and val < meta_avf:
-                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                    def highlight_by_goal(val, meta):
+                        if pd.notna(val):
+                            if val < meta:
+                                return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                            else:
+                                return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                         return ''
-                    
-                    styled_avf = df_avf.style.map(highlight_below, subset=['Média'])
+
+                    styled_avf = df_avf.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Média'])
                     st.dataframe(styled_avf, use_container_width=True)
                     
                     st.markdown("**Filtros:**")
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
-                        centros = st.multiselect("Centro", options=sorted(df_avf['Centro'].unique()), key="avf_centro")
+                        centros = st.multiselect("Centro", options=sorted(df_avf['Centro'].unique()), key="avf_centro_quest")
                     with col_f2:
                         categorias = st.multiselect("Categoria", options=sorted(df_avf['Categoria'].unique()), key="avf_cat")
                     df_filt = df_avf.copy()
@@ -523,28 +545,50 @@ def mostrar_qualidade():
                         df_filt = df_filt[df_filt['Centro'].isin(centros)]
                     if categorias:
                         df_filt = df_filt[df_filt['Categoria'].isin(categorias)]
-                    styled_filt = df_filt.style.map(highlight_below, subset=['Média'])
+                    styled_filt = df_filt.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Média'])
                     st.dataframe(styled_filt, use_container_width=True)
                     st.caption(f"Média global: {df_filt['Média'].mean():.2f} | Total respostas: {len(df_filt)}")
                 else:
                     st.info("Nenhuma avaliação de formador encontrada nos questionários.")
             elif has_cursos and "Avaliação formador" in df_cursos.columns:
-                df_avf_cursos = df_cursos[['Ação', 'Centro', 'Avaliação formador']].dropna()
+                df_avf_cursos = df_cursos[['Ação', 'Centro', 'Formador', 'Avaliação formador']].dropna(subset=['Avaliação formador'])
                 df_avf_cursos['Avaliação formador'] = pd.to_numeric(df_avf_cursos['Avaliação formador'], errors='coerce')
+                df_avf_cursos = df_avf_cursos.dropna(subset=['Avaliação formador'])
                 meta_avf = st.session_state.obj_formador
                 
-                def highlight_below(val):
-                    if pd.notna(val) and val < meta_avf:
-                        return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                def highlight_by_goal(val, meta):
+                    if pd.notna(val):
+                        if val < meta:
+                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
+                        else:
+                            return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                     return ''
                 
-                styled_cursos = df_avf_cursos.style.map(highlight_below, subset=['Avaliação formador'])
+                styled_cursos = df_avf_cursos.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Avaliação formador'])
                 st.dataframe(styled_cursos, use_container_width=True)
-                st.caption(f"Média: {df_avf_cursos['Avaliação formador'].mean():.2f}")
+                
+                st.markdown("**Filtros:**")
+                col_f1, col_f2, col_f3 = st.columns(3)
+                with col_f1:
+                    centros = st.multiselect("Centro", options=sorted(df_avf_cursos['Centro'].unique()), key="avf_cursos_centro")
+                with col_f2:
+                    acoes = st.multiselect("Ação", options=sorted(df_avf_cursos['Ação'].unique()), key="avf_cursos_acao")
+                with col_f3:
+                    formadores = st.multiselect("Formador", options=sorted(df_avf_cursos['Formador'].unique()), key="avf_cursos_formador")
+                
+                df_filt_cursos = df_avf_cursos.copy()
+                if centros:
+                    df_filt_cursos = df_filt_cursos[df_filt_cursos['Centro'].isin(centros)]
+                if acoes:
+                    df_filt_cursos = df_filt_cursos[df_filt_cursos['Ação'].isin(acoes)]
+                if formadores:
+                    df_filt_cursos = df_filt_cursos[df_filt_cursos['Formador'].isin(formadores)]
+                
+                styled_filt_cursos = df_filt_cursos.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Avaliação formador'])
+                st.dataframe(styled_filt_cursos, use_container_width=True)
+                st.caption(f"Média: {df_filt_cursos['Avaliação formador'].mean():.2f} | Total registos: {len(df_filt_cursos)}")
             else:
                 st.warning("Sem dados de avaliação de formadores.")
-
-    st.markdown("---")
     # ------------------------------------------------------------
     # KPI 4 – Ações com mais de um formador
     # ------------------------------------------------------------
