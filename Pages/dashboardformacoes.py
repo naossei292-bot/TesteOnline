@@ -546,6 +546,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
     """
     Exibe a tabela completa de todas as ações (após filtros) com possibilidade de selecionar colunas.
     A ordem de exibição segue a mesma estrutura da página de cursos (todas_colunas_dados).
+    Permite selecionar colunas de Taxa de Satisfação M01..M12 mesmo que não existam no DataFrame.
     """
     if df.empty:
         st.info("Nenhum dado para exibir.")
@@ -563,20 +564,17 @@ def tabela_geral_acoes(df: pd.DataFrame):
         "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
     ]
 
-    # Filtrar apenas as colunas que realmente existem no DataFrame
-    colunas_existentes = [col for col in ordem_canonica if col in df.columns]
-    # Também incluir eventuais colunas adicionais que não estejam na ordem canónica (por segurança)
-    colunas_adicionais = [col for col in df.columns if col not in ordem_canonica and col not in ["Apagar", "_Tipo"]]
-    todas_colunas_opcoes = colunas_existentes + colunas_adicionais
+    # Todas as colunas possíveis (ordem canónica completa)
+    todas_colunas_opcoes = ordem_canonica
 
     st.markdown("---")
     st.markdown(f'<p style="font-size:.95rem;font-weight:600;color:{COR_PRIMARIA};margin-bottom:6px;">📋 Todas as Ações ({len(df)} registos)</p>', unsafe_allow_html=True)
 
-    # Seletor de colunas (as opções aparecem na ordem canónica)
+    # Seletor de colunas (agora mostra todas as colunas da ordem canónica)
     colunas_selecionadas = st.multiselect(
         "Escolha as colunas a exibir:",
         options=todas_colunas_opcoes,
-        default=colunas_existentes[:10],  # mostra as primeiras 10 da ordem canónica por padrão
+        default=[col for col in ordem_canonica[:10] if col in df.columns],  # padrão: primeiras 10 que existem
         key="tabela_geral_colunas"
     )
 
@@ -584,14 +582,18 @@ def tabela_geral_acoes(df: pd.DataFrame):
         st.warning("Selecione pelo menos uma coluna.")
         return
 
-    # Reordenar as colunas selecionadas conforme a ordem canónica (primeiro as existentes na ordem, depois as adicionais)
+    # Reordenar as colunas selecionadas conforme a ordem canónica
     colunas_ordenadas = [col for col in ordem_canonica if col in colunas_selecionadas]
-    colunas_ordenadas += [col for col in colunas_selecionadas if col not in ordem_canonica]
 
-    # Construir DataFrame a exibir
-    df_exibir = df[colunas_ordenadas].copy()
+    # Construir DataFrame a exibir: para cada coluna selecionada, se existir no df original, usa os valores; senão, cria coluna vazia
+    df_exibir = pd.DataFrame(index=df.index)
+    for col in colunas_ordenadas:
+        if col in df.columns:
+            df_exibir[col] = df[col]
+        else:
+            df_exibir[col] = None  # coluna vazia
 
-    # Formatar colunas de data (se estiverem presentes e forem datetime)
+    # Formatar colunas de data (se existirem e forem datetime)
     for data_col in ["Data Inicial", "Data Final"]:
         if data_col in df_exibir.columns and pd.api.types.is_datetime64_any_dtype(df_exibir[data_col]):
             df_exibir[data_col] = df_exibir[data_col].dt.strftime("%d/%m/%Y")
@@ -605,11 +607,14 @@ def tabela_geral_acoes(df: pd.DataFrame):
     column_config = {}
     for col in df_exibir.columns:
         if col in ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"]:
-            max_val = df_exibir[col].max() if pd.api.types.is_numeric_dtype(df_exibir[col]) else 100
-            if pd.notna(max_val) and max_val > 0:
-                column_config[col] = st.column_config.ProgressColumn(
-                    col, min_value=0, max_value=int(max_val), format="%d"
-                )
+            # Calcular máximo apenas se existirem valores numéricos
+            valores = df_exibir[col].dropna()
+            if not valores.empty and pd.api.types.is_numeric_dtype(valores):
+                max_val = valores.max()
+                if pd.notna(max_val) and max_val > 0:
+                    column_config[col] = st.column_config.ProgressColumn(
+                        col, min_value=0, max_value=int(max_val), format="%d"
+                    )
         elif "satisfação" in col.lower() or "Satisfação" in col:
             column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
         elif "Avaliação" in col:

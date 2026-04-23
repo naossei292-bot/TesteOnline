@@ -79,33 +79,36 @@ if 'pagina' not in st.session_state:
 st.sidebar.title("📁 Gestão de Dados")
 # Menu de navegação
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação - Balanços")
+st.sidebar.markdown("### 📌 Navegação - Balanços e Relatórios")
 if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
-    st.session_state.pagina = "📚 Relatórios"   # sem "E Balanços"
+    st.session_state.pagina = "📚 Balanços e Relatórios"   # sem "E Balanços"
     st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Navegação - Questionários de avaliação")
+if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+    st.session_state.pagina = "📋 Questionários"
+    st.rerun()
+
 
 # Menu de navegação
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📌 Navegação - Qualidade")
+st.sidebar.markdown("### 📌 Navegação - Gestão de Qualidade")
 
 if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
     st.session_state.pagina = "📚 Cursos"
-    st.rerun()
-
-if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
-    st.session_state.pagina = "📋 Questionários"
     st.rerun()
 
 if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
     st.session_state.pagina = "🎯 Gestão de Qualidade"
     st.rerun()
 
-if st.sidebar.button("⚔️ Comparador Versus -  EM DESENVOLVIMENTO", use_container_width=True, key="nav_comparador"):
-    st.session_state.pagina = "⚔️ Comparador Versus"
-    st.rerun()
-
 if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
     st.session_state.pagina = "📊 Dashboard"
+    st.rerun()
+
+if st.sidebar.button("⚔️ Comparador Versus -  EM DESENVOLVIMENTO", use_container_width=True, key="nav_comparador"):
+    st.session_state.pagina = "⚔️ Comparador Versus"
     st.rerun()
 
 
