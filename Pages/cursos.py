@@ -68,6 +68,25 @@ def atualizar_colunas_satisfacao():
         return True
     return False
 
+def garantir_todas_colunas(df: pd.DataFrame, todas_colunas: list) -> pd.DataFrame:
+    for col in todas_colunas:
+        if col not in df.columns:
+            df[col] = None
+    if "Apagar" not in df.columns:
+        df.insert(0, "Apagar", False)
+    cols_ordenadas = ["Apagar"] + [c for c in todas_colunas if c in df.columns]
+    return df[cols_ordenadas]
+
+def dfs_diferentes(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
+    if df1.shape != df2.shape:
+        return True
+    try:
+        return not df1.fillna("__NA__").astype(str).equals(
+            df2.fillna("__NA__").astype(str)
+        )
+    except Exception:
+        return True
+
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
 
@@ -92,7 +111,7 @@ def mostrar_cursos():
         st.session_state.colunas_selecionadas = [
             col for col in todas_colunas_dados
             if (not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"])
-            and col != "Nacionalidades(Portugueses/Estrangeiros)"   # excluir esta coluna da pré-seleção
+            and col != "Nacionalidades(Portugueses/Estrangeiros)"
         ]
 
     st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
@@ -142,7 +161,6 @@ def mostrar_cursos():
             key="carga_acoes_upload"
         )
     with col3:
-        # FIX 1: Removido o espaço extra no caminho ("assets/ " → "assets/")
         try:
             with open("assets/Modelo_Acoes_Preenchido.xlsx", "rb") as f:
                 conteudo_exemplo = f.read()
@@ -180,11 +198,9 @@ def mostrar_cursos():
                     df_parcial.columns = df_parcial.columns.str.strip()
 
                 elif nome.endswith('.xlsx'):
-                    # FIX 2: header=1 para saltar a linha em branco do topo do ficheiro Excel
                     df_parcial = pd.read_excel(ficheiro, header=1)
                     df_parcial.columns = df_parcial.columns.str.strip()
 
-                    # FIX 3: Juntar colunas "Portugueses" e "Estrangeiros" numa só coluna
                     if 'Portugueses' in df_parcial.columns and 'Estrangeiros' in df_parcial.columns:
                         df_parcial['Nacionalidades(Portugueses/Estrangeiros)'] = (
                             df_parcial['Portugueses'].fillna('').astype(str).str.strip()
@@ -193,7 +209,6 @@ def mostrar_cursos():
                         )
                         df_parcial.drop(columns=['Portugueses', 'Estrangeiros'], inplace=True)
 
-                    # Limpar espaços em colunas de texto
                     for col in ['Ação', 'Status', 'Centro', 'Formador']:
                         if col in df_parcial.columns:
                             df_parcial[col] = df_parcial[col].astype(str).str.strip()
@@ -282,21 +297,11 @@ def mostrar_cursos():
     # ---------- Tabela editável ----------
     placeholder = st.empty()
 
-    df_atual = st.session_state.acoes_editaveis.copy()
-    if "Apagar" not in df_atual.columns:
-        df_atual.insert(0, "Apagar", False)
-    else:
-        cols = df_atual.columns.tolist()
-        if cols[0] != "Apagar":
-            cols.remove("Apagar")
-            cols.insert(0, "Apagar")
-            df_atual = df_atual[cols]
-
-    colunas_para_mostrar = ["Apagar"] + [col for col in colunas_dados if col in df_atual.columns]
-    for col in colunas_dados:
-        if col not in df_atual.columns:
-            df_atual[col] = None
-    df_atual = df_atual[colunas_para_mostrar]
+    df_atual = garantir_todas_colunas(
+        st.session_state.acoes_editaveis.copy(),
+        todas_colunas_dados
+    )
+    df_atual = normalizar_dataframe(df_atual)
 
     with placeholder.container():
         edited_df = st.data_editor(
@@ -310,7 +315,9 @@ def mostrar_cursos():
             }
         )
 
-    if not edited_df.equals(df_atual):
+    # ---------- Botão para guardar alterações MANUALMENTE (substitui a atualização automática) ----------
+    if st.button("💾 Guardar alterações da tabela", use_container_width=True):
+        # Atualiza o session_state com os dados editados manualmente
         df_completo = st.session_state.acoes_editaveis.copy()
         for col in edited_df.columns:
             if col != "Apagar":
@@ -320,9 +327,10 @@ def mostrar_cursos():
         df_normalizado = normalizar_dataframe(df_completo)
         st.session_state.acoes_editaveis = df_normalizado
         st.session_state.editor_key_counter += 1
+        st.success("✅ Alterações guardadas com sucesso!")
         st.rerun()
 
-    # ---------- Botões ----------
+    # ---------- Botões de limpar e apagar ----------
     st.markdown("---")
     col_bot1, col_bot2 = st.columns(2)
 
