@@ -68,6 +68,8 @@ def atualizar_colunas_satisfacao():
         return True
     return False
 
+# NOVO: garante TODAS as colunas no dataframe (M03-M12 incluídas), preenchendo
+# com None as que não existirem. Resolve o problema das colunas a saltar.
 def garantir_todas_colunas(df: pd.DataFrame, todas_colunas: list) -> pd.DataFrame:
     for col in todas_colunas:
         if col not in df.columns:
@@ -77,6 +79,9 @@ def garantir_todas_colunas(df: pd.DataFrame, todas_colunas: list) -> pd.DataFram
     cols_ordenadas = ["Apagar"] + [c for c in todas_colunas if c in df.columns]
     return df[cols_ordenadas]
 
+# NOVO: comparação robusta que trata None e NaN como equivalentes.
+# O .equals() original falhava porque garantir_todas_colunas preenche com None,
+# mas o data_editor devolve NaN — logo a comparação era sempre diferente → loop infinito.
 def dfs_diferentes(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
     if df1.shape != df2.shape:
         return True
@@ -90,6 +95,9 @@ def dfs_diferentes(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
 
+    # Inicializa contadores de chave dinâmica (para uploader e editor)
+    if "uploader_key_cursos" not in st.session_state:
+        st.session_state.uploader_key_cursos = 0
     if "editor_key_counter" not in st.session_state:
         st.session_state.editor_key_counter = 0
 
@@ -144,21 +152,24 @@ def mostrar_cursos():
     else:
         st.session_state.acoes_editaveis = normalizar_dataframe(st.session_state.acoes_editaveis)
 
-    if atualizar_colunas_satisfacao():
-        st.rerun()
-
-    # ---------- Carregar ficheiro ----------
+    # ---------- Carregar ficheiro (com chave dinâmica) ----------
     st.subheader("📤 Carregar dados a partir de ficheiro")
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        modo_carga = st.radio("Modo de carregamento:", ["Substituir dados existentes", "Adicionar ao final"], horizontal=True, key="modo_carga_acoes")
+        modo_carga = st.radio(
+            "Modo de carregamento:",
+            ["Substituir dados existentes", "Adicionar ao final"],
+            horizontal=True,
+            key="modo_carga_acoes"
+        )
     with col2:
+        # CHAVE DINÂMICA – igual à lógica dos questionários
         ficheiros_carga = st.file_uploader(
             "Carregar um ou mais ficheiros (Excel ou CSV)",
             type=None,
             accept_multiple_files=True,
-            key="carga_acoes_upload"
+            key=f"carga_acoes_upload_{st.session_state.uploader_key_cursos}",
         )
     with col3:
         try:
@@ -196,7 +207,6 @@ def mostrar_cursos():
                 if nome.endswith('.csv'):
                     df_parcial = pd.read_csv(ficheiro)
                     df_parcial.columns = df_parcial.columns.str.strip()
-
                 elif nome.endswith('.xlsx'):
                     df_parcial = pd.read_excel(ficheiro, header=1)
                     df_parcial.columns = df_parcial.columns.str.strip()
@@ -213,11 +223,11 @@ def mostrar_cursos():
                         if col in df_parcial.columns:
                             df_parcial[col] = df_parcial[col].astype(str).str.strip()
                             df_parcial[col] = df_parcial[col].replace('nan', None)
-
                 else:
                     st.warning(f"Ficheiro ignorado (formato não suportado): {ficheiro.name}")
                     continue
 
+                # Mapeamento de colunas (mantido igual)
                 mapeamento = {
                     'status': 'Status', 'acao': 'Ação',
                     'dataini': 'Data Inicial', 'datafim': 'Data Final',
@@ -251,7 +261,6 @@ def mostrar_cursos():
                         df_parcial[col] = None
                 df_parcial = df_parcial[todas_colunas_dados]
                 df_parcial.insert(0, "Apagar", False)
-
                 df_parcial = normalizar_dataframe(df_parcial)
                 lista_dfs.append(df_parcial)
             except Exception as e:
@@ -265,23 +274,14 @@ def mostrar_cursos():
                 st.session_state.acoes_editaveis = pd.concat(
                     [st.session_state.acoes_editaveis, df_novo], ignore_index=True
                 )
+            # Incrementa as chaves dinâmicas para limpar o uploader e forçar rerender do editor
+            st.session_state.uploader_key_cursos += 1
             st.session_state.editor_key_counter += 1
             st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
             st.rerun()
 
         st.markdown("---")
 
-    st.subheader("✏️ Editar tabela de ações")
-
-    col_upd1, col_upd2 = st.columns([1, 5])
-    with col_upd1:
-        if st.button("🔄 Atualizar Tabela", use_container_width=True, key="btn_refresh"):
-            import time
-            timestamp = int(time.time())
-            st.query_params["refresh_trigger"] = str(timestamp)
-            st.rerun()
-
-    # ---------- Adicionar linhas vazias ----------
     st.subheader("➕ Adicionar múltiplas linhas")
     col_add1, col_add2 = st.columns([1, 2])
     with col_add1:
@@ -294,9 +294,7 @@ def mostrar_cursos():
             st.session_state.editor_key_counter += 1
             st.rerun()
 
-    # ---------- Tabela editável ----------
     placeholder = st.empty()
-
     df_atual = garantir_todas_colunas(
         st.session_state.acoes_editaveis.copy(),
         todas_colunas_dados
@@ -315,9 +313,7 @@ def mostrar_cursos():
             }
         )
 
-    # ---------- Botão para guardar alterações MANUALMENTE (substitui a atualização automática) ----------
-    if st.button("💾 Guardar alterações da tabela", use_container_width=True):
-        # Atualiza o session_state com os dados editados manualmente
+    if dfs_diferentes(edited_df, df_atual):
         df_completo = st.session_state.acoes_editaveis.copy()
         for col in edited_df.columns:
             if col != "Apagar":
@@ -327,10 +323,8 @@ def mostrar_cursos():
         df_normalizado = normalizar_dataframe(df_completo)
         st.session_state.acoes_editaveis = df_normalizado
         st.session_state.editor_key_counter += 1
-        st.success("✅ Alterações guardadas com sucesso!")
         st.rerun()
 
-    # ---------- Botões de limpar e apagar ----------
     st.markdown("---")
     col_bot1, col_bot2 = st.columns(2)
 
@@ -361,7 +355,6 @@ def mostrar_cursos():
             else:
                 st.warning("Coluna 'Apagar' não encontrada.")
 
-    # ---------- Exportar dados ----------
     st.markdown("---")
     st.subheader("📎 Exportar dados")
 
@@ -380,7 +373,6 @@ def mostrar_cursos():
         key="download_cursos_excel"
     )
 
-    # ---------- Métricas resumo ----------
     df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
     df_metricas = converter_colunas_numericas(df_metricas)
 
@@ -405,7 +397,6 @@ def mostrar_cursos():
             else 0
         )
         taxa_aprovacao = (total_aptos / total_inscricoes * 100) if total_inscricoes > 0 else 0
-
         media_satisfacao = (
             df_metricas["Taxa de satisfação Final"].mean()
             if "Taxa de satisfação Final" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Taxa de satisfação Final"])
