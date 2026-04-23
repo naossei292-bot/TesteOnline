@@ -124,7 +124,7 @@ def mostrar_cursos():
 
     st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
     colunas_escolhidas = st.multiselect(
-        "Selecione as colunas (a coluna 'Apagar' é sempre mostrada):",
+        "Selecione as colunas (a coluna 'Apagar!' é sempre mostrada):",
         options=todas_colunas_dados,
         default=st.session_state.colunas_selecionadas,
         key="seletor_colunas"
