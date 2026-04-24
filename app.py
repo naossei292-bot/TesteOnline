@@ -107,7 +107,7 @@ if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashbo
     st.session_state.pagina = "📊 Dashboard"
     st.rerun()
 
-if st.sidebar.button("⚔️ Comparador Versus -  EM DESENVOLVIMENTO", use_container_width=True, key="nav_comparador"):
+if st.sidebar.button("⚔️ Comparador Versus - Em Desenvolvimento", use_container_width=True, key="nav_comparador"):
     st.session_state.pagina = "⚔️ Comparador Versus"
     st.rerun()
 
