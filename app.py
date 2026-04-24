@@ -111,10 +111,6 @@ if st.sidebar.button("⚔️ Comparador Versus -  EM DESENVOLVIMENTO", use_conta
     st.session_state.pagina = "⚔️ Comparador Versus"
     st.rerun()
 
-
-
-
-
 # ============================================
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
 # ============================================
@@ -123,7 +119,7 @@ if st.session_state.pagina == "📚 Cursos":
     from Pages.cursos import mostrar_cursos
     mostrar_cursos()
 
-elif st.session_state.pagina == "📚 Relatórios":
+elif st.session_state.pagina == "📚 Balanços e Relatórios":
     from Pages.balancos_e_relatorios import mostrar_relatorios
     mostrar_relatorios()
 
@@ -143,8 +139,7 @@ elif st.session_state.pagina == "📊 Dashboard":
     from Pages.dashboardformacoes import mostrar_dashboard
     mostrar_dashboard()
 
-
-    # Botão de logout (agora na sidebar, mais intuitivo)
+# Botão de logout (agora na sidebar, mais intuitivo)
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
     st.session_state.clear()
