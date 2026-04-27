@@ -90,6 +90,11 @@ if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_q
     st.session_state.pagina = "📋 Questionários"
     st.rerun()
 
+if st.sidebar.button("📊 Dashboard - Questionários", use_container_width=True, key="nav_dashboard_quest"):
+    st.session_state.pagina = "📊 Dashboard - Questionários"
+    st.rerun()
+
+
 
 # Menu de navegação
 st.sidebar.markdown("---")
@@ -103,8 +108,8 @@ if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key=
     st.session_state.pagina = "🎯 Gestão de Qualidade"
     st.rerun()
 
-if st.sidebar.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
-    st.session_state.pagina = "📊 Dashboard"
+if st.sidebar.button("📊 Dashboard - Ações", use_container_width=True, key="nav_dashboard_acoes"):
+    st.session_state.pagina = "📊 Dashboard - Ações"
     st.rerun()
 
 if st.sidebar.button("⚔️ Comparador Versus - Em Desenvolvimento", use_container_width=True, key="nav_comparador"):
@@ -135,9 +140,13 @@ elif st.session_state.pagina == "⚔️ Comparador Versus":
     from Pages.comparador import mostrar_comparador
     mostrar_comparador()
 
-elif st.session_state.pagina == "📊 Dashboard":
+elif st.session_state.pagina == "📊 Dashboard - Ações":
     from Pages.dashboardformacoes import mostrar_dashboard
     mostrar_dashboard()
+
+elif st.session_state.pagina == "📊 Dashboard - Questionários":
+    from Pages.dashboardquestionarios import mostrar_questionarios_dashboard
+    mostrar_questionarios_dashboard()
 
 # Botão de logout (agora na sidebar, mais intuitivo)
 st.sidebar.markdown("---")
