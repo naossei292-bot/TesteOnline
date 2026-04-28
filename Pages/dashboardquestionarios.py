@@ -385,7 +385,7 @@ def mostrar_questionarios_dashboard():
 
     st.markdown("")
 
-    # ── Linha 1: por Centro e por Respondente ────────────────
+        # ── Linha 1: por Centro e por Respondente ────────────────
     _sec("Satisfação por Centro e Respondente")
     c1, c2 = st.columns([3, 2])
 
@@ -407,13 +407,16 @@ def mostrar_questionarios_dashboard():
 
     with c2:
         if df["Respondente"].notna().any():
+            # CORREÇÃO: Agora calcula a média por respondente, não a contagem
             df_resp = (
-                df["Respondente"].value_counts(dropna=True)
-                .rename_axis("Respondente")
-                .reset_index(name="Registos")
+                df.groupby("Respondente")["Valor Médio"]
+                .mean()
+                .round(2)
+                .reset_index()
+                .rename(columns={"Valor Médio": "Média"})
             )
             st.plotly_chart(
-                _fig_pizza(df_resp, "Respondente", "Registos", "Distribuição por Respondente"),
+                _fig_pizza(df_resp, "Respondente", "Média", "Satisfação Média por Respondente"),
                 use_container_width=True
             )
 
