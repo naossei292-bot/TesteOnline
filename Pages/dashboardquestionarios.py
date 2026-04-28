@@ -249,7 +249,7 @@ def _sidebar_filtros(df: pd.DataFrame) -> pd.DataFrame:
 # Página principal
 # ─────────────────────────────────────────────────────────────
 
-def mostrar_dashboard_questionarios():
+def mostrar_questionarios_dashboard():
     st.set_page_config(layout="wide") if False else None   # já definido no main
     _css()
 
@@ -449,4 +449,4 @@ def mostrar_dashboard_questionarios():
 
 
 if __name__ == "__main__":
-    mostrar_dashboard_questionarios()
+    mostrar_questionarios_dashboard()

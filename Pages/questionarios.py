@@ -27,52 +27,68 @@ FOLHA_META = {
 
 def parsear_item(item_str: str) -> dict:
     """Parseia item → {Módulo, Folha, Pergunta, Respondente, Modalidade, Tipo}.
-    Aceita formato com módulo (M00_21b.A01) e sem módulo (23a.D01)."""
+    Aceita formato com módulo (M00_21b.A01), sem módulo (23a.D01),
+    e com duplo underscore (M01__21b.A01) — o underscore extra é removido da Folha."""
     m = RE_ITEM.match(str(item_str).strip())
     if not m:
         return {"Módulo": None, "Folha": None, "Pergunta": None,
                 "Respondente": None, "Modalidade": None, "Tipo": None}
-    modulo  = m.group(1)          # None se não tiver prefixo M00_
-    folha   = m.group(2)
+    modulo = m.group(1)               # None se não tiver prefixo M00_
+    folha = m.group(2).strip("_")     # remove underscores extra
     pergunta = m.group(3)
     meta = FOLHA_META.get(folha, {"Respondente": None, "Modalidade": None, "Tipo": None})
     return {
-        "Módulo":      modulo,
-        "Folha":       folha,
-        "Pergunta":    pergunta,
+        "Módulo": modulo,
+        "Folha": folha,
+        "Pergunta": pergunta,
         "Respondente": meta["Respondente"],
-        "Modalidade":  meta["Modalidade"],
-        "Tipo":        meta["Tipo"],
+        "Modalidade": meta["Modalidade"],
+        "Tipo": meta["Tipo"],
     }
 
 
 def processar_acoes_xlsx(ficheiro) -> pd.DataFrame:
-    """Lê ações_por_centro.xlsx → DataFrame com Ação, Datini, Datfim, Centro."""
+    """Lê ações_por_centro.xlsx → DataFrame com Ação, DataInicioAcao, DataFimAcao, Centro, U_status."""
+    import unicodedata
+
     df = pd.read_excel(ficheiro)
     df.columns = df.columns.str.strip()
+
+    # Limpeza de espaços e normalização
     for col in df.columns:
-        if df[col].dtype == object:
-            df[col] = df[col].str.strip()
-    # Renomear para nomes normalizados
+        try:
+            stripped = df[col].astype(str).str.strip()
+            df[col] = stripped.where(df[col].notna(), other=None)
+        except Exception:
+            pass
+
+    def norm(s):
+        return unicodedata.normalize("NFC", str(s)).lower().strip()
+
     rename = {}
     for col in df.columns:
-        cl = col.lower()
-        if cl == "ação" or cl == "acao":
+        cn = norm(col)
+        if cn in ("ação", "acao"):
             rename[col] = "Ação"
-        elif cl == "datini":
-            rename[col] = "Datini"
-        elif cl == "datfim":
-            rename[col] = "Datfim"
-        elif cl == "deslocal":
+        elif cn in ("datini", "datainicio", "data_inicio", "datainicioacao",
+                    "data_ini_acao", "datainiacao", "inicio", "data inicio"):
+            rename[col] = "DataInicioAcao"
+        elif cn in ("datfim", "datafim", "data_fim", "datafimacao",
+                    "data_fim_acao", "datafimacao", "fim", "data fim"):
+            rename[col] = "DataFimAcao"
+        elif cn in ("deslocal", "local", "localização", "localizacao", "centro"):
             rename[col] = "Centro"
+        elif cn in ("u_status", "ustatus", "status"):
+            rename[col] = "U_status"
+
     df = df.rename(columns=rename)
-    colunas_necessarias = [c for c in ["Ação", "Datini", "Datfim", "Centro"] if c in df.columns]
+    colunas_necessarias = [c for c in ["Ação", "DataInicioAcao", "DataFimAcao", "Centro", "U_status"]
+                           if c in df.columns]
     return df[colunas_necessarias].copy()
 
 
 def processar_csv(ficheiro) -> pd.DataFrame:
     """Lê mdl_course.csv → DataFrame com colunas expandidas."""
-    # Tentar utf-8, fallback para latin-1
     try:
         df = pd.read_csv(ficheiro, sep=";", encoding="utf-8")
     except UnicodeDecodeError:
@@ -85,13 +101,13 @@ def processar_csv(ficheiro) -> pd.DataFrame:
     parsed = df["item"].apply(parsear_item).apply(pd.Series)
     df = pd.concat([df, parsed], axis=1)
 
-    # Normalizar valor_medio para numérico
+    # Normalizar valor_medio
     df["valor_medio"] = pd.to_numeric(df["valor_medio"], errors="coerce")
 
-    # Renomear colunas para PT
+    # Renomear colunas
     df = df.rename(columns={
         "shortname":   "Shortname",
-        "data_ini":    "Data",
+        "data_ini":    "DataResposta",
         "item":        "Item",
         "valor_medio": "Valor Médio",
     })
@@ -102,33 +118,34 @@ def juntar_dados(df_csv: pd.DataFrame, df_acoes: pd.DataFrame) -> pd.DataFrame:
     """
     Faz o join entre o CSV (Shortname) e o Excel (Ação).
     A correlação é: Shortname do CSV == Ação do Excel.
-    Se não houver correspondência (ex: ficheiros de períodos diferentes),
-    os dados do CSV são mantidos na mesma sem informação de Centro/Datas.
+    Traz Centro, DataInicioAcao, DataFimAcao e U_status do Excel.
     """
     if df_acoes.empty:
-        # Sem Excel carregado — manter dados CSV com colunas vazias
         df_csv["Centro"] = None
-        df_csv["Datini"] = None
-        df_csv["Datfim"] = None
-        return df_csv
+        df_csv["DataInicioAcao"] = None
+        df_csv["DataFimAcao"] = None
+        df_csv["U_status"] = None
+        return df_csv.reset_index(drop=True)
 
+    cols_join = [c for c in ["Ação", "DataInicioAcao", "DataFimAcao", "Centro", "U_status"]
+                 if c in df_acoes.columns]
     df = df_csv.merge(
-        df_acoes.rename(columns={"Ação": "Shortname"}),
+        df_acoes[cols_join].rename(columns={"Ação": "Shortname"}),
         on="Shortname",
         how="left"
-    )
+    ).reset_index(drop=True)
     return df
 
 
 # ─────────────────────────────────────────────────────────────
-# Funções auxiliares de estado (igual à página de cursos)
+# Funções auxiliares de estado
 # ─────────────────────────────────────────────────────────────
 
 COLUNAS_DADOS = [
-    "Shortname", "Centro", "Datini", "Datfim",
+    "Shortname", "Centro", "DataInicioAcao", "DataFimAcao", "U_status",
     "Módulo", "Folha", "Pergunta", "Item",
     "Respondente", "Modalidade", "Tipo",
-    "Valor Médio", "Data",
+    "Valor Médio", "DataResposta",
 ]
 
 
@@ -139,7 +156,7 @@ def garantir_todas_colunas(df: pd.DataFrame) -> pd.DataFrame:
     if "Apagar" not in df.columns:
         df.insert(0, "Apagar", False)
     cols = ["Apagar"] + [c for c in COLUNAS_DADOS if c in df.columns]
-    return df[cols]
+    return df[cols].reset_index(drop=True)
 
 
 def dfs_diferentes(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
@@ -163,16 +180,15 @@ def _gerar_excel_com_filtros(df: pd.DataFrame) -> io.BytesIO:
     ws = wb.active
     ws.title = "Questionários"
 
-    # ── Estilos ──────────────────────────────────────────────
-    COR_CABECALHO  = "1F4E79"   # azul escuro
-    COR_FILTRO     = "2E75B6"   # azul médio para colunas de filtro principais
-    COLS_DESTAQUE  = {"Centro", "Shortname", "Datini", "Datfim", "Respondente"}
+    COR_CABECALHO = "1F4E79"
+    COR_FILTRO = "2E75B6"
+    COLS_DESTAQUE = {"Centro", "Shortname", "DataInicioAcao", "DataFimAcao", "Respondente"}
 
     header_base = Font(bold=True, color="FFFFFF", name="Arial", size=10)
     header_fill_principal = PatternFill("solid", fgColor=COR_FILTRO)
-    header_fill_normal    = PatternFill("solid", fgColor=COR_CABECALHO)
+    header_fill_normal = PatternFill("solid", fgColor=COR_CABECALHO)
     align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    align_left   = Alignment(horizontal="left",   vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
     borda_fina = Border(
         left=Side(style="thin", color="BFBFBF"),
         right=Side(style="thin", color="BFBFBF"),
@@ -181,17 +197,17 @@ def _gerar_excel_com_filtros(df: pd.DataFrame) -> io.BytesIO:
 
     cols = list(df.columns)
 
-    # ── Cabeçalho ─────────────────────────────────────────────
+    # Cabeçalho
     ws.row_dimensions[1].height = 30
     for ci, col_name in enumerate(cols, start=1):
         cell = ws.cell(row=1, column=ci, value=col_name)
-        cell.font  = header_base
-        cell.fill  = header_fill_principal if col_name in COLS_DESTAQUE else header_fill_normal
+        cell.font = header_base
+        cell.fill = header_fill_principal if col_name in COLS_DESTAQUE else header_fill_normal
         cell.alignment = align_center
         cell.border = borda_fina
 
-    # ── Dados ─────────────────────────────────────────────────
-    fill_par   = PatternFill("solid", fgColor="DCE6F1")   # azul muito claro
+    # Dados
+    fill_par = PatternFill("solid", fgColor="DCE6F1")
     fill_impar = PatternFill("solid", fgColor="FFFFFF")
     fonte_dado = Font(name="Arial", size=9)
 
@@ -199,26 +215,23 @@ def _gerar_excel_com_filtros(df: pd.DataFrame) -> io.BytesIO:
         fill = fill_par if ri % 2 == 0 else fill_impar
         for ci, value in enumerate(row_data, start=1):
             cell = ws.cell(row=ri, column=ci, value=value)
-            cell.font      = fonte_dado
-            cell.fill      = fill
+            cell.font = fonte_dado
+            cell.fill = fill
             cell.alignment = align_left
-            cell.border    = borda_fina
+            cell.border = borda_fina
 
-    # ── Larguras de coluna automáticas ────────────────────────
+    # Larguras
     LARGURAS = {
-        "Centro": 14, "Shortname": 18, "Datini": 13, "Datfim": 13,
+        "Centro": 14, "Shortname": 18, "DataInicioAcao": 18, "DataFimAcao": 16,
         "Respondente": 22, "Modalidade": 14, "Tipo": 12,
         "Módulo": 10, "Folha": 10, "Pergunta": 12, "Item": 18,
-        "Valor Médio": 13, "Data": 13,
+        "Valor Médio": 13, "DataResposta": 14,
     }
     for ci, col_name in enumerate(cols, start=1):
         largura = LARGURAS.get(col_name, 16)
         ws.column_dimensions[get_column_letter(ci)].width = largura
 
-    # ── Congelar primeira linha ────────────────────────────────
     ws.freeze_panes = "A2"
-
-    # ── AutoFilter em todas as colunas ────────────────────────
     ultima_col = get_column_letter(len(cols))
     ws.auto_filter.ref = f"A1:{ultima_col}{ws.max_row}"
 
@@ -237,7 +250,7 @@ def mostrar_questionarios():
 
     COLUNAS_COM_APAGAR = ["Apagar"] + COLUNAS_DADOS
 
-    # ── Inicializar estado ─────────────────────────────────────
+    # Inicializar estado
     if "quest_uploader_key" not in st.session_state:
         st.session_state.quest_uploader_key = 0
     if "quest_editor_key" not in st.session_state:
@@ -245,21 +258,19 @@ def mostrar_questionarios():
     if "quest_editaveis" not in st.session_state:
         st.session_state.quest_editaveis = pd.DataFrame(columns=COLUNAS_COM_APAGAR)
     if "quest_acoes_df" not in st.session_state:
-        # DataFrame auxiliar com as ações do Excel (para joins futuros)
-        st.session_state.quest_acoes_df = pd.DataFrame(columns=["Ação", "Datini", "Datfim", "Centro"])
+        st.session_state.quest_acoes_df = pd.DataFrame(
+            columns=["Ação", "DataInicioAcao", "DataFimAcao", "Centro", "U_status"]
+        )
 
-    # Garantir todas as colunas no estado atual
     st.session_state.quest_editaveis = garantir_todas_colunas(
         st.session_state.quest_editaveis.copy()
     )
-
-    # (exportação inclui sempre todas as colunas, ordenadas com as de filtro à esquerda)
 
     # ── Carregar ficheiros ──────────────────────────────────────
     st.subheader("📤 Carregar Ficheiros")
 
     st.info(
-        "**Ficheiro de Ações (Excel):** `ações_por_centro.xlsx` — fornece Ação, Datini, Datfim, Centro.  \n"
+        "**Ficheiro de Ações (Excel):** `ações_por_centro.xlsx` — fornece Ação, DataInicioAcao, DataFimAcao, Centro.  \n"
         "**Ficheiro de Questionários (CSV):** `mdl_course.csv` — fornece Shortname, Item, Valor Médio.  \n"
         "A correlação é feita automaticamente: **Shortname (CSV) = Ação (Excel)**."
     )
@@ -278,17 +289,20 @@ def mostrar_questionarios():
             key=f"carga_quest_upload_{st.session_state.quest_uploader_key}",
         )
     with c3:
-        # Botão de reset
         if st.button("🗑️ Limpar todos os dados", use_container_width=True, key="btn_limpar_quest"):
             st.session_state.quest_editaveis = pd.DataFrame(columns=COLUNAS_COM_APAGAR)
-            st.session_state.quest_acoes_df = pd.DataFrame(columns=["Ação", "Datini", "Datfim", "Centro"])
+            st.session_state.quest_acoes_df = pd.DataFrame(
+                columns=["Ação", "DataInicioAcao", "DataFimAcao", "Centro", "U_status"]
+            )
+            st.session_state.quest_excel_cache = None
             st.session_state.quest_editor_key += 1
             st.rerun()
 
-    if ficheiros:
-        dfs_csv   = []
-        dfs_acoes = []
+    # Inicializar listas mesmo que não haja ficheiros (evita UnboundLocalError)
+    dfs_csv = []
+    dfs_acoes = []
 
+    if ficheiros:
         for f in ficheiros:
             nome = f.name.lower()
             try:
@@ -313,19 +327,27 @@ def mostrar_questionarios():
             except Exception as e:
                 st.error(f"Erro em {f.name}: {e}")
 
-        # Atualizar DataFrame de ações (para joins)
         if dfs_acoes:
-            df_acoes_novo = pd.concat(dfs_acoes, ignore_index=True).drop_duplicates(subset=["Ação"])
+            df_acoes_novo = pd.concat(dfs_acoes, ignore_index=True).drop_duplicates(subset=["Ação"]).reset_index(drop=True)
             if modo_carga == "Substituir dados existentes":
                 st.session_state.quest_acoes_df = df_acoes_novo
             else:
                 st.session_state.quest_acoes_df = pd.concat(
                     [st.session_state.quest_acoes_df, df_acoes_novo], ignore_index=True
-                ).drop_duplicates(subset=["Ação"])
+                ).drop_duplicates(subset=["Ação"]).reset_index(drop=True)
 
-        # Processar CSVs e fazer join com ações
+            # Forçar re-join se já há CSV carregado
+            if not st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").empty:
+                df_csv_atual = st.session_state.quest_editaveis.drop(
+                    columns=["Apagar", "Centro", "DataInicioAcao", "DataFimAcao", "U_status"], errors="ignore"
+                )
+                df_rejoin = juntar_dados(df_csv_atual, st.session_state.quest_acoes_df)
+                df_rejoin = garantir_todas_colunas(df_rejoin)
+                df_rejoin["Apagar"] = False
+                st.session_state.quest_editaveis = df_rejoin
+
         if dfs_csv:
-            df_csv_total = pd.concat(dfs_csv, ignore_index=True)
+            df_csv_total = pd.concat(dfs_csv, ignore_index=True).reset_index(drop=True)
             df_joined = juntar_dados(df_csv_total, st.session_state.quest_acoes_df)
             df_joined = garantir_todas_colunas(df_joined)
             df_joined["Apagar"] = False
@@ -333,21 +355,21 @@ def mostrar_questionarios():
             if modo_carga == "Substituir dados existentes":
                 st.session_state.quest_editaveis = df_joined
             else:
-                st.session_state.quest_editaveis = pd.concat(
-                    [st.session_state.quest_editaveis, df_joined], ignore_index=True
-                )
+                novo_df = pd.concat([st.session_state.quest_editaveis, df_joined], ignore_index=True).reset_index(drop=True)
+                st.session_state.quest_editaveis = novo_df
 
-            n_match = df_joined["Centro"].notna().sum()
-            n_total = len(df_joined)
+            # ATENÇÃO: usa .sum() para obter um inteiro
+            n_match = df_joined["Centro"].notna().sum()   # ← escalar
+            n_total = len(df_joined)                     # ← escalar
+
             if n_match > 0:
                 st.info(f"🔗 Correlação: {n_match}/{n_total} registos com Centro identificado via Excel.")
             else:
-                st.info("ℹ️ Nenhuma correspondência encontrada entre Shortname e Ação do Excel. "
-                        "Carregue também o ficheiro Excel de Ações para enriquecer os dados.")
+                st.info("ℹ️ Nenhuma correspondência...")
 
         if dfs_csv or dfs_acoes:
             st.session_state.quest_uploader_key += 1
-            st.session_state.quest_editor_key   += 1
+            st.session_state.quest_editor_key += 1
             st.rerun()
 
     st.markdown("---")
@@ -377,21 +399,21 @@ def mostrar_questionarios():
                 modalidades = sorted(df_atual["Modalidade"].dropna().unique())
                 filtro_modalidade = st.multiselect("Modalidade", modalidades, default=modalidades, key="fq_modalidade")
 
-            # Filtro de datas
+            # Filtro de datas (usando DataInicioAcao, não DataResposta)
             col_d1, col_d2 = st.columns(2)
             df_datas = df_atual.copy()
-            df_datas["Datini_dt"] = pd.to_datetime(df_datas["Datini"], errors="coerce")
-            data_min = df_datas["Datini_dt"].min()
-            data_max = df_datas["Datini_dt"].max()
+            df_datas["DataInicioAcao_dt"] = pd.to_datetime(df_datas["DataInicioAcao"], errors="coerce")
+            data_min = df_datas["DataInicioAcao_dt"].min()
+            data_max = df_datas["DataInicioAcao_dt"].max()
 
             with col_d1:
                 if pd.notna(data_min):
-                    filtro_data_ini = st.date_input("Data início (a partir de)", value=data_min.date(), key="fq_data_ini")
+                    filtro_data_ini = st.date_input("Data início da ação (a partir de)", value=data_min.date(), key="fq_data_ini")
                 else:
                     filtro_data_ini = None
             with col_d2:
                 if pd.notna(data_max):
-                    filtro_data_fim = st.date_input("Data início (até)", value=data_max.date(), key="fq_data_fim")
+                    filtro_data_fim = st.date_input("Data início da ação (até)", value=data_max.date(), key="fq_data_fim")
                 else:
                     filtro_data_fim = None
 
@@ -408,12 +430,12 @@ def mostrar_questionarios():
                 df_filtrado = df_filtrado[df_filtrado["Modalidade"].isin(filtro_modalidade)]
             if filtro_data_ini and filtro_data_fim:
                 df_datas_f = df_filtrado.copy()
-                df_datas_f["Datini_dt"] = pd.to_datetime(df_datas_f["Datini"], errors="coerce")
+                df_datas_f["DataInicioAcao_dt"] = pd.to_datetime(df_datas_f["DataInicioAcao"], errors="coerce")
                 mask_data = (
-                    df_datas_f["Datini_dt"].isna() |
+                    df_datas_f["DataInicioAcao_dt"].isna() |
                     (
-                        (df_datas_f["Datini_dt"].dt.date >= filtro_data_ini) &
-                        (df_datas_f["Datini_dt"].dt.date <= filtro_data_fim)
+                        (df_datas_f["DataInicioAcao_dt"].dt.date >= filtro_data_ini) &
+                        (df_datas_f["DataInicioAcao_dt"].dt.date <= filtro_data_fim)
                     )
                 )
                 df_filtrado = df_filtrado[mask_data.values]
@@ -443,9 +465,42 @@ def mostrar_questionarios():
             novas.insert(0, "Apagar", False)
             st.session_state.quest_editaveis = pd.concat(
                 [st.session_state.quest_editaveis, novas], ignore_index=True
-            )
+            ).reset_index(drop=True)
             st.session_state.quest_editor_key += 1
             st.rerun()
+
+    # ── Exportar (ANTES do editor) ─────────────────────────────
+    if "quest_excel_cache" not in st.session_state:
+        st.session_state.quest_excel_cache = None
+
+    df_para_export = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
+    tem_dados = not df_para_export.empty and df_para_export["Shortname"].notna().any()
+    if tem_dados:
+        COLS_FILTRO_EXP = ["Centro", "Shortname", "DataInicioAcao", "DataFimAcao", "U_status",
+                           "Respondente", "Modalidade", "Tipo"]
+        COLS_REST_EXP = [c for c in COLUNAS_DADOS if c not in COLS_FILTRO_EXP]
+        ordem_exp = [c for c in COLS_FILTRO_EXP + COLS_REST_EXP if c in df_para_export.columns]
+        df_exp = df_para_export[ordem_exp].copy()
+        for col_data in ["DataInicioAcao", "DataFimAcao", "DataResposta"]:
+            if col_data in df_exp.columns:
+                df_exp[col_data] = (pd.to_datetime(df_exp[col_data], errors="coerce")
+                                    .dt.strftime("%d/%m/%Y"))
+        st.session_state.quest_excel_cache = _gerar_excel_com_filtros(df_exp)
+
+    st.markdown("---")
+    st.subheader("📎 Exportar dados com filtros")
+    st.caption("O ficheiro Excel inclui **filtros nativos** em todas as colunas — Centro, Ação, Data, Respondente, U_status, etc.")
+    if st.session_state.quest_excel_cache is not None:
+        st.download_button(
+            label="📥 Descarregar Excel com filtros",
+            data=st.session_state.quest_excel_cache,
+            file_name="questionarios_exportados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="download_quest_excel",
+        )
+    else:
+        st.info("Carregue dados para ativar a exportação.")
 
     # ── Tabela editável ────────────────────────────────────────
     st.markdown("---")
@@ -458,12 +513,11 @@ def mostrar_questionarios():
         height=420,
         key=f"quest_editor_{st.session_state.quest_editor_key}",
         column_config={
-            "Apagar":     st.column_config.CheckboxColumn("Apagar", default=False),
+            "Apagar": st.column_config.CheckboxColumn("Apagar", default=False),
             "Valor Médio": st.column_config.NumberColumn("Valor Médio", format="%.2f"),
         },
     )
 
-    # Auto-update robusto (mesmo padrão da página de cursos)
     if dfs_diferentes(edited_df, df_atual):
         st.session_state.quest_editaveis = edited_df
         st.session_state.quest_editor_key += 1
@@ -483,39 +537,6 @@ def mostrar_questionarios():
         else:
             st.warning("Nenhuma linha marcada.")
 
-    # ── Exportar ───────────────────────────────────────────────
-    st.markdown("---")
-    st.subheader("📎 Exportar dados com filtros")
-
-    st.caption(
-        "O ficheiro Excel gerado inclui **filtros nativos** em todas as colunas "
-        "(Centro, Ação, Data, Respondente, etc.) — basta clicar nas setas no cabeçalho para filtrar."
-    )
-
-    df_export = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
-
-    # Colunas de filtragem prioritárias ficam à esquerda
-    COLS_FILTRO   = ["Centro", "Shortname", "Datini", "Datfim", "Respondente", "Modalidade", "Tipo"]
-    COLS_RESTANTES = [c for c in COLUNAS_DADOS if c not in COLS_FILTRO]
-    ordem_export   = [c for c in COLS_FILTRO + COLS_RESTANTES if c in df_export.columns]
-    df_export = df_export[ordem_export]
-
-    # Formatar datas como string legível se forem datetime
-    for col_data in ["Datini", "Datfim", "Data"]:
-        if col_data in df_export.columns:
-            df_export[col_data] = pd.to_datetime(df_export[col_data], errors="coerce").dt.strftime("%d/%m/%Y")
-
-    output = _gerar_excel_com_filtros(df_export)
-
-    st.download_button(
-        label="📥 Descarregar Excel com filtros",
-        data=output,
-        file_name="questionarios_exportados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-        key="download_quest_excel",
-    )
-
     # ── Métricas ───────────────────────────────────────────────
     df_m = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
     df_m = df_m[df_m["Shortname"].notna()]
@@ -528,19 +549,16 @@ def mostrar_questionarios():
 
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Cursos (Shortnames)", df_m["Shortname"].nunique())
-        m2.metric("Centros",  df_m["Centro"].nunique() if "Centro" in df_m else 0)
-        m3.metric("Módulos",  df_m["Módulo"].nunique() if "Módulo" in df_m else 0)
+        m2.metric("Centros", df_m["Centro"].nunique() if "Centro" in df_m else 0)
+        m3.metric("Módulos", df_m["Módulo"].nunique() if "Módulo" in df_m else 0)
         m4.metric("Registos", len(df_m))
         media_geral = df_m["Valor Médio"].mean()
         m5.metric("Valor Médio Geral", f"{media_geral:.2f}" if pd.notna(media_geral) else "—")
 
-        # Resumo por Módulo / Folha / Respondente
         if all(c in df_m.columns for c in ["Módulo", "Folha", "Respondente", "Valor Médio"]):
             resumo = (
                 df_m.groupby(["Módulo", "Folha", "Respondente"])["Valor Médio"]
-                .mean()
-                .round(3)
-                .reset_index()
+                .mean().round(3).reset_index()
                 .rename(columns={"Valor Médio": "Média"})
                 .sort_values(["Módulo", "Folha"])
             )
@@ -548,13 +566,10 @@ def mostrar_questionarios():
                 st.subheader("📋 Médias por Módulo / Folha / Respondente")
                 st.dataframe(resumo, use_container_width=True, hide_index=True)
 
-        # Resumo por Centro (se houver dados de ações)
         if "Centro" in df_m.columns and df_m["Centro"].notna().any():
             resumo_centro = (
                 df_m.groupby("Centro")["Valor Médio"]
-                .mean()
-                .round(3)
-                .reset_index()
+                .mean().round(3).reset_index()
                 .rename(columns={"Valor Médio": "Média"})
                 .sort_values("Média", ascending=False)
             )
