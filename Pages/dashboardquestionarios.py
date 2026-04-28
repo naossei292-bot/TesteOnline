@@ -156,6 +156,89 @@ def _fig_linha(df_group, x, y, cor=None, titulo=""):
     return fig
 
 
+# NOVA FUNÇÃO - Gráfico de linha com pontos estilo o da imagem
+def _fig_linha_pontos(df_group, x, y, titulo="", cor=COR_SECUNDARIA):
+    """
+    Cria um gráfico de linha com pontos marcados e valores visíveis,
+    similar ao exemplo da imagem com eixo Y de 0.5 a 4.5
+    """
+    fig = go.Figure()
+    
+    # Adiciona a linha com marcadores e texto
+    fig.add_trace(go.Scatter(
+        x=df_group[x],
+        y=df_group[y],
+        mode='lines+markers+text',
+        name='Série1',
+        line=dict(color=cor, width=2.5),
+        marker=dict(
+            size=12,
+            color=cor,
+            symbol='circle',
+            line=dict(color='white', width=2)
+        ),
+        text=df_group[y].round(1),
+        textposition='top center',
+        textfont=dict(size=10, color=COR_TEXTO)
+    ))
+    
+    # Configuração do layout
+    fig.update_layout(
+        title=dict(text=titulo, font_size=13),
+        xaxis=dict(
+            title=dict(text="", font_size=11),
+            tickangle=0,
+            showgrid=False,
+            tickfont=dict(size=10)
+        ),
+        yaxis=dict(
+            title=dict(text="Valor Médio", font_size=11),
+            showgrid=True,
+            gridcolor="#EEF2F8",
+            range=[0.5, 4.5],
+            dtick=0.5,
+            tickfont=dict(size=10)
+        ),
+        **PLOTLY_LAYOUT
+    )
+    
+    return fig
+
+
+def _fig_barras_por_folha(df_group, categoria=None, titulo=""):
+    ordem_folhas = ["21a", "21b", "22a", "22b", "23a", "23b", "24a", "24b"]
+    if categoria and categoria in df_group.columns:
+        fig = px.bar(
+            df_group.sort_values(["Folha", categoria]),
+            x="Folha",
+            y="Valor Médio",
+            color=categoria,
+            barmode="group",
+            category_orders={"Folha": ordem_folhas},
+            color_discrete_sequence=PALETA,
+        )
+        fig.update_traces(texttemplate="%{y:.2f}", textposition="outside")
+    else:
+        fig = px.bar(
+            df_group.sort_values("Folha"),
+            x="Folha",
+            y="Valor Médio",
+            color_discrete_sequence=[COR_SECUNDARIA],
+            category_orders={"Folha": ordem_folhas},
+        )
+        fig.update_traces(texttemplate="%{y:.2f}", textposition="outside")
+
+    fig.update_layout(
+        title_text=titulo,
+        title_font_size=13,
+        barmode="group",
+        **PLOTLY_LAYOUT
+    )
+    fig.update_yaxes(showgrid=True, gridcolor="#EEF2F8", range=[0.5, 4.5], dtick=0.5)
+    fig.update_xaxes(showgrid=False, type="category")
+    return fig
+
+
 # ─────────────────────────────────────────────────────────────
 # Sidebar de filtros
 # ─────────────────────────────────────────────────────────────
@@ -299,8 +382,6 @@ def mostrar_questionarios_dashboard():
     with k1: _kpi("Registos filtrados", f"{n_filtrado:,}".replace(",","."), f"de {n_total:,}".replace(",","."))
     with k2: _kpi("Cursos (Shortnames)", df["Shortname"].nunique(), "únicos")
     with k3: _kpi("Centros", df["Centro"].nunique() if df["Centro"].notna().any() else "—", "", "verde")
-    with k4: _kpi("Valor Médio Geral", f"{vm_geral:.2f}" if pd.notna(vm_geral) else "—", "escala 0–5", "laranja")
-    with k5: _kpi("Amplitude", f"{vm_min:.2f} – {vm_max:.2f}" if pd.notna(vm_min) else "—", "min – max curso", "amarelo")
 
     st.markdown("")
 
@@ -327,107 +408,109 @@ def mostrar_questionarios_dashboard():
     with c2:
         if df["Respondente"].notna().any():
             df_resp = (
-                df.groupby("Respondente")["Valor Médio"]
-                .mean().round(2).reset_index()
-                .rename(columns={"Valor Médio": "Média"})
+                df["Respondente"].value_counts(dropna=True)
+                .rename_axis("Respondente")
+                .reset_index(name="Registos")
             )
             st.plotly_chart(
-                _fig_pizza(df_resp, "Respondente", "Média", "Distribuição por Respondente"),
+                _fig_pizza(df_resp, "Respondente", "Registos", "Distribuição por Respondente"),
                 use_container_width=True
             )
 
-    # ── Linha 2: por Módulo e por Folha ──────────────────────
-    _sec("Satisfação por Módulo e Área (Folha)")
-    c3, c4 = st.columns(2)
+    # ── NOVO GRÁFICO DE LINHA COM PONTOS ─────────────────────
+    _sec("Evolução da Satisfação")
+    
+    # Verifica se existe coluna de Folha e valor médio para o gráfico principal
+    if "Folha" in df.columns and "Valor Médio" in df.columns:
+        ordem_folhas = ["21a", "21b", "22a", "22b", "23a", "23b", "24a", "24b"]
+        df_folha = df[df["Folha"].isin(ordem_folhas)].copy()
 
-    with c3:
-        if df["Módulo"].notna().any():
-            df_mod = (
-                df.groupby("Módulo")["Valor Médio"]
-                .mean().round(2).reset_index()
-                .sort_values("Módulo")
-                .rename(columns={"Valor Médio": "Média"})
-            )
-            st.plotly_chart(
-                _fig_bar(df_mod, "Módulo", "Média", "Valor Médio por Módulo", COR_ACENTO),
-                use_container_width=True
-            )
+        if not df_folha.empty:
+            df_folha["Folha"] = pd.Categorical(df_folha["Folha"], categories=ordem_folhas, ordered=True)
 
-    with c4:
-        if df["Folha"].notna().any():
-            df_folha = (
-                df.groupby("Folha")["Valor Médio"]
-                .mean().round(2).reset_index()
-                .sort_values("Valor Médio", ascending=True)
-                .rename(columns={"Valor Médio": "Média"})
-            )
-            # Mapa de descrição da folha
-            desc_folha = {
-                "21a": "Formando – Presencial – Módulo",
-                "21b": "Formando – Distância – Módulo",
-                "22a": "Formando – Presencial – Ação",
-                "22b": "Formando – Distância – Ação",
-                "23a": "Formador – Presencial",
-                "23b": "Tutor – Distância",
-                "24a": "Coord. Ped. – Presencial",
-                "24b": "Coord. Ped. – Distância",
-            }
-            df_folha["Descrição"] = df_folha["Folha"].map(desc_folha).fillna(df_folha["Folha"])
-            st.plotly_chart(
-                _fig_bar(df_folha, "Descrição", "Média",
-                         "Valor Médio por Área (Folha)", COR_AVISO, horizontal=True),
-                use_container_width=True
-            )
+            if "Pergunta" in df_folha.columns and df_folha["Pergunta"].notna().any():
+                # Normaliza a pergunta para usar apenas a letra inicial A-F e remover N, P, R, S, O
+                letras_validas = ["A", "B", "C", "D", "E", "F"]
+                df_folha["Pergunta Letra"] = (
+                    df_folha["Pergunta"].astype(str)
+                    .str.strip()
+                    .str.upper()
+                    .str.extract(r'^([A-Z])')[0]
+                )
+                df_folha = df_folha[df_folha["Pergunta Letra"].isin(letras_validas)]
 
-    # ── Linha 3: evolução temporal ───────────────────────────
-    if "_Mês" in df.columns and df["_Mês"].notna().any():
-        _sec("Evolução Temporal (por Mês)")
-        df_tempo = (
-            df[df["_Mês"].notna()]
-            .groupby("_Mês")["Valor Médio"]
-            .mean().round(2).reset_index()
-            .rename(columns={"_Mês": "Mês", "Valor Médio": "Média"})
-            .sort_values("Mês")
+                df_plot = (
+                    df_folha.groupby(["Folha", "Pergunta Letra"])["Valor Médio"]
+                    .mean()
+                    .round(2)
+                    .reset_index()
+                    .rename(columns={"Pergunta Letra": "Pergunta"})
+                )
+                st.plotly_chart(
+                    _fig_barras_por_folha(
+                        df_plot,
+                        categoria="Pergunta",
+                        titulo="Satisfação Média por Folha e Pergunta"
+                    ),
+                    use_container_width=True
+                )
+            else:
+                df_plot = (
+                    df_folha.groupby("Folha")["Valor Médio"]
+                    .mean()
+                    .round(2)
+                    .reset_index()
+                )
+                st.plotly_chart(
+                    _fig_barras_por_folha(
+                        df_plot,
+                        categoria=None,
+                        titulo="Satisfação Média por Folha"
+                    ),
+                    use_container_width=True
+                )
+        else:
+            st.info("ℹ️ Não existem folhas 21a-24b nos dados atuais para este gráfico.")
+    elif "_Mês" in df.columns and "Valor Médio" in df.columns:
+        # Alternativa: usar meses como eixo X
+        df_meses = (
+            df.groupby("_Mês")["Valor Médio"]
+            .mean()
+            .round(2)
+            .reset_index()
+            .sort_values("_Mês")
         )
-        if len(df_tempo) > 1:
-            st.plotly_chart(
-                _fig_linha(df_tempo, "Mês", "Média", COR_SECUNDARIA, "Evolução do Valor Médio por Mês"),
-                use_container_width=True
-            )
-
-    # ── Linha 4: top cursos ───────────────────────────────────
-    _sec("Top e Pior Desempenho por Curso")
-    c5, c6 = st.columns(2)
-
-    df_cursos = (
-        df.groupby("Shortname")["Valor Médio"]
-        .mean().round(2).reset_index()
-        .rename(columns={"Valor Médio": "Média"})
-    )
-
-    with c5:
-        top = df_cursos.nlargest(10, "Média").sort_values("Média", ascending=True)
-        fig_top = px.bar(
-            top, x="Média", y="Shortname", orientation="h",
-            text_auto=".2f", color_discrete_sequence=[COR_ACENTO],
-            title="🏆 Top 10 Cursos"
+        
+        st.plotly_chart(
+            _fig_linha_pontos(
+                df_meses,
+                "_Mês",
+                "Valor Médio",
+                "Evolução Mensal da Satisfação"
+            ),
+            use_container_width=True
         )
-        fig_top.update_traces(textposition="outside")
-        fig_top.update_layout(**PLOTLY_LAYOUT, title_font_size=13)
-        fig_top.update_yaxes(showgrid=False)
-        st.plotly_chart(fig_top, use_container_width=True)
-
-    with c6:
-        bot = df_cursos.nsmallest(10, "Média").sort_values("Média", ascending=False)
-        fig_bot = px.bar(
-            bot, x="Média", y="Shortname", orientation="h",
-            text_auto=".2f", color_discrete_sequence=[COR_AVISO],
-            title="⚠️ 10 Cursos com Menor Média"
+    elif "Shortname" in df.columns and "Valor Médio" in df.columns:
+        # Alternativa: usar ações como eixo X
+        df_acoes = (
+            df.groupby("Shortname")["Valor Médio"]
+            .mean()
+            .round(2)
+            .reset_index()
+            .sort_values("Shortname")
         )
-        fig_bot.update_traces(textposition="outside")
-        fig_bot.update_layout(**PLOTLY_LAYOUT, title_font_size=13)
-        fig_bot.update_yaxes(showgrid=False)
-        st.plotly_chart(fig_bot, use_container_width=True)
+        
+        st.plotly_chart(
+            _fig_linha_pontos(
+                df_acoes,
+                "Shortname",
+                "Valor Médio",
+                "Satisfação Média por Ação"
+            ),
+            use_container_width=True
+        )
+    else:
+        st.info("ℹ️ Adicione uma coluna 'Pergunta', 'Shortname' ou tenha dados mensais para ver o gráfico de evolução.")
 
     # ── Tabela resumo filtrada ─────────────────────────────────
     _sec("Tabela Resumo")
