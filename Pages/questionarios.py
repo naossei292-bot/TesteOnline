@@ -51,25 +51,21 @@ def parsear_item(item_str: str) -> dict:
     }
 
 def processar_acoes_xlsx(ficheiro) -> pd.DataFrame:
-    """Lê ações_por_centro.xlsx → DataFrame com Ação, Datini, Datfim, Centro, U_status."""
+    """Lê ações_por_centro.xlsx → DataFrame com Ação, Datini, Datfim, Centro, U_status.
+       Cria também uma chave normalizada _acao_key para merge case‑insensitive."""
     import unicodedata
 
     df = pd.read_excel(ficheiro)
     df.columns = df.columns.str.strip()
 
-    # FIX: usar astype(str).str.strip() em vez de verificar dtype == object.
-    # O Excel pode devolver colunas com dtype StringDtype (pandas moderno) em vez
-    # de 'object' — nesse caso o check falhava silenciosamente e os valores
-    # ficavam com dezenas de espaços no final, quebrando o join com o CSV.
+    # Normalizar strings em todas as colunas (remove espaços)
     for col in df.columns:
         try:
             stripped = df[col].astype(str).str.strip()
-            # Repor NaN/None onde o valor original era nulo
             df[col] = stripped.where(df[col].notna(), other=None)
         except Exception:
             pass
 
-    # Detecção de colunas robusta: normaliza unicode + lowercase + strip
     def norm(s):
         return unicodedata.normalize("NFC", str(s)).lower().strip()
 
@@ -88,14 +84,21 @@ def processar_acoes_xlsx(ficheiro) -> pd.DataFrame:
             rename[col] = "U_status"
 
     df = df.rename(columns=rename)
-    colunas_necessarias = [c for c in ["Ação", "Datini", "Datfim", "Centro", "U_status"]
-                           if c in df.columns]
-    return df[colunas_necessarias].copy()
+
+    # Garantir colunas necessárias
+    colunas_necessarias = ["Ação", "Datini", "Datfim", "Centro", "U_status"]
+    for col in colunas_necessarias:
+        if col not in df.columns:
+            df[col] = None
+
+    # Criar chave normalizada para merge (case‑insensitive, sem espaços)
+    df["_acao_key"] = df["Ação"].astype(str).str.strip().str.lower()
+
+    return df[colunas_necessarias + ["_acao_key"]].copy()
 
 
 def processar_csv(ficheiro) -> pd.DataFrame:
-    """Lê mdl_course.csv → DataFrame com colunas expandidas."""
-    # Tentar utf-8, fallback para latin-1
+    """Lê mdl_course.csv → DataFrame com colunas expandidas e chave normalizada."""
     try:
         df = pd.read_csv(ficheiro, sep=";", encoding="utf-8")
     except UnicodeDecodeError:
@@ -104,27 +107,28 @@ def processar_csv(ficheiro) -> pd.DataFrame:
 
     df.columns = df.columns.str.strip()
 
-    # Expandir item
+    # Expandir item (com correção de duplo underscore)
     parsed = df["item"].apply(parsear_item).apply(pd.Series)
     df = pd.concat([df, parsed], axis=1)
 
-    # Normalizar valor_medio para numérico
     df["valor_medio"] = pd.to_numeric(df["valor_medio"], errors="coerce")
 
-    # Renomear colunas para PT
     df = df.rename(columns={
         "shortname":   "Shortname",
         "data_ini":    "Data",
         "item":        "Item",
         "valor_medio": "Valor Médio",
     })
+
+    # Criar chave normalizada para merge
+    df["_shortname_key"] = df["Shortname"].astype(str).str.strip().str.lower()
+
     return df
 
 
 def juntar_dados(df_csv: pd.DataFrame, df_acoes: pd.DataFrame) -> pd.DataFrame:
     """
-    Faz o join entre o CSV (Shortname) e o Excel (Ação).
-    A correlação é: Shortname do CSV == Ação do Excel.
+    Faz o join usando as chaves normalizadas (_shortname_key e _acao_key).
     Traz Centro, Datini, Datfim e U_status do Excel.
     """
     if df_acoes.empty:
@@ -134,14 +138,17 @@ def juntar_dados(df_csv: pd.DataFrame, df_acoes: pd.DataFrame) -> pd.DataFrame:
         df_csv["U_status"] = None
         return df_csv
 
-    cols_join = [c for c in ["Ação", "Datini", "Datfim", "Centro", "U_status"]
-                 if c in df_acoes.columns]
-    df = df_csv.merge(
-        df_acoes[cols_join].rename(columns={"Ação": "Shortname"}),
-        on="Shortname",
-        how="left"
-    )
-    return df
+    # Selecionar colunas do Excel necessárias, incluindo a chave normalizada
+    cols_join = ["_acao_key", "Datini", "Datfim", "Centro", "U_status"]
+    df_join = df_acoes[cols_join].rename(columns={"_acao_key": "_shortname_key"})
+
+    # Merge usando a chave normalizada
+    df_resultado = df_csv.merge(df_join, on="_shortname_key", how="left")
+
+    # Remover as colunas auxiliares (opcional, mas fica mais limpo)
+    df_resultado.drop(columns=["_shortname_key"], inplace=True, errors="ignore")
+
+    return df_resultado
 
 
 # ─────────────────────────────────────────────────────────────
@@ -499,10 +506,27 @@ def mostrar_questionarios():
         COLS_REST_EXP      = [c for c in COLUNAS_DADOS if c not in COLS_FILTRO_EXP]
         ordem_exp          = [c for c in COLS_FILTRO_EXP + COLS_REST_EXP if c in df_para_export.columns]
         df_exp             = df_para_export[ordem_exp].copy()
+        def formatar_data_se_valida(valor):
+            """Se for uma data (datetime ou string convertível), devolve dd/mm/aaaa.
+            Caso contrário, devolve o valor original (None, string, etc.)."""
+            if pd.isna(valor):
+                return None
+            # Se já for Timestamp, formata diretamente
+            if isinstance(valor, pd.Timestamp):
+                return valor.strftime("%d/%m/%Y")
+            # Tenta converter string para data
+            try:
+                dt = pd.to_datetime(valor, errors="coerce")
+                if pd.notna(dt):
+                    return dt.strftime("%d/%m/%Y")
+                else:
+                    return valor  # não é data, mantém original (ex: "FINALIZADA")
+            except Exception:
+                return valor
+
         for col_data in ["Datini", "Datfim", "Data"]:
             if col_data in df_exp.columns:
-                df_exp[col_data] = (pd.to_datetime(df_exp[col_data], errors="coerce")
-                                    .dt.strftime("%d/%m/%Y"))
+                df_exp[col_data] = df_exp[col_data].apply(formatar_data_se_valida)
         st.session_state.quest_excel_cache = _gerar_excel_com_filtros(df_exp)
 
     st.markdown("---")
