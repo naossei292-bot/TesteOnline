@@ -523,7 +523,7 @@ def mostrar_questionarios_dashboard():
     else:
         st.info("ℹ️ Adicione uma coluna 'Pergunta', 'Shortname' ou tenha dados mensais para ver o gráfico de evolução.")
 
-    # ── Tabela resumo filtrada ────────────────────────────────
+    # ── Tabela resumo Filtrada ────────────────────────────────
     _sec("Tabela Resumo")
     COLS_RESUMO = [c for c in ["Centro", "Shortname", "Datini", "Respondente",
                                "Módulo", "Folha", "Pergunta", "Valor Médio"] if c in df.columns]

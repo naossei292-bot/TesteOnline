@@ -196,7 +196,7 @@ def parsear_itens_vectorizado(series: pd.Series) -> pd.DataFrame:
         # Se for só números (ex: "244", "235"), atribui a uma folha padrão (ex: 21a)
         if item.isdigit():
             return f"21a.{item}"
-        # Para outros casos, tenta extrair qualquer coisa antes do último ponto (fallback)
+        # Para outros casos, tenta Extrair qualquer coisa antes do último ponto (fallback)
         if '.' in item:
             return item
         # Último recurso: coloca na folha 21a com o valor original como código
