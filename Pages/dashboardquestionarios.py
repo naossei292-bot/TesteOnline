@@ -300,7 +300,7 @@ def mostrar_questionarios_dashboard():
     st.markdown("---")
 
     # Upload directo de ficheiro (Excel/CSV)
-    with st.expander("📂 **Carregar ficheiro de dados**", expanded=False):
+    with st.expander("📂 **Carregar ficheiro de dados OPCIONAL**", expanded=False):
         uploaded_file = st.file_uploader(
             "Carregue o ficheiro exportado do módulo Questionários (Excel ou CSV)",
             type=["xlsx", "csv"],
