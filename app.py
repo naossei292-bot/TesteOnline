@@ -41,7 +41,12 @@ def verificar_autenticacao():
         except (KeyError, AttributeError):
             # Fallback APENAS PARA TESTES LOCAIS - NÃO USAR EM PRODUÇÃO
             st.warning("⚠️ Usando passwords hardcoded (apenas desenvolvimento).")
-        
+            passwords_config = {
+                "admin": "admin123",
+                "gestor_BALANÇOS": "balancos123",
+                "gestor_qualidade": "qualidade123",
+                "gestor_questionarios": "questionarios123"
+            }
         
         # Verifica qual password corresponde
         role_encontrado = None
@@ -69,6 +74,7 @@ if not verificar_autenticacao():
 # ============================================
 PERMISSOES = {
     "admin": [
+        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
         "📚 Balanços e Relatórios",
         "📋 Questionários",
         "🎯 Gestão de Qualidade",
@@ -78,15 +84,18 @@ PERMISSOES = {
         "📊 Dashboard - Questionários"
     ],
     "gestor_BALANÇOS": [
+        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
         "📚 Balanços e Relatórios",
     ],
     "gestor_qualidade": [
+        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
         "⚔️ Comparador Versus"
     ],
     "gestor_questionarios": [
+        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
         "📋 Questionários",
         "📊 Dashboard - Questionários"
     ]
@@ -106,8 +115,8 @@ if 'quest_df' not in st.session_state:
 if 'filtro_centro' not in st.session_state: 
     st.session_state.filtro_centro = []
 if 'pagina' not in st.session_state:
-    # Define a primeira página permitida como padrão, ou a primeira da lista
-    st.session_state.pagina = paginas_autorizadas[0] if paginas_autorizadas else "📚 Cursos"
+    # Define a página inicial como padrão (se disponível)
+    st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
 
 # ============================================
 # BARRA LATERAL CONDICIONAL (baseada no role)
@@ -116,47 +125,55 @@ if 'pagina' not in st.session_state:
 st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
 
-# --- Balanços e Relatórios (apenas para quem tem permissão específica) ---
+# Mostrar informações do utilizador logado
+st.sidebar.info(f"👤 **Utilizador:** {role.replace('_', ' ').title()}", icon="ℹ️")
+
+# --- Página Inicial (sempre visível para todos os roles autenticados) ---
+st.sidebar.markdown("### 🏠 Navegação")
+if st.sidebar.button("🏠 Página Inicial", use_container_width=True, key="nav_home"):
+    st.session_state.pagina = "🏠 Página Inicial"
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+# --- Balanços e Relatórios (apenas para quem tem permissão) ---
 if "📚 Balanços e Relatórios" in paginas_autorizadas:
-    st.sidebar.markdown("### 📌 Balanços e Relatórios")
-    if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios_balancos"):
+    if st.sidebar.button("📚 Balanços e Relatórios", use_container_width=True, key="nav_relatorios"):
         st.session_state.pagina = "📚 Balanços e Relatórios"
         st.rerun()
 
 # --- Cursos (apenas para quem tem permissão) ---
 if "📚 Cursos" in paginas_autorizadas:
-    st.sidebar.markdown("### 📌 Cursos")
-    if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos_gestao"):
+    if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
         st.session_state.pagina = "📚 Cursos"
         st.rerun()
 
 # --- Questionários ---
-if any(p in paginas_autorizadas for p in ["📋 Questionários", "📊 Dashboard - Questionários"]):
-    st.sidebar.markdown("### 📌 Questionários de avaliação")
-    if "📋 Questionários" in paginas_autorizadas:
-        if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
-            st.session_state.pagina = "📋 Questionários"
-            st.rerun()
-    if "📊 Dashboard - Questionários" in paginas_autorizadas:
-        if st.sidebar.button("📊 Dashboard - Questionários", use_container_width=True, key="nav_dashboard_questionarios"):
-            st.session_state.pagina = "📊 Dashboard - Questionários"
-            st.rerun()
+if "📋 Questionários" in paginas_autorizadas:
+    if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
+        st.session_state.pagina = "📋 Questionários"
+        st.rerun()
+
+if "📊 Dashboard - Questionários" in paginas_autorizadas:
+    if st.sidebar.button("📊 Dashboard - Questionários", use_container_width=True, key="nav_dashboard_questionarios"):
+        st.session_state.pagina = "📊 Dashboard - Questionários"
+        st.rerun()
 
 # --- Gestão de Qualidade ---
-if any(p in paginas_autorizadas for p in ["🎯 Gestão de Qualidade", "📊 Dashboard - Ações", "⚔️ Comparador Versus"]):
-    st.sidebar.markdown("### 📌 Gestão de Qualidade")
-    if "🎯 Gestão de Qualidade" in paginas_autorizadas:
-        if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
-            st.session_state.pagina = "🎯 Gestão de Qualidade"
-            st.rerun()
-    if "📊 Dashboard - Ações" in paginas_autorizadas:
-        if st.sidebar.button("📊 Dashboard - Ações", use_container_width=True, key="nav_dashboard_acoes"):
-            st.session_state.pagina = "📊 Dashboard - Ações"
-            st.rerun()
-    if "⚔️ Comparador Versus" in paginas_autorizadas:
-        if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-            st.session_state.pagina = "⚔️ Comparador Versus"
-            st.rerun()
+if "🎯 Gestão de Qualidade" in paginas_autorizadas:
+    if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
+        st.session_state.pagina = "🎯 Gestão de Qualidade"
+        st.rerun()
+
+if "📊 Dashboard - Ações" in paginas_autorizadas:
+    if st.sidebar.button("📊 Dashboard - Ações", use_container_width=True, key="nav_dashboard_acoes"):
+        st.session_state.pagina = "📊 Dashboard - Ações"
+        st.rerun()
+
+if "⚔️ Comparador Versus" in paginas_autorizadas:
+    if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+        st.session_state.pagina = "⚔️ Comparador Versus"
+        st.rerun()
 
 # Botão de logout (sempre visível)
 st.sidebar.markdown("---")
@@ -169,13 +186,17 @@ st.sidebar.markdown("---")
 # CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
 # ============================================
 
-# Segurança extra: se a página atual não está autorizada, redefine para a primeira permitida
+# Segurança extra: se a página atual não está autorizada, redefine para a página inicial
 if st.session_state.pagina not in paginas_autorizadas and paginas_autorizadas:
-    st.session_state.pagina = paginas_autorizadas[0]
+    st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
     st.rerun()
 
-# Navegação condicional (as importações só acontecem se a página estiver autorizada)
-if st.session_state.pagina == "📚 Cursos":
+# Navegação condicional
+if st.session_state.pagina == "🏠 Página Inicial":
+    from Pages.welcome import mostrar_welcome
+    mostrar_welcome()
+
+elif st.session_state.pagina == "📚 Cursos":
     from Pages.cursos import mostrar_cursos
     mostrar_cursos()
 
