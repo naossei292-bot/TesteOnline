@@ -5,23 +5,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import re
 
-# ── Paleta de cores ────────────────────────────────────────────────────────────
-COR_PRIMARIA   = "#1E3A5F"
-COR_SECUNDARIA = "#2E86AB"
-COR_ACENTO     = "#F6AE2D"
-COR_SUCESSO    = "#2DC653"
-COR_PERIGO     = "#E63946"
-COR_NEUTRO     = "#8D99AE"
-COR_ROXO       = "#9B5DE5"
-GRADIENTE      = ["#1E3A5F", "#2E86AB", "#54C6EB", "#F6AE2D", "#F26419"]
-
-LAYOUT_BASE = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Segoe UI, sans-serif", color="#2d2d2d"),
-    margin=dict(l=10, r=10, t=40, b=10),
-)
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -66,25 +49,6 @@ def fmt_euro(v):
 
 def fmt_num(v):
     return f"{v:,.0f}".replace(",", ".")
-
-def cartao_metrica(label, valor, subtexto=None, cor=COR_PRIMARIA, icone="📊"):
-    sub_html = f'<p style="margin:4px 0 0;font-size:.75rem;color:{COR_NEUTRO};">{subtexto}</p>' if subtexto else ""
-    st.markdown(
-        f"""
-        <div style="background:white;border-radius:14px;padding:18px 20px;
-            border-left:5px solid {cor};box-shadow:0 2px 12px rgba(0,0,0,.07);height:100%;">
-          <p style="margin:0 0 4px;font-size:.72rem;color:{COR_NEUTRO};
-                    text-transform:uppercase;letter-spacing:.07em;font-weight:600;">
-            {icone} {label}
-          </p>
-          <p style="margin:0;font-size:1.85rem;font-weight:700;color:{cor};line-height:1.1;">
-            {valor}
-          </p>
-          {sub_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 # ── Painéis de detalhe (conteúdo das tabelas) ─────────────────────────────────
 def painel_detalhe_acoes(df: pd.DataFrame):
@@ -150,7 +114,7 @@ def painel_detalhe_satisfacao(df: pd.DataFrame):
         "Defina o objetivo (valor mínimo para considerar 'acima'):",
         min_value=float(valor_min),
         max_value=float(valor_max),
-        value=3.0,  # valor padrão, pode ser ajustado
+        value=3.0,
         step=0.1,
         key="objetivo_satisfacao"
     )
@@ -217,11 +181,10 @@ def secao_kpis(df: pd.DataFrame):
     if "mostrar_valor" not in st.session_state:
         st.session_state.mostrar_valor = False
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-    with c1:
-        if st.button(f"🎓 Ações\n\n{fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True,
-                     help="Clique para ver distribuição por centro"):
+    with col1:
+        if st.button(f"🎓 Ações\n\n{fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
             st.session_state.mostrar_inaptos_desist = False
@@ -229,9 +192,8 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_acoes = not st.session_state.mostrar_acoes
             st.rerun()
-    with c2:
-        if st.button(f"👥 Inscritos\n\n{fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True,
-                     help="Clique para ver as ações com mais inscritos"):
+    with col2:
+        if st.button(f"👥 Inscritos\n\n{fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_aptos = False
             st.session_state.mostrar_inaptos_desist = False
@@ -239,9 +201,8 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_inscritos = not st.session_state.mostrar_inscritos
             st.rerun()
-    with c3:
-        if st.button(f"✅ Aptos\n\n{fmt_num(total_aptos)}\nTaxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True,
-                     help="Clique para ver as ações com mais aptos"):
+    with col3:
+        if st.button(f"✅ Aptos\n\n{fmt_num(total_aptos)}\nTaxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_inaptos_desist = False
@@ -249,9 +210,9 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_aptos = not st.session_state.mostrar_aptos
             st.rerun()
-    with c4:
+    with col4:
         if st.button(f"⚠️ Inaptos / Desist.\n\n{fmt_num(total_inaptos)} / {fmt_num(total_desist)}\nDevedores: {fmt_num(total_deved)}",
-                     key="btn_inaptos", use_container_width=True, help="Clique para ver ações com inaptos ou desistentes"):
+                     key="btn_inaptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
@@ -259,9 +220,9 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
             st.rerun()
-    with c5:
+    with col5:
         if st.button(f"⭐ Satisfação Final\n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
-                     use_container_width=True, help=f"Clique para ver melhores/piores satisfações\nAvaliação formador: {media_form:.2f}" if media_form else None):
+                     use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
@@ -269,9 +230,9 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
             st.rerun()
-    with c6:
+    with col6:
         if st.button(f"💶 Valor Recebido\n\n{fmt_euro(valor_recebido)}\nCobrança: {t_cobranca}%", key="btn_valor",
-                     use_container_width=True, help=f"Clique para ver ações com maior recebimento\nEsperado: {fmt_euro(valor_receber)}"):
+                     use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
@@ -307,25 +268,15 @@ def grafico_status(df: pd.DataFrame):
     counts = df["Status"].value_counts().reset_index()
     counts.columns = ["Status", "Total"]
 
-    cores_status = {
-        "Finalizado": COR_SUCESSO,  "FINALIZADA": COR_SUCESSO,
-        "Em curso":   COR_SECUNDARIA, "ABERTA":  COR_SECUNDARIA,
-        "Cancelado":  COR_PERIGO,   "CANCELADA":  COR_PERIGO,
-        "Suspenso":   COR_ACENTO,   "SUSPENSA":   COR_ACENTO,
-    }
-    cor_lista = [cores_status.get(s, COR_NEUTRO) for s in counts["Status"]]
-
     fig = go.Figure(go.Pie(
         labels=counts["Status"], values=counts["Total"],
         hole=.58,
-        marker=dict(colors=cor_lista, line=dict(color="white", width=2)),
         textinfo="label+percent", textfont=dict(size=11),
         customdata=counts["Status"],
         hovertemplate="<b>%{label}</b><br>Total: %{value}<br>Percent: %{percent}<br><i>Clique para ver detalhe</i><extra></extra>"
     ))
     fig.update_layout(
-        **LAYOUT_BASE,
-        title=dict(text="Estado das Ações", font=dict(size=14, color=COR_PRIMARIA)),
+        title=dict(text="Estado das Ações", font_size=14),
         showlegend=False, height=260,
         clickmode="event",
     )
@@ -354,20 +305,8 @@ def painel_detalhe_estado(df: pd.DataFrame, estado: str):
     if df_estado.empty:
         st.info(f"Nenhuma ação com estado '{estado}'.")
         return
-    st.markdown(
-        f"""
-        <div style="background:linear-gradient(135deg,{COR_PRIMARIA}12,{COR_SECUNDARIA}18);
-            border:1.5px solid {COR_SECUNDARIA}55; border-radius:14px; padding:16px 22px; margin:14px 0 10px;">
-          <h3 style="margin:0;color:{COR_PRIMARIA};font-size:1.05rem;font-weight:700;">
-            📋 Ações com estado <strong>{estado}</strong>
-            <span style="font-size:.78rem;color:{COR_NEUTRO};font-weight:400;margin-left:8px;">
-              Clique novamente na fatia para fechar
-            </span>
-          </h3>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"### 📋 Ações com estado: **{estado}**")
+    st.markdown("*Clique novamente na fatia do gráfico para fechar*")
     cols_mostrar = [c for c in ["Centro", "Ação", "Status", "Inscritos", "Aptos", "Taxa de satisfação Final"] if c in df_estado.columns]
     df_show = df_estado[cols_mostrar].reset_index(drop=True)
     st.dataframe(df_show, use_container_width=True, hide_index=True)
@@ -381,22 +320,20 @@ def grafico_funil(df: pd.DataFrame):
     desist    = safe_sum(df, "Desistentes")
     deved     = safe_sum(df, "Devedores")
     stages = [
-        ("Inscritos",   inscritos, COR_SECUNDARIA),
-        ("Aptos",       aptos,     COR_SUCESSO),
-        ("Inaptos",     inaptos,   COR_PERIGO),
-        ("Desistentes", desist,    COR_ACENTO),
-        ("Devedores",   deved,     COR_ROXO),
+        ("Inscritos",   inscritos),
+        ("Aptos",       aptos),
+        ("Inaptos",     inaptos),
+        ("Desistentes", desist),
+        ("Devedores",   deved),
     ]
     fig = go.Figure(go.Funnel(
         y=[s[0] for s in stages],
         x=[s[1] for s in stages],
-        marker=dict(color=[s[2] for s in stages], line=dict(color="white", width=1)),
         textinfo="value+percent initial",
         textfont=dict(size=12),
     ))
     fig.update_layout(
-        **LAYOUT_BASE,
-        title=dict(text="Distribuição de Participantes", font=dict(size=14, color=COR_PRIMARIA)),
+        title=dict(text="Distribuição de Participantes", font_size=14),
         height=280,
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -413,25 +350,19 @@ def grafico_timeline(df: pd.DataFrame):
                     Aptos=("Aptos", "sum"))
                .reset_index())
     mes_sel = st.session_state.get("timeline_mes_selecionado")
-    if mes_sel is not None:
-        cores_barras = [COR_ACENTO if m == mes_sel else COR_SECUNDARIA for m in agg["Mês"]]
-        opacidades   = [1.0 if m == mes_sel else 0.4 for m in agg["Mês"]]
-    else:
-        cores_barras = [COR_SECUNDARIA] * len(agg)
-        opacidades   = [0.7] * len(agg)
+    
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=agg["Mês"], y=agg["Ações"], name="Nº Ações",
-                         marker=dict(color=cores_barras, opacity=opacidades),
                          hovertemplate="<b>%{x|%b %Y}</b><br>Ações: %{y}<br><i>Clique para ver detalhe</i><extra></extra>"),
                   secondary_y=False)
     fig.add_trace(go.Scatter(x=agg["Mês"], y=agg["Inscritos"], name="Inscritos", mode="lines+markers",
-                             line=dict(color=COR_ACENTO, width=2.5), marker=dict(size=6)), secondary_y=True)
+                             line=dict(width=2.5), marker=dict(size=6)), secondary_y=True)
     fig.add_trace(go.Scatter(x=agg["Mês"], y=agg["Aptos"], name="Aptos", mode="lines+markers",
-                             line=dict(color=COR_SUCESSO, width=2, dash="dot"), marker=dict(size=5)), secondary_y=True)
+                             line=dict(width=2, dash="dot"), marker=dict(size=5)), secondary_y=True)
     fig.add_annotation(text="💡 Clique numa barra para ver o detalhe do mês", xref="paper", yref="paper",
-                       x=1, y=1.18, showarrow=False, font=dict(size=10, color=COR_NEUTRO), align="right")
-    fig.update_layout(**LAYOUT_BASE, title=dict(text="Evolução Mensal — Ações, Inscritos e Aptos",
-                      font=dict(size=14, color=COR_PRIMARIA)), height=310, legend=dict(orientation="h", y=1.12),
+                       x=1, y=1.18, showarrow=False, font=dict(size=10), align="right")
+    fig.update_layout(title=dict(text="Evolução Mensal — Ações, Inscritos e Aptos", font_size=14),
+                      height=310, legend=dict(orientation="h", y=1.12),
                       xaxis=dict(showgrid=False), yaxis=dict(showgrid=False, title="Nº Ações"),
                       yaxis2=dict(showgrid=False, title="Participantes"), clickmode="event")
     st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_chart")
@@ -460,28 +391,25 @@ def painel_detalhe_mes(df: pd.DataFrame, mes: pd.Timestamp):
     df_mes = df[df["Data Inicial"].dt.to_period("M").dt.to_timestamp() == mes].copy()
     if df_mes.empty:
         return
-    st.markdown(f"""<div style="background:linear-gradient(135deg,{COR_PRIMARIA}12,{COR_SECUNDARIA}18);
-                border:1.5px solid {COR_SECUNDARIA}55; border-radius:14px; padding:16px 22px; margin:14px 0 10px;">
-                <h3 style="margin:0;color:{COR_PRIMARIA};font-size:1.05rem;font-weight:700;">
-                📅 Detalhe — <strong>{nome_mes}</strong>
-                <span style="font-size:.78rem;color:{COR_NEUTRO};font-weight:400;margin-left:8px;">
-                Clique novamente na barra para fechar</span></h3></div>""", unsafe_allow_html=True)
+    st.markdown(f"### 📅 Detalhe — **{nome_mes}**")
+    st.markdown("*Clique novamente na barra do gráfico para fechar*")
+    
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         n_acoes = df_mes["Ação"].nunique() if "Ação" in df_mes.columns else len(df_mes)
-        cartao_metrica("Ações", str(n_acoes), icone="🎓", cor=COR_PRIMARIA)
+        st.metric("Ações", str(n_acoes))
     with k2:
-        cartao_metrica("Inscritos", fmt_num(safe_sum(df_mes, "Inscritos")), icone="👥", cor=COR_SECUNDARIA)
+        st.metric("Inscritos", fmt_num(safe_sum(df_mes, "Inscritos")))
     with k3:
         ins = safe_sum(df_mes, "Inscritos")
         apt = safe_sum(df_mes, "Aptos")
-        cartao_metrica("Aptos", fmt_num(apt), subtexto=f"Taxa: {taxa(apt, ins)}%", icone="✅", cor=COR_SUCESSO)
+        st.metric("Aptos", fmt_num(apt), delta=f"Taxa: {taxa(apt, ins)}%")
     with k4:
-        cartao_metrica("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}",
-                       icone="⚠️", cor=COR_PERIGO)
+        st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")
     with k5:
         media_s = safe_mean(df_mes, "Taxa de satisfação Final")
-        cartao_metrica("Satisfação Média", f"{media_s:.2f}" if media_s else "—", icone="⭐", cor=COR_ACENTO)
+        st.metric("Satisfação Média", f"{media_s:.2f}" if media_s else "—")
+    
     st.markdown("<div style='margin:10px 0'></div>", unsafe_allow_html=True)
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
@@ -516,10 +444,10 @@ def grafico_avaliacao_formador(df: pd.DataFrame):
     df_f.columns = ["Formador", "Avaliação"]
     if df_f.empty:
         return
-    cores = [COR_SUCESSO if v >= 4 else (COR_ACENTO if v >= 3 else COR_PERIGO) for v in df_f["Avaliação"]]
-    fig = go.Figure(go.Bar(x=df_f["Avaliação"], y=df_f["Formador"], orientation="h", marker_color=cores,
+    
+    fig = go.Figure(go.Bar(x=df_f["Avaliação"], y=df_f["Formador"], orientation="h",
                            text=df_f["Avaliação"].round(2), textposition="outside"))
-    fig.update_layout(**LAYOUT_BASE, title=dict(text="Avaliação Média por Formador", font=dict(size=14, color=COR_PRIMARIA)),
+    fig.update_layout(title=dict(text="Avaliação Média por Formador", font_size=14),
                       height=max(220, len(df_f) * 36), xaxis=dict(showgrid=False, visible=False, range=[0, 5.5]),
                       yaxis=dict(showgrid=False))
     st.plotly_chart(fig, use_container_width=True)
@@ -534,10 +462,10 @@ def grafico_receita(df: pd.DataFrame):
         return
     fig = go.Figure()
     fig.add_trace(go.Bar(x=agg["Receber"], y=agg["Centro"], orientation="h", name="A Receber",
-                         marker_color=COR_NEUTRO, opacity=.5, text=agg["Receber"].apply(fmt_euro), textposition="outside"))
+                         opacity=.5, text=agg["Receber"].apply(fmt_euro), textposition="outside"))
     fig.add_trace(go.Bar(x=agg["Recebido"], y=agg["Centro"], orientation="h", name="Recebido",
-                         marker_color=COR_SUCESSO, opacity=.85, text=agg["Recebido"].apply(fmt_euro), textposition="outside"))
-    fig.update_layout(**LAYOUT_BASE, title=dict(text="Receita: Esperada vs Recebida por Centro", font=dict(size=14, color=COR_PRIMARIA)),
+                         opacity=.85, text=agg["Recebido"].apply(fmt_euro), textposition="outside"))
+    fig.update_layout(title=dict(text="Receita: Esperada vs Recebida por Centro", font_size=14),
                       barmode="overlay", height=max(230, len(agg) * 40), xaxis=dict(showgrid=False, visible=False),
                       yaxis=dict(showgrid=False), legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig, use_container_width=True)
@@ -545,14 +473,11 @@ def grafico_receita(df: pd.DataFrame):
 def tabela_geral_acoes(df: pd.DataFrame):
     """
     Exibe a tabela completa de todas as ações (após filtros) com possibilidade de selecionar colunas.
-    A ordem de exibição segue a mesma estrutura da página de cursos (todas_colunas_dados).
-    Permite selecionar colunas de Taxa de Satisfação M01..M12 mesmo que não existam no DataFrame.
     """
     if df.empty:
         st.info("Nenhum dado para exibir.")
         return
 
-    # Ordem canónica das colunas (igual à usada na página "Análise de Formações")
     ordem_canonica = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
         "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
@@ -564,17 +489,15 @@ def tabela_geral_acoes(df: pd.DataFrame):
         "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
     ]
 
-    # Todas as colunas possíveis (ordem canónica completa)
     todas_colunas_opcoes = ordem_canonica
 
     st.markdown("---")
-    st.markdown(f'<p style="font-size:.95rem;font-weight:600;color:{COR_PRIMARIA};margin-bottom:6px;">📋 Todas as Ações ({len(df)} registos)</p>', unsafe_allow_html=True)
+    st.markdown(f"### 📋 Todas as Ações ({len(df)} registos)")
 
-    # Seletor de colunas (agora mostra todas as colunas da ordem canónica)
     colunas_selecionadas = st.multiselect(
         "Escolha as colunas a exibir:",
         options=todas_colunas_opcoes,
-        default=[col for col in ordem_canonica[:10] if col in df.columns],  # padrão: primeiras 10 que existem
+        default=[col for col in ordem_canonica[:10] if col in df.columns],
         key="tabela_geral_colunas"
     )
 
@@ -582,32 +505,26 @@ def tabela_geral_acoes(df: pd.DataFrame):
         st.warning("Selecione pelo menos uma coluna.")
         return
 
-    # Reordenar as colunas selecionadas conforme a ordem canónica
     colunas_ordenadas = [col for col in ordem_canonica if col in colunas_selecionadas]
 
-    # Construir DataFrame a exibir: para cada coluna selecionada, se existir no df original, usa os valores; senão, cria coluna vazia
     df_exibir = pd.DataFrame(index=df.index)
     for col in colunas_ordenadas:
         if col in df.columns:
             df_exibir[col] = df[col]
         else:
-            df_exibir[col] = None  # coluna vazia
+            df_exibir[col] = None
 
-    # Formatar colunas de data (se existirem e forem datetime)
     for data_col in ["Data Inicial", "Data Final"]:
         if data_col in df_exibir.columns and pd.api.types.is_datetime64_any_dtype(df_exibir[data_col]):
             df_exibir[data_col] = df_exibir[data_col].dt.strftime("%d/%m/%Y")
 
-    # Formatar valores monetários (colunas que começam com "Valor")
     for col in df_exibir.columns:
         if "Valor" in col and pd.api.types.is_numeric_dtype(df_exibir[col]):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
 
-    # Configuração de colunas para o st.dataframe (barras de progresso para números inteiros)
     column_config = {}
     for col in df_exibir.columns:
         if col in ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"]:
-            # Calcular máximo apenas se existirem valores numéricos
             valores = df_exibir[col].dropna()
             if not valores.empty and pd.api.types.is_numeric_dtype(valores):
                 max_val = valores.max()
@@ -620,7 +537,6 @@ def tabela_geral_acoes(df: pd.DataFrame):
         elif "Avaliação" in col:
             column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
 
-    # Exibir tabela com scroll e ordenação interativa
     st.dataframe(
         df_exibir,
         use_container_width=True,
@@ -628,10 +544,11 @@ def tabela_geral_acoes(df: pd.DataFrame):
         column_config=column_config,
         height=min(600, 35 + len(df_exibir) * 35)
     )
+
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
-        st.markdown(f'<h3 style="color:{COR_PRIMARIA};margin-bottom:4px;">🔍 Filtros</h3>', unsafe_allow_html=True)
+        st.markdown("## 🔍 Filtros")
         st.markdown("---")
         if "Status" in df.columns:
             opts = sorted(df["Status"].dropna().unique().tolist())
@@ -681,29 +598,8 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Dashboard principal ───────────────────────────────────────────────────────
 def mostrar_dashboard():
-    st.markdown("""
-        <style>
-            div[data-testid="stButton"] button {
-                background-color: white; border-left: 5px solid #1E3A5F;
-                border-radius: 14px; padding: 18px 20px;
-                box-shadow: 0 2px 12px rgba(0,0,0,.07); height: 100%;
-                text-align: left; white-space: pre-line;
-                font-family: 'Segoe UI', sans-serif;
-            }
-            div[data-testid="stButton"] button p { margin: 0; font-size: 1rem; }
-            div[data-testid="stButton"] button .st-emotion-cache-1v0mbdj {
-                font-size: 2.2rem !important; font-weight: 700 !important; line-height: 1.2 !important;
-            }
-            .stMarkdown div div p:first-of-type { font-size: 1rem; }
-            .stMarkdown div div p:last-of-type { font-size: 2.2rem !important; font-weight: 700; }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"""<div style="background:linear-gradient(135deg,{COR_PRIMARIA},{COR_SECUNDARIA});
-                border-radius:16px;padding:28px 32px;margin-bottom:28px;box-shadow:0 4px 20px rgba(30,58,95,.2);">
-                <h1 style="margin:0;color:white;font-size:1.9rem;font-weight:700;">📊 Dashboard de Formações</h1>
-                <p style="margin:6px 0 0;color:rgba(255,255,255,.75);font-size:.95rem;">
-                Análise interativa — filtre pelo painel lateral</p></div>""", unsafe_allow_html=True)
+    st.title("📊 Dashboard de Formações")
+    st.markdown("Análise interativa — filtre pelo painel lateral")
 
     df_raw = st.session_state.get("acoes_editaveis", pd.DataFrame())
     if df_raw.empty:
@@ -739,7 +635,6 @@ def mostrar_dashboard():
     with c6:
         grafico_avaliacao_formador(df)
 
-    # Nova tabela geral (em vez do antigo top 10)
     tabela_geral_acoes(df)
 
 if __name__ == "__main__":

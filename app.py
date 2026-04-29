@@ -116,36 +116,35 @@ if 'pagina' not in st.session_state:
 st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
 
-# Exibe apenas as secções e botões que o role pode ver
-
-# --- Balanços e Relatórios ---
-if any(p in paginas_autorizadas for p in ["📚 Balanços e Relatórios", "📚 Cursos"]):
+# --- Balanços e Relatórios (apenas para quem tem permissão específica) ---
+if "📚 Balanços e Relatórios" in paginas_autorizadas:
     st.sidebar.markdown("### 📌 Balanços e Relatórios")
-    if "📚 Balanços e Relatórios" in paginas_autorizadas:
-        if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios"):
-            st.session_state.pagina = "📚 Balanços e Relatórios"
-            st.rerun()
+    if st.sidebar.button("Relatórios", use_container_width=True, key="nav_relatorios_balancos"):
+        st.session_state.pagina = "📚 Balanços e Relatórios"
+        st.rerun()
 
+# --- Cursos (apenas para quem tem permissão) ---
+if "📚 Cursos" in paginas_autorizadas:
+    st.sidebar.markdown("### 📌 Cursos")
+    if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos_gestao"):
+        st.session_state.pagina = "📚 Cursos"
+        st.rerun()
 
 # --- Questionários ---
 if any(p in paginas_autorizadas for p in ["📋 Questionários", "📊 Dashboard - Questionários"]):
     st.sidebar.markdown("### 📌 Questionários de avaliação")
     if "📋 Questionários" in paginas_autorizadas:
-        if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_quest"):
+        if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
             st.session_state.pagina = "📋 Questionários"
             st.rerun()
     if "📊 Dashboard - Questionários" in paginas_autorizadas:
-        if st.sidebar.button("📊 Dashboard - Questionários", use_container_width=True, key="nav_dashboard_quest"):
+        if st.sidebar.button("📊 Dashboard - Questionários", use_container_width=True, key="nav_dashboard_questionarios"):
             st.session_state.pagina = "📊 Dashboard - Questionários"
             st.rerun()
 
 # --- Gestão de Qualidade ---
 if any(p in paginas_autorizadas for p in ["🎯 Gestão de Qualidade", "📊 Dashboard - Ações", "⚔️ Comparador Versus"]):
     st.sidebar.markdown("### 📌 Gestão de Qualidade")
-    if "📚 Cursos" in paginas_autorizadas:
-        if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-            st.session_state.pagina = "📚 Cursos"
-            st.rerun()
     if "🎯 Gestão de Qualidade" in paginas_autorizadas:
         if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
             st.session_state.pagina = "🎯 Gestão de Qualidade"
@@ -161,7 +160,7 @@ if any(p in paginas_autorizadas for p in ["🎯 Gestão de Qualidade", "📊 Das
 
 # Botão de logout (sempre visível)
 st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Sair", use_container_width=True, help="Terminar sessão"):
+if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
     st.session_state.clear()
     st.rerun()
 st.sidebar.markdown("---")
