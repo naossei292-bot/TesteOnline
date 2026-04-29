@@ -120,6 +120,10 @@ def _preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace({"nan": None, "None": None, "": None})
 
+    # ── NOVO: preencher Shortname vazio para não perder registos de formadores/tutores ──
+    if "Shortname" in df.columns:
+        df["Shortname"] = df["Shortname"].fillna("Sem Ação")
+
     return df
 
 
@@ -156,7 +160,6 @@ def _fig_linha(df_group, x, y, cor=None, titulo=""):
     return fig
 
 
-# NOVA FUNÇÃO - Gráfico de linha com pontos estilo o da imagem
 def _fig_linha_pontos(df_group, x, y, titulo="", cor=COR_SECUNDARIA):
     """
     Cria um gráfico de linha com pontos marcados e valores visíveis,
@@ -329,11 +332,16 @@ def _sidebar_filtros(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────
-# Página principal
+# Página principal da dashboard
 # ─────────────────────────────────────────────────────────────
 
 def mostrar_questionarios_dashboard():
-    st.set_page_config(layout="wide") if False else None   # já definido no main
+    """
+    Página principal da dashboard. Permite carregar um ficheiro Excel/CSV
+    exportado a partir da página Questionários, ou usar os dados em sessão.
+    """
+    # Apenas para garantir layout wide se for chamada directamente
+    st.set_page_config(layout="wide") if False else None
     _css()
 
     st.markdown(
@@ -344,48 +352,72 @@ def mostrar_questionarios_dashboard():
         unsafe_allow_html=True,
     )
 
-    # ── Verificar dados disponíveis ──────────────────────────
-    if "quest_editaveis" not in st.session_state or st.session_state.quest_editaveis.empty:
+    # ── Upload directo de ficheiro (Excel/CSV) ────────────────
+    st.subheader("📂 Carregar ficheiro de dados (opcional)")
+    uploaded_file = st.file_uploader(
+        "Carregue o ficheiro exportado do módulo Questionários (Excel ou CSV)",
+        type=["xlsx", "csv"],
+        key="dash_upload"
+    )
+
+    # ── Escolher fonte dos dados ─────────────────────────────
+    if uploaded_file is not None:
+        if uploaded_file.name.endswith(".xlsx"):
+            df_raw = pd.read_excel(uploaded_file)
+        else:
+            df_raw = pd.read_csv(uploaded_file)
+        st.success(f"✅ Dados carregados do ficheiro: {len(df_raw)} registos")
+    elif "quest_editaveis" in st.session_state and not st.session_state.quest_editaveis.empty:
+        # Fallback: usar dados da página Questionários (se existirem)
+        df_raw = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
+    else:
         st.warning(
-            "⚠️ Sem dados carregados. Aceda à página **Questionários** e carregue os ficheiros primeiro.",
+            "⚠️ Sem dados. Carregue um ficheiro exportado da página Questionários "
+            "ou aceda a essa página e carregue os ficheiros primeiro.",
             icon="📋"
         )
         return
 
-    df_raw = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
+    # Preparar dados e garantir Shortname preenchido
     df_raw = _preparar_dados(df_raw)
 
-    # Remover linhas sem shortname
-    df_raw = df_raw[df_raw["Shortname"].notna()]
+    # IMPORTANTE: NÃO filtrar por Shortname notna - isso eliminaria Formadores/Tutores
+    # O preenchimento com "Sem Ação" já foi feito dentro de _preparar_dados
+
     if df_raw.empty:
         st.info("ℹ️ Nenhum dado válido encontrado.")
         return
 
-    # ── Sidebar + filtros ────────────────────────────────────
+    # Aplicar filtros da sidebar
     df = _sidebar_filtros(df_raw)
 
     if df.empty:
         st.info("ℹ️ Nenhum registo corresponde aos filtros selecionados.")
         return
 
-    n_total    = len(df_raw)
-    n_filtrado = len(df)
-
     # ── KPIs ─────────────────────────────────────────────────
     _sec("Indicadores Gerais")
-
+    n_total = len(df_raw)
+    n_filtrado = len(df)
     vm_geral = df["Valor Médio"].mean()
-    vm_max   = df.groupby("Shortname")["Valor Médio"].mean().max()
-    vm_min   = df.groupby("Shortname")["Valor Médio"].mean().min()
+    vm_max = df.groupby("Shortname")["Valor Médio"].mean().max() if not df.empty else 0
+    vm_min = df.groupby("Shortname")["Valor Médio"].mean().min() if not df.empty else 0
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    with k1: _kpi("Registos filtrados", f"{n_filtrado:,}".replace(",","."), f"de {n_total:,}".replace(",","."))
-    with k2: _kpi("Cursos (Shortnames)", df["Shortname"].nunique(), "únicos")
-    with k3: _kpi("Centros", df["Centro"].nunique() if df["Centro"].notna().any() else "—", "", "verde")
+    with k1:
+        _kpi("Registos filtrados", f"{n_filtrado:,}".replace(",", "."), f"de {n_total:,}".replace(",", "."))
+    with k2:
+        _kpi("Cursos (Shortnames)", df["Shortname"].nunique(), "únicos")
+    with k3:
+        _kpi("Centros", df["Centro"].nunique() if df["Centro"].notna().any() else "—", "", "verde")
+    with k4:
+        _kpi("Média geral", f"{vm_geral:.2f}" if pd.notna(vm_geral) else "—")
+    with k5:
+        _kpi("Média max/min", f"{vm_max:.2f}" if pd.notna(vm_max) else "—", f"min: {vm_min:.2f}" if pd.notna(vm_min) else "—", "amarelo")
 
     st.markdown("")
 
-        # ── Linha 1: por Centro e por Respondente ────────────────
+    # ── Linha 1: por Centro e por Respondente ─────────────────
     _sec("Satisfação por Centro e Respondente")
     c1, c2 = st.columns([3, 2])
 
@@ -407,12 +439,9 @@ def mostrar_questionarios_dashboard():
 
     with c2:
         if df["Respondente"].notna().any():
-            # CORREÇÃO: Agora calcula a média por respondente, não a contagem
             df_resp = (
                 df.groupby("Respondente")["Valor Médio"]
-                .mean()
-                .round(2)
-                .reset_index()
+                .mean().round(2).reset_index()
                 .rename(columns={"Valor Médio": "Média"})
             )
             st.plotly_chart(
@@ -420,10 +449,9 @@ def mostrar_questionarios_dashboard():
                 use_container_width=True
             )
 
-    # ── NOVO GRÁFICO DE LINHA COM PONTOS ─────────────────────
+    # ── Gráfico de barras por folha/pergunta ──────────────────
     _sec("Evolução da Satisfação")
-    
-    # Verifica se existe coluna de Folha e valor médio para o gráfico principal
+
     if "Folha" in df.columns and "Valor Médio" in df.columns:
         ordem_folhas = ["21a", "21b", "22a", "22b", "23a", "23b", "24a", "24b"]
         df_folha = df[df["Folha"].isin(ordem_folhas)].copy()
@@ -432,7 +460,7 @@ def mostrar_questionarios_dashboard():
             df_folha["Folha"] = pd.Categorical(df_folha["Folha"], categories=ordem_folhas, ordered=True)
 
             if "Pergunta" in df_folha.columns and df_folha["Pergunta"].notna().any():
-                # Normaliza a pergunta para usar apenas a letra inicial A-F e remover N, P, R, S, O
+                # Normaliza a pergunta para usar apenas a letra inicial A-F
                 letras_validas = ["A", "B", "C", "D", "E", "F"]
                 df_folha["Pergunta Letra"] = (
                     df_folha["Pergunta"].astype(str)
@@ -444,9 +472,7 @@ def mostrar_questionarios_dashboard():
 
                 df_plot = (
                     df_folha.groupby(["Folha", "Pergunta Letra"])["Valor Médio"]
-                    .mean()
-                    .round(2)
-                    .reset_index()
+                    .mean().round(2).reset_index()
                     .rename(columns={"Pergunta Letra": "Pergunta"})
                 )
                 st.plotly_chart(
@@ -460,9 +486,7 @@ def mostrar_questionarios_dashboard():
             else:
                 df_plot = (
                     df_folha.groupby("Folha")["Valor Médio"]
-                    .mean()
-                    .round(2)
-                    .reset_index()
+                    .mean().round(2).reset_index()
                 )
                 st.plotly_chart(
                     _fig_barras_por_folha(
@@ -478,44 +502,28 @@ def mostrar_questionarios_dashboard():
         # Alternativa: usar meses como eixo X
         df_meses = (
             df.groupby("_Mês")["Valor Médio"]
-            .mean()
-            .round(2)
-            .reset_index()
+            .mean().round(2).reset_index()
             .sort_values("_Mês")
         )
-        
         st.plotly_chart(
-            _fig_linha_pontos(
-                df_meses,
-                "_Mês",
-                "Valor Médio",
-                "Evolução Mensal da Satisfação"
-            ),
+            _fig_linha_pontos(df_meses, "_Mês", "Valor Médio", "Evolução Mensal da Satisfação"),
             use_container_width=True
         )
     elif "Shortname" in df.columns and "Valor Médio" in df.columns:
         # Alternativa: usar ações como eixo X
         df_acoes = (
             df.groupby("Shortname")["Valor Médio"]
-            .mean()
-            .round(2)
-            .reset_index()
+            .mean().round(2).reset_index()
             .sort_values("Shortname")
         )
-        
         st.plotly_chart(
-            _fig_linha_pontos(
-                df_acoes,
-                "Shortname",
-                "Valor Médio",
-                "Satisfação Média por Ação"
-            ),
+            _fig_linha_pontos(df_acoes, "Shortname", "Valor Médio", "Satisfação Média por Ação"),
             use_container_width=True
         )
     else:
         st.info("ℹ️ Adicione uma coluna 'Pergunta', 'Shortname' ou tenha dados mensais para ver o gráfico de evolução.")
 
-    # ── Tabela resumo filtrada ─────────────────────────────────
+    # ── Tabela resumo filtrada ────────────────────────────────
     _sec("Tabela Resumo")
     COLS_RESUMO = [c for c in ["Centro", "Shortname", "Datini", "Respondente",
                                "Módulo", "Folha", "Pergunta", "Valor Médio"] if c in df.columns]
@@ -529,9 +537,7 @@ def mostrar_questionarios_dashboard():
         height=280,
         hide_index=True,
     )
-
-    total_mostrado = len(df_resumo)
-    st.caption(f"A mostrar {total_mostrado:,} registos filtrados.".replace(",", "."))
+    st.caption(f"A mostrar {len(df_resumo):,} registos filtrados.".replace(",", "."))
 
 
 if __name__ == "__main__":

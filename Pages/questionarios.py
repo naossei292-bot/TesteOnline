@@ -21,6 +21,156 @@ FOLHA_META = {
     "24a": {"Respondente": "Coordenação Pedagógica", "Modalidade": "Presencial",  "Tipo": "Formador"},
     "24b": {"Respondente": "Coordenação Pedagógica", "Modalidade": "À Distância", "Tipo": "Tutor"},
 }
+# ── Dicionário com as perguntas completas para cada folha ──────────────────
+PERGUNTAS_POR_FOLHA = {
+    "21a": {
+        "A01": "A01-Coerência de estruturação dos conteúdos.",
+        "A02": "A02-Relevância dos temas abordados.",
+        "A03": "A03-Adequação da duração do Módulo.",
+        "A04": "A04-Nível de abrangência da documentação disponibilizada.",
+        "A05": "A05-Condições de limpeza da sala de formação utilizada.",
+        "B01": "B01-Apoio logístico e administrativo prestado pela Equipa de Coordenação Pedagógica de Centro (entrega de material, exames, contratos, resolução de problemas informáticos).",
+        "C01": "C01-Correspondência entre os conteúdos do módulo e as suas expectativas iniciais",
+        "C02": "C02-Aplicação dos conteúdos no campo profissional e/ou pessoal.",
+        "D01": "D01-O Formador domina os temas abordados.",
+        "D02": "D02-O formador domína as técnicas pedagógicas.",
+        "D03": "D03-O formador motiva os formandos.",
+        "D04": "D04-O formador demonstra capacidade de exposição dos conteúdos.",
+        "D05": "D05-O formador utiliza adequadamente os procedimentos didáticos (aulas expositivas, aulas práticas, textos de apoio, trabalhos de grupo, atividades externas).",
+        "D06": "D06-O formador demonstra disponibilidade para esclarecer as questões dos formandos.",
+        "E01": "E01-Avaliação global do módulo frequentado.",
+    },
+    "21b": {
+        "A01": "A01-Qualidade dos recursos didáticos.",
+        "A02": "A02-Coerência da estruturação dos conteúdos.",
+        "A03": "A03-Relevância dos temas abordados.",
+        "A04": "A04-Nível de abrangência da documentação distribuída.",
+        "A05": "A05-Adequação da duração do módulo.",
+        "A06": "A06-Adequação da forma de organização.",
+        "B01": "B01-Apoio prestado pela Coordenação Pedagógica.",
+        "B02": "B02-Apoio administrativo prestado.",
+        "B03": "B03-Apoio técnico de suporte.",
+        "C01": "C01-Correspondência entre os conteúdos do módulo e as suas expectativas iniciais.",
+        "C02": "C02-Aplicação dos conteúdos no campo profissional e/ou pessoal.",
+        "D01": "D01-O Formador/Tutor domina os temas abordados.",
+        "D02": "D02-O Formador/Tutor demonstra disponibilidade para esclarecer as questões dos formandos.",
+        "E01": "E01-Acessibilidade e navegabilidade.",
+        "E02": "E02-Qualidade gráfica dos documentos.",
+        "E03": "E03-Qualidade do sistema em formação à distância.",
+        "F01": "F01-Avaliação global do módulo frequentado.",
+    },
+    "22a": {
+        "A01": "A01-Adequação da sala de formação utilizada.",
+        "A02": "A02-Qualidade dos recursos didáticos adotados.",
+        "A03": "A03-Adequação do desenvolvimento da ação de formação e organização dos módulos ministrados.",
+        "A04": "A04-Importância e utilidade dos conteúdos ministrados.",
+        "A05": "A05-Cumprimento dos objetivos da ação de formação.",
+        "A06": "A06-Número de horas destinados à ação de formação.",
+        "B01": "B01-Apresentação preliminar do plano de ensino pela Equipa de Coordenação Pedagógica de Centro (programa, cronograma, avaliação).",
+        "B02": "B02-Encerramento da ação de formação pela Equipa de Coordenação Pedagógica de Centro (indicação de progressão, apresentação de estágio, se aplicável, orientações gerais).",
+        "B03": "B03-Apoio prestado pela Coordenação Pedagógica de Centro (gestão de conflitos, disponibilidade no atendimento, clareza na comunicação).",
+        "C01": "C01-Correspondência entre os conteúdos do módulo e as suas expectativas iniciais",
+        "D01": "D01-Avaliação global do desempenho do(s) formador(es).",
+        "E01": "E01-Avaliação global da ação de formação frequentada.",
+    },
+    "22b": {
+        "A01": "A01-Qualidade dos recursos didáticos.",
+        "A02": "A02-Coerência da estruturação dos conteúdos.",
+        "A03": "A03-Relevância dos temas abordados.",
+        "A04": "A04-Nível de abrangência da documentação distribuída.",
+        "A05": "A05-Adequação da duração da Ação de Formação.",
+        "A06": "A06-Adequação da forma de organização.",
+        "B01": "B01-Apoio prestado pela Coordenação Pedagógica.",
+        "B02": "B02-Apoio administrativo prestado.",
+        "B03": "B03-Apoio técnico de suporte.",
+        "C01": "C01-Correspondência entre os conteúdos do módulo e as suas expectativas iniciais.",
+        "C02": "C02-Aplicação dos conteúdos no campo profissional e/ou pessoal.",
+        "D01": "D01-O Formador/Tutor domina os temas abordados.",
+        "D02": "D02-O Formador/Tutor demonstra disponibilidade para esclarecer as questões dos formandos.",
+        "E01": "E01-Acessibilidade e navegabilidade.",
+        "E02": "E02-Qualidade gráfica dos documentos.",
+        "E03": "E03-Qualidade do sistema em formação à distância.",
+        "F01": "F01-Avaliação global da ação de formação frequentada.",
+    },
+    "23a": {
+        "A01": "A01-Cumprimentos dos Objetivos da ação.",
+        "A02": "A02-Coerência da estruturação dos conteúdos ao longo da ação.",
+        "A03": "A03-Utilidade dos conteúdos.",
+        "A04": "A04-Adequação da duração do curso.",
+        "A05": "A05-Qualidade dos recursos didáticos.",
+        "A06": "A06-Adequação da sala de formação utilizada.",
+        "A07": "A07-Atividades Externas/Recursos Programados.",
+        "A08": "A08-Conhecimento prévio do público-alvo.",
+        "A09": "A09-Trabalho com a equipa pedagógica (formadores e coordenação).",
+        "B01": "B01-Apoio prestado pela Coordenação (apresentação inicial, gestão de conflitos, disponibilidade, clareza na comunicação).",
+        "B02": "B02-Apoio logístico e administrativo prestado pela equipa de coordenação do centro de formação (entrega de material, exames, contratos, resolução de problemas informáticos).",
+        "C01": "C01-Motivação do grupo.",
+        "C02": "C02-Grau de participação do grupo.",
+        "C03": "C03-Grau de adequação de postura e perfil profissional demonstrado em sala.",
+        "C04": "C04-Disponibilidade do grupo para realizar atividades pedagógicas e produtividade.",
+        "C05": "C05-Relacionamento criado entre os formandos.",
+        "C06": "C06-Relacionamento criado entre o formador e os formandos.",
+        "C07": "C07-Alteração do perfil de entrada e de saída dos formandos.",
+        "C08": "C08-Resultados alcançados pelos formandos.",
+        "C09": "C09-Assiduidade e Pontualidade do grupo.",
+        "D01": "D01-Apreciação global do desempenho do formador.",
+    },
+    "23b": {
+        "A01": "A01-Qualidade dos recursos didáticos.",
+        "A02": "A02-Utilidade dos conteúdos.",
+        "A03": "A03-Adequação do programa face aos objetivos previstos.",
+        "A04": "A04-Coerência da estruturação dos conteúdos ao longo da ação.",
+        "A05": "A05-Nível de abrangência da documentação distribuída.",
+        "A06": "A06-Adequação da duração do curso.",
+        "B01": "B01-Apoio prestado pela Coordenação Pedagógica.",
+        "B02": "B02-Apoio logístico e administrativo prestado.",
+        "B03": "B03-Apoio prestado pela equipa de suporte técnico.",
+        "C01": "C01-Motivação do formando.",
+        "C02": "C02-Grau de participação do formando nas atividades propostas.",
+        "C03": "C03-Disponibilidade do formando no cumprimento do Itinerário de Atividades.",
+        "D01": "D01-Acessibilidade e navegabilidade.",
+        "D02": "D02-Qualidade do sistema em e-Learning.",
+        "E01": "E01-Avaliação Global do Curso.",
+    },
+    "24a": {
+        "A01": "A01-Preenche corretamente e no tempo adequado os documentos do DTP da sua responsabilidade.",
+        "A02": "A02-Planifica corretamente as sessões e as atividades pedagógicas de acordo com o programa de formação.",
+        "A03": "A03-Assiduidade.",
+        "A04": "A04-Pontualidade.",
+        "A05": "A05-Reporta as questões relativas à Coordenação.",
+        "A06": "A06-Participa ativamente nas reuniões da Equipa Pedagógica.",
+        "B01": "B01-Utiliza métodos e estratégias pedagógicas adequadas ao perfil dos formandos.",
+        "B02": "B02-Demonstra preocupação em fazer corresponder os assuntos da formação aos interesses e expectativas dos formandos.",
+        "B03": "B03-Fomenta o espírito de iniciativa e de autonomia dos formandos.",
+        "B04": "B04-Domina o assunto da formação.",
+        "C01": "C01-Estabelece um bom relacionamento com a Equipa Pedagógica.",
+        "C02": "C02-Desenvolve um bom relacionamento com o grupo de formandos.",
+        "C03": "C03-Apresenta uma atitude positiva nos relacionamentos interpessoais e em situações imprevistas.",
+        "C04": "C04-Demonstra disponibilidade nos relacionamentos interpessoais.",
+        "D01": "D01-Apreciação global do desempenho do formador.",
+    },
+    "24b": {
+        "A01": "A01-Preenche corretamente e no tempo adequado os documentos do DTP da sua responsabilidade.",
+        "A02": "A02-Planifica corretamente as sessões e as atividades pedagógicas de acordo com o programa de formação.",
+        "A03": "A03-Produz com qualidade materiais didáticos e atividades para serem utilizados em formação à distância.",
+        "A04": "A04-Reporta as questões relativas à Coordenação.",
+        "B01": "B01-Utiliza métodos e estratégias pedagógicas adequadas ao perfil dos formandos.",
+        "B02": "B02-Demonstra preocupação em fazer corresponder os assuntos da formação aos interesses e expectativas dos formandos.",
+        "B03": "B03-Fomenta o espírito de iniciativa e de autonomia dos formandos.",
+        "B04": "B04-Domina o assunto da formação.",
+        "C01": "C01-Estabelece um bom relacionamento com a Equipa Pedagógica.",
+        "C02": "C02-Pratica uma tutoria ativa através da plataforma Moodle.",
+        "D01": "D01-Apreciação global do desempenho do/a tutor/a.",
+    },
+}
+
+def pergunta_completa(folha: str, codigo: str) -> str:
+    """Devolve a pergunta completa para uma dada folha e código."""
+    folha = str(folha).strip()
+    codigo = str(codigo).strip()
+    if folha in PERGUNTAS_POR_FOLHA:
+        return PERGUNTAS_POR_FOLHA[folha].get(codigo, codigo)
+    return codigo  # fallback: mantém o código se a folha for desconhecida
 
 # Lookup plano para evitar .get() com dict aninhado em cada linha
 _FOLHA_RESPONDENTE = {k: v["Respondente"] for k, v in FOLHA_META.items()}
@@ -30,20 +180,41 @@ _FOLHA_TIPO        = {k: v["Tipo"]        for k, v in FOLHA_META.items()}
 
 # ── MELHORIA 1: parsear_item vectorizado (substitui apply linha-a-linha) ──────
 def parsear_itens_vectorizado(series: pd.Series) -> pd.DataFrame:
-    """
-    Substitui o antigo parsear_item() chamado via .apply() linha-a-linha.
-    Usa str.extract() vectorizado — 70-90% mais rápido em datasets grandes.
-    """
     s = series.astype(str).str.strip().str.replace("__", "_", regex=False)
-
     extracted = s.str.extract(r'^(?:(M\d+)_)?([^.]+)\.(.+)$')
-    extracted.columns = ["Módulo", "Folha", "Pergunta"]
-
+    # --- NOVO: normalização de itens mal formatados ---
+    def normalizar_item(item: str) -> str:
+        item = str(item).strip()
+        # Se já está no formato esperado (ex: M1_21a.A01), mantém
+        if re.match(r'^(?:M\d+_)?[0-9]{2}[a-z]\.[A-Z0-9]+$', item):
+            return item
+        # Se for "CP_210" ou "CL_210", mapeia para folhas conhecidas (ajuste conforme sua realidade)
+        if item.startswith("CP_210"):
+            return "24a.CP"       # exemplo: assume folha 24a, pergunta genérica
+        if item.startswith("CL_210"):
+            return "24b.CL"       # exemplo: folha 24b
+        # Se for só números (ex: "244", "235"), atribui a uma folha padrão (ex: 21a)
+        if item.isdigit():
+            return f"21a.{item}"
+        # Para outros casos, tenta extrair qualquer coisa antes do último ponto (fallback)
+        if '.' in item:
+            return item
+        # Último recurso: coloca na folha 21a com o valor original como código
+        return f"21a.{item}"
+    
+    s_normalizado = s.apply(normalizar_item)
+    extracted = s_normalizado.str.extract(r'^(?:(M\d+)_)?([^.]+)\.(.+)$')
+    extracted.columns = ["Módulo", "Folha", "Pergunta_Codigo"]
     folha = extracted["Folha"]
     extracted["Respondente"] = folha.map(_FOLHA_RESPONDENTE)
     extracted["Modalidade"]  = folha.map(_FOLHA_MODALIDADE)
     extracted["Tipo"]        = folha.map(_FOLHA_TIPO)
 
+    # --- NOVO: criar coluna com a pergunta completa ---
+    extracted["Pergunta"] = extracted.apply(
+        lambda row: pergunta_completa(row["Folha"], row["Pergunta_Codigo"]),
+        axis=1
+    )
     return extracted
 
 
