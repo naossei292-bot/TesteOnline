@@ -1,415 +1,447 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import unicodedata
 import io
-import re
 
-def converter_colunas_numericas(df: pd.DataFrame) -> pd.DataFrame:
-    """Converte colunas relevantes para numérico (float)."""
-    colunas_numericas = [
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
-        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
-        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
-        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
-        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
-        "Taxa de satisfação Final", "Valor total a receber", "Valor Total Recebido",
-        "Avaliação formador"
-    ]
-    for col in colunas_numericas:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+# ═══════════════════════════════════════════════════════════════
+# DEFINIÇÃO DE COLUNAS
+# ═══════════════════════════════════════════════════════════════
+
+COLUNAS_CURSOS = [
+    "Status", "Ação", "Centro", "Data Inicial", "Data Final",
+    "Aptos", "Inaptos", "Desistentes", "Inscritos",
+    "Devedor", "Valor total a receber", "Valor Total Recebido",
+    "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
+    "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
+    "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
+    "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
+    "Taxa de satisfação Final", "Formador", "Avaliação formador",
+]
+
+COLUNAS_FORMANDOS = [
+    "Ação", "Data_inicial", "Data_final", "Estado", "Formando",
+    "No_formando", "Valor_curso", "Desconto",
+    "Valor_curso_final",   # calculado
+    "Total_ja_pago", "Total_a_pagar",  # calculado
+    "Proximo_acordo", "Devedor",       # calculado
+]
+
+CALC_CURSOS    = {"Devedor", "Valor total a receber", "Valor Total Recebido"}
+CALC_FORMANDOS = {"Valor_curso_final", "Total_a_pagar", "Devedor"}
+
+_ASSIN_CURSOS     = {"Centro", "Data Inicial", "Data Final", "Formador"}
+_ASSIN_FORMANDOS  = {"Formando", "No_formando", "Valor_curso", "Total_ja_pago"}
+
+# ═══════════════════════════════════════════════════════════════
+# MAPEAMENTO DE ALIASES — corrigido para "Formando" (número)
+# ═══════════════════════════════════════════════════════════════
+
+ALIASES_FORMANDOS: dict[str, list[str]] = {
+    "Ação":           ["Acao", "Acção", "Accao", "Ação de formação", "Acao de formacao",
+                       "Codigo acao", "Código ação", "Cod_acao", "Cod acao"],
+    "Data_inicial":   ["Data inicial", "DataInicial", "Data_Inicio", "Data inicio",
+                       "Data de inicio", "Data de início", "Inicio"],
+    "Data_final":     ["Data final", "DataFinal", "Data_Fim", "Data fim",
+                       "Data de fim", "Fim"],
+    "Estado":         ["Situação", "Situacao", "Estado formando", "Estado_formando",
+                       "Situação formando", "Situacao formando", "Status"],
+    "Formando":       ["Formando", "Nome de formando", "Nome formando", "Nome_formando", 
+                       "Nome do formando", "Nome completo", "Designação", "Designacao"],
+    "No_formando":    ["No_Formando",   # <-- Mapeia a coluna 'Formando' do Excel para No_formando
+                       "num do formando",
+                       "No_formando",
+                       "Nº Formando", "N_formando", "Numero formando", "Número formando",
+                       "Nformando", "Nº_formando", "No formando", "Num formando",
+                       "Número do formando", "ID formando", "Id_formando"],
+    "Valor_curso":    ["Valor curso", "ValorCurso", "Valor", "Preco", "Preço",
+                       "Custo", "Valor do curso", "Valor formação"],
+    "Desconto":       ["Desc", "Desconto aplicado", "Discount"],
+    "Total_ja_pago":  ["Total ja pago", "Total pago", "TotalPago", "Valor pago",
+                       "Pago", "Já pago", "Ja pago"],
+    "Proximo_acordo": ["Proximo acordo", "Próximo acordo", "Acordo", "Próx acordo",
+                       "Data acordo", "Prox_acordo"],
+}
+
+ALIASES_CURSOS: dict[str, list[str]] = {
+    "Ação":                   ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao"],
+    "Data Inicial":           ["Data_Inicial", "DataInicial", "Data inicio", "Data de início"],
+    "Data Final":             ["Data_Final", "DataFinal", "Data fim", "Data de fim"],
+    "Inscritos":              ["Total inscritos", "Num inscritos", "Nº inscritos"],
+    "Aptos":                  ["Total aptos", "Certificados", "Aprovados"],
+    "Inaptos":                ["Total inaptos", "Reprovados", "Não aptos"],
+    "Desistentes":            ["Total desistentes", "Desistiu", "Desistencias"],
+    "Avaliação formador":     ["Avaliacao formador", "Aval formador", "Nota formador"],
+    "Taxa de satisfação Final": ["Taxa satisfacao final", "Satisfacao final",
+                                  "Taxa final", "Satisfação final"],
+}
+
+# ═══════════════════════════════════════════════════════════════
+# FUNÇÕES DE NORMALIZAÇÃO E MAPEAMENTO
+# ═══════════════════════════════════════════════════════════════
+
+def _normalizar(texto: str) -> str:
+    texto = unicodedata.normalize("NFD", str(texto))
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    return texto.lower().strip().replace(" ", "").replace("_", "").replace("º", "").replace("ª", "")
+
+def mapear_colunas(df: pd.DataFrame, aliases: dict[str, list[str]]) -> tuple[pd.DataFrame, dict]:
+    colunas_originais = {col: _normalizar(col) for col in df.columns}
+    renomear = {}
+    log = {}
+    for destino, lista_aliases in aliases.items():
+        destino_norm = _normalizar(destino)
+        all_aliases_norm = [destino_norm] + [_normalizar(a) for a in lista_aliases]
+        for col_orig, col_norm in colunas_originais.items():
+            if col_orig in renomear.values():
+                continue
+            if col_norm in all_aliases_norm:
+                if col_orig != destino:
+                    renomear[col_orig] = destino
+                log[destino] = col_orig
+                break
+    if renomear:
+        df = df.rename(columns=renomear)
+    return df, log
+
+def mesclar_colunas_duplicadas(df: pd.DataFrame) -> pd.DataFrame:
+    if not df.columns.duplicated().any():
+        return df
+    for col in df.columns[df.columns.duplicated()].unique():
+        colunas_iguais = [c for c in df.columns if c == col]
+        if len(colunas_iguais) > 1:
+            df[colunas_iguais[0]] = df[colunas_iguais[0]].fillna(df[colunas_iguais[1]])
+            df = df.loc[:, ~df.columns.duplicated(keep='first')]
     return df
 
-def normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Aplica normalizações: conversão numérica."""
-    df = converter_colunas_numericas(df)
-    return df
+# ═══════════════════════════════════════════════════════════════
+# FUNÇÕES AUXILIARES
+# ═══════════════════════════════════════════════════════════════
 
-def obter_max_mes_satisfacao(df: pd.DataFrame) -> int:
-    if df.empty:
-        return 2
-    padrao = re.compile(r"Taxa de Satisfação M(\d{2})")
-    max_mes = 2
-    for col in df.columns:
-        match = padrao.match(col)
-        if match:
-            mes = int(match.group(1))
-            if df[col].notna().any():
-                if mes > max_mes:
-                    max_mes = mes
-    return max_mes
+def exportar_excel(df: pd.DataFrame, sheet_name: str = "Dados") -> bytes:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    output.seek(0)
+    return output.getvalue()
 
-def atualizar_colunas_satisfacao():
-    if 'acoes_editaveis' not in st.session_state or st.session_state.acoes_editaveis.empty:
-        max_mes = 2
-    else:
-        df_temp = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore")
-        max_mes = obter_max_mes_satisfacao(df_temp)
-
-    colunas_satisfacao = [f"Taxa de Satisfação M{i:02d}" for i in range(1, max_mes + 1)]
-
-    atuais = st.session_state.get("colunas_selecionadas", [])
-    outras_colunas = [col for col in atuais if not col.startswith("Taxa de Satisfação M")]
-    novas_selecionadas = outras_colunas + [col for col in colunas_satisfacao if col not in outras_colunas]
-    todas_opcoes = [
-        "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
-        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
-        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
-        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
-        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
-        "Taxa de satisfação Final", "Nacionalidades(Portugueses/Estrangeiros)",
-        "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
-    ]
-    novas_selecionadas = [col for col in todas_opcoes if col in novas_selecionadas]
-
-    if set(novas_selecionadas) != set(st.session_state.colunas_selecionadas):
-        st.session_state.colunas_selecionadas = novas_selecionadas
-        return True
-    return False
-
-# NOVO: garante TODAS as colunas no dataframe (M03-M12 incluídas), preenchendo
-# com None as que não existirem. Resolve o problema das colunas a saltar.
-def garantir_todas_colunas(df: pd.DataFrame, todas_colunas: list) -> pd.DataFrame:
-    for col in todas_colunas:
-        if col not in df.columns:
-            df[col] = None
-    if "Apagar" not in df.columns:
-        df.insert(0, "Apagar", False)
-    cols_ordenadas = ["Apagar"] + [c for c in todas_colunas if c in df.columns]
-    return df[cols_ordenadas]
-
-# NOVO: comparação robusta que trata None e NaN como equivalentes.
-# O .equals() original falhava porque garantir_todas_colunas preenche com None,
-# mas o data_editor devolve NaN — logo a comparação era sempre diferente → loop infinito.
 def dfs_diferentes(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
     if df1.shape != df2.shape:
         return True
     try:
-        return not df1.fillna("__NA__").astype(str).equals(
-            df2.fillna("__NA__").astype(str)
-        )
+        return not df1.fillna("__NA__").astype(str).equals(df2.fillna("__NA__").astype(str))
     except Exception:
         return True
+
+def garantir_colunas(df: pd.DataFrame, colunas: list) -> pd.DataFrame:
+    for col in colunas:
+        if col not in df.columns:
+            df[col] = None
+    if "Apagar" not in df.columns:
+        df.insert(0, "Apagar", False)
+    ordem = ["Apagar"] + [c for c in colunas if c in df.columns]
+    return df[ordem]
+
+def converter_numericos_cursos(df: pd.DataFrame) -> pd.DataFrame:
+    num_cols = [
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedor",
+        "Valor total a receber", "Valor Total Recebido", "Avaliação formador",
+    ] + [f"Taxa de Satisfação M{i:02d}" for i in range(1, 13)] + ["Taxa de satisfação Final"]
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+# ═══════════════════════════════════════════════════════════════
+# LÓGICA DE CÁLCULO
+# ═══════════════════════════════════════════════════════════════
+
+def calcular_formandos(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    for col in ["Valor_curso", "Desconto", "Total_ja_pago"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    df["Valor_curso_final"] = df.get("Valor_curso", 0) - df.get("Desconto", 0)
+    df["Total_a_pagar"]     = df["Valor_curso_final"] - df.get("Total_ja_pago", 0)
+    df["Devedor"]           = df["Total_a_pagar"].apply(lambda x: x > 0 if pd.notna(x) else False)
+    return df
+
+def recalcular_cursos(df_cursos: pd.DataFrame, df_formandos: pd.DataFrame) -> pd.DataFrame:
+    if df_cursos is None or df_cursos.empty:
+        return df_cursos if df_cursos is not None else pd.DataFrame()
+    for col in ["Devedor", "Valor total a receber", "Valor Total Recebido"]:
+        if col not in df_cursos.columns:
+            df_cursos[col] = 0
+    if df_formandos is None or df_formandos.empty or "Ação" not in df_formandos.columns:
+        df_cursos["Devedor"] = df_cursos["Valor total a receber"] = df_cursos["Valor Total Recebido"] = 0
+        return df_cursos
+    df_f = calcular_formandos(df_formandos.copy())
+    df_f["Ação"] = df_f["Ação"].astype(str).str.strip()
+    agg = df_f.groupby("Ação", as_index=False).agg(
+        _dev=("Devedor", lambda x: x.eq(True).sum()),
+        _rec=("Total_a_pagar", "sum"),
+        _pago=("Total_ja_pago", "sum")
+    )
+    agg["Ação"] = agg["Ação"].astype(str).str.strip()
+    cols_fixas = [c for c in df_cursos.columns if c not in CALC_CURSOS]
+    df_res = df_cursos[cols_fixas].copy()
+    df_res["_key"] = df_res["Ação"].astype(str).str.strip()
+    agg["_key"] = agg["Ação"].astype(str).str.strip()
+    df_res = df_res.merge(agg[["_key", "_dev", "_rec", "_pago"]], on="_key", how="left")
+    df_res["Devedor"] = df_res["_dev"].fillna(0).astype(int)
+    df_res["Valor total a receber"] = df_res["_rec"].fillna(0)
+    df_res["Valor Total Recebido"] = df_res["_pago"].fillna(0)
+    df_res.drop(columns=["_key", "_dev", "_rec", "_pago"], inplace=True, errors="ignore")
+    return df_res
+
+# ═══════════════════════════════════════════════════════════════
+# LEITURA E PREPARAÇÃO DE FICHEIROS
+# ═══════════════════════════════════════════════════════════════
+
+def ler_ficheiro(f) -> pd.DataFrame:
+    nome = f.name.lower()
+    if nome.endswith(".csv"):
+        df = pd.read_csv(f)
+    else:
+        df = pd.read_excel(f, header=0)
+        if df.shape[1] < 3:
+            f.seek(0)
+            df = pd.read_excel(f, header=1)
+    df.columns = df.columns.astype(str).str.strip().str.replace(r'\s+', ' ', regex=True)
+    return df
+
+def detectar_tipo_ficheiro(df: pd.DataFrame) -> str:
+    cols_norm = {_normalizar(c) for c in df.columns}
+    score_c = sum(1 for s in _ASSIN_CURSOS if _normalizar(s) in cols_norm)
+    score_f = sum(1 for s in _ASSIN_FORMANDOS if _normalizar(s) in cols_norm)
+    df_m, _ = mapear_colunas(df.copy(), ALIASES_FORMANDOS)
+    cols_m = set(df_m.columns)
+    score_f_alias = len(cols_m & _ASSIN_FORMANDOS)
+    score_f = max(score_f, score_f_alias)
+    if score_c == 0 and score_f == 0:
+        return "desconhecido"
+    return "cursos" if score_c >= score_f else "formandos"
+
+def preparar_cursos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    df, log = mapear_colunas(df, ALIASES_CURSOS)
+    df = mesclar_colunas_duplicadas(df)
+    for col in COLUNAS_CURSOS:
+        if col not in df.columns:
+            df[col] = None
+    df = df[COLUNAS_CURSOS].copy()
+    df.insert(0, "Apagar", False)
+    return df, log
+
+def preparar_formandos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    df, log = mapear_colunas(df, ALIASES_FORMANDOS)
+    df = mesclar_colunas_duplicadas(df)
+    for col in COLUNAS_FORMANDOS:
+        if col not in df.columns:
+            df[col] = None
+    df = df[COLUNAS_FORMANDOS].copy()
+    df.insert(0, "Apagar", False)
+    return calcular_formandos(df), log
+
+# ═══════════════════════════════════════════════════════════════
+# FUNÇÃO PRINCIPAL
+# ═══════════════════════════════════════════════════════════════
 
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
 
-    # Inicializa contadores de chave dinâmica (para uploader e editor)
-    if "uploader_key_cursos" not in st.session_state:
-        st.session_state.uploader_key_cursos = 0
-    if "editor_key_counter" not in st.session_state:
-        st.session_state.editor_key_counter = 0
+    defaults = {
+        "acoes_df":          pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS),
+        "formandos_df":      pd.DataFrame(columns=["Apagar"] + COLUNAS_FORMANDOS),
+        "editor_key_cursos": 0,
+        "editor_key_form":   0,
+        "uploader_key":      0,
+        "colunas_vis":       [c for c in COLUNAS_CURSOS if not c.startswith("Taxa de Satisfação M") or c in ("Taxa de Satisfação M01", "Taxa de Satisfação M02")],
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state or st.session_state[k] is None:
+            st.session_state[k] = v
 
-    if "refresh_trigger" in st.query_params:
-        del st.query_params["refresh_trigger"]
+    st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
 
-    todas_colunas_dados = [
-        "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
-        "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
-        "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
-        "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
-        "Taxa de Satisfação M10", "Taxa de Satisfação M11", "Taxa de Satisfação M12",
-        "Taxa de satisfação Final", "Nacionalidades(Portugueses/Estrangeiros)",
-        "Valor total a receber", "Valor Total Recebido", "Formador", "Avaliação formador"
-    ]
+    with st.expander("📤 Carregar ficheiros (Ações e/ou Formandos)", expanded=False):
+        st.markdown("Selecione **um ou mais ficheiros**. O sistema identifica automaticamente se cada ficheiro é de **Ações** ou de **Formandos** e mapeia as colunas.")
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            modo_cursos = st.radio("Modo para Ações:", ["Substituir", "Adicionar"], horizontal=True, key="modo_up_cursos")
+        with col_m2:
+            modo_form   = st.radio("Modo para Formandos:", ["Substituir", "Adicionar"], horizontal=True, key="modo_up_form")
 
-    if "colunas_selecionadas" not in st.session_state:
-        st.session_state.colunas_selecionadas = [
-            col for col in todas_colunas_dados
-            if (not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"])
-            and col != "Nacionalidades(Portugueses/Estrangeiros)"
-        ]
+        ficheiros = st.file_uploader("Selecione ficheiros Excel (.xlsx) ou CSV", type=None, accept_multiple_files=True, key=f"upload_{st.session_state.uploader_key}")
 
-    st.subheader("📋 Escolha as colunas que pretende visualizar/editar")
-    colunas_escolhidas = st.multiselect(
-        "Selecione as colunas (a coluna 'Apagar!' é sempre mostrada):",
-        options=todas_colunas_dados,
-        default=st.session_state.colunas_selecionadas,
-        key="seletor_colunas"
-    )
-
-    if set(colunas_escolhidas) != set(st.session_state.colunas_selecionadas):
-        st.session_state.colunas_selecionadas = colunas_escolhidas
-        if 'acoes_editaveis' in st.session_state and not st.session_state.acoes_editaveis.empty:
-            df_atual = st.session_state.acoes_editaveis
-            if "Apagar" in df_atual.columns:
-                apagar = df_atual["Apagar"]
-                outras = {col: df_atual[col] for col in st.session_state.colunas_selecionadas if col in df_atual.columns}
-                novo_df = pd.DataFrame(outras)
-                novo_df.insert(0, "Apagar", apagar)
-                st.session_state.acoes_editaveis = normalizar_dataframe(novo_df)
-            else:
-                st.session_state.acoes_editaveis = pd.DataFrame(columns=["Apagar"] + st.session_state.colunas_selecionadas)
-        st.rerun()
-
-    colunas_dados = st.session_state.colunas_selecionadas
-    colunas_com_apagar = ["Apagar"] + colunas_dados
-
-    if 'acoes_editaveis' not in st.session_state:
-        st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
-    else:
-        st.session_state.acoes_editaveis = normalizar_dataframe(st.session_state.acoes_editaveis)
-
-    # ---------- Carregar ficheiro (com chave dinâmica) ----------
-    st.subheader("📤 Carregar dados a partir de ficheiro")
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        modo_carga = st.radio(
-            "Modo de carregamento:",
-            ["Substituir dados existentes", "Adicionar ao final"],
-            horizontal=True,
-            key="modo_carga_acoes"
-        )
-    with col2:
-        # CHAVE DINÂMICA – igual à lógica dos questionários
-        ficheiros_carga = st.file_uploader(
-            "Carregar um ou mais ficheiros (Excel ou CSV)",
-            type=None,
-            accept_multiple_files=True,
-            key=f"carga_acoes_upload_{st.session_state.uploader_key_cursos}",
-        )
-    with col3:
-        try:
-            with open("assets/Modelo_Acoes_Preenchido.xlsx", "rb") as f:
-                conteudo_exemplo = f.read()
-            st.download_button(
-                label="📥 Descarregar ficheiro exemplo preenchido (Excel)",
-                data=conteudo_exemplo,
-                file_name="Modelo_Acoes_Preenchido.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except FileNotFoundError:
-            st.error("⚠️ Ficheiro de exemplo preenchido não encontrado. Verifique o caminho 'assets/Modelo_Acoes_Preenchido.xlsx'.")
-
-    with col4:
-        try:
-            with open("assets/Modelo_Acoes.xlsx", "rb") as f:
-                conteudo_exemplo = f.read()
-            st.download_button(
-                label="📥 Descarregar ficheiro exemplo vazio (Excel)",
-                data=conteudo_exemplo,
-                file_name="Modelo_Acoes.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except FileNotFoundError:
-            st.error("⚠️ Ficheiro de exemplo vazio não encontrado. Verifique o caminho 'assets/Modelo_Acoes.xlsx'.")
-
-    if ficheiros_carga:
-        lista_dfs = []
-        for ficheiro in ficheiros_carga:
-            nome = ficheiro.name.lower()
-            try:
-                if nome.endswith('.csv'):
-                    df_parcial = pd.read_csv(ficheiro)
-                    df_parcial.columns = df_parcial.columns.str.strip()
-                elif nome.endswith('.xlsx'):
-                    df_parcial = pd.read_excel(ficheiro, header=1)
-                    df_parcial.columns = df_parcial.columns.str.strip()
-
-                    if 'Portugueses' in df_parcial.columns and 'Estrangeiros' in df_parcial.columns:
-                        df_parcial['Nacionalidades(Portugueses/Estrangeiros)'] = (
-                            df_parcial['Portugueses'].fillna('').astype(str).str.strip()
-                            + '/'
-                            + df_parcial['Estrangeiros'].fillna('').astype(str).str.strip()
-                        )
-                        df_parcial.drop(columns=['Portugueses', 'Estrangeiros'], inplace=True)
-
-                    for col in ['Ação', 'Status', 'Centro', 'Formador']:
-                        if col in df_parcial.columns:
-                            df_parcial[col] = df_parcial[col].astype(str).str.strip()
-                            df_parcial[col] = df_parcial[col].replace('nan', None)
-                else:
-                    st.warning(f"Ficheiro ignorado (formato não suportado): {ficheiro.name}")
-                    continue
-
-                # Mapeamento de colunas (mantido igual)
-                mapeamento = {
-                    'status': 'Status', 'acao': 'Ação',
-                    'dataini': 'Data Inicial', 'datafim': 'Data Final',
-                    'centro': 'Centro',
-                    'inscritos': 'Inscritos', 'aptos': 'Aptos',
-                    'inaptos': 'Inaptos', 'desistentes': 'Desistentes',
-                    'devedores': 'Devedores',
-                    'taxa_satisfacao_m01': 'Taxa de Satisfação M01',
-                    'taxa_satisfacao_m02': 'Taxa de Satisfação M02',
-                    'taxa_satisfacao_m03': 'Taxa de Satisfação M03',
-                    'taxa_satisfacao_m04': 'Taxa de Satisfação M04',
-                    'taxa_satisfacao_m05': 'Taxa de Satisfação M05',
-                    'taxa_satisfacao_m06': 'Taxa de Satisfação M06',
-                    'taxa_satisfacao_m07': 'Taxa de Satisfação M07',
-                    'taxa_satisfacao_m08': 'Taxa de Satisfação M08',
-                    'taxa_satisfacao_m09': 'Taxa de Satisfação M09',
-                    'taxa_satisfacao_m10': 'Taxa de Satisfação M10',
-                    'taxa_satisfacao_m11': 'Taxa de Satisfação M11',
-                    'taxa_satisfacao_m12': 'Taxa de Satisfação M12',
-                    'taxa_final': 'Taxa de satisfação Final',
-                    'nacionalidades': 'Nacionalidades(Portugueses/Estrangeiros)',
-                    'valor_total_receber': 'Valor total a receber',
-                    'valor_total_recebido': 'Valor Total Recebido',
-                    'formador': 'Formador',
-                    'avaliacao_formador': 'Avaliação formador'
-                }
-                df_parcial.rename(columns={k: v for k, v in mapeamento.items() if k in df_parcial.columns}, inplace=True)
-
-                for col in todas_colunas_dados:
-                    if col not in df_parcial.columns:
-                        df_parcial[col] = None
-                df_parcial = df_parcial[todas_colunas_dados]
-                df_parcial.insert(0, "Apagar", False)
-                df_parcial = normalizar_dataframe(df_parcial)
-                lista_dfs.append(df_parcial)
-            except Exception as e:
-                st.error(f"Erro ao ler {ficheiro.name}: {e}")
-
-        if lista_dfs:
-            df_novo = pd.concat(lista_dfs, ignore_index=True)
-            if modo_carga == "Substituir dados existentes":
-                st.session_state.acoes_editaveis = df_novo
-            else:
-                st.session_state.acoes_editaveis = pd.concat(
-                    [st.session_state.acoes_editaveis, df_novo], ignore_index=True
-                )
-            # Incrementa as chaves dinâmicas para limpar o uploader e forçar rerender do editor
-            st.session_state.uploader_key_cursos += 1
-            st.session_state.editor_key_counter += 1
-            st.success(f"✅ {len(lista_dfs)} ficheiro(s) carregado(s) – total de {len(df_novo)} linhas")
-            st.rerun()
-
-        st.markdown("---")
-
-    st.subheader("➕ Adicionar múltiplas linhas")
-    col_add1, col_add2 = st.columns([1, 2])
-    with col_add1:
-        num_linhas = st.number_input("Número de linhas a adicionar:", min_value=1, max_value=10000, value=5, step=1)
-    with col_add2:
-        if st.button("Adicionar linhas vazias"):
-            novas_linhas = pd.DataFrame({col: [None] * num_linhas for col in todas_colunas_dados})
-            novas_linhas.insert(0, "Apagar", False)
-            st.session_state.acoes_editaveis = pd.concat([st.session_state.acoes_editaveis, novas_linhas], ignore_index=True)
-            st.session_state.editor_key_counter += 1
-            st.rerun()
-
-    placeholder = st.empty()
-    df_atual = garantir_todas_colunas(
-        st.session_state.acoes_editaveis.copy(),
-        todas_colunas_dados
-    )
-    df_atual = normalizar_dataframe(df_atual)
-
-    with placeholder.container():
-        edited_df = st.data_editor(
-            df_atual,
-            use_container_width=True,
-            num_rows="dynamic",
-            height=400,
-            key=f"acoes_editor_{st.session_state.editor_key_counter}",
-            column_config={
-                "Apagar": st.column_config.CheckboxColumn("Apagar", default=False)
-            }
-        )
-
-    if dfs_diferentes(edited_df, df_atual):
-        df_completo = st.session_state.acoes_editaveis.copy()
-        for col in edited_df.columns:
-            if col != "Apagar":
-                df_completo[col] = edited_df[col].values
-        if "Apagar" in edited_df.columns:
-            df_completo["Apagar"] = edited_df["Apagar"].values
-        df_normalizado = normalizar_dataframe(df_completo)
-        st.session_state.acoes_editaveis = df_normalizado
-        st.session_state.editor_key_counter += 1
-        st.rerun()
+        if ficheiros:
+            novos_cursos, novos_formandos = [], []
+            linhas_log = []
+            for f in ficheiros:
+                try:
+                    df_raw = ler_ficheiro(f)
+                    tipo = detectar_tipo_ficheiro(df_raw)
+                    if tipo == "cursos":
+                        df_pronto, log_map = preparar_cursos(df_raw)
+                        novos_cursos.append(df_pronto)
+                        linhas_log.append(f"✅ **{f.name}** → **Ações** ({len(df_raw)} linhas)")
+                        if log_map:
+                            mapeados = ", ".join(f"`{orig}` → `{dest}`" for dest, orig in log_map.items() if orig != dest)
+                            if mapeados:
+                                linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ Colunas remapeadas: {mapeados}")
+                    elif tipo == "formandos":
+                        df_pronto, log_map = preparar_formandos(df_raw)
+                        novos_formandos.append(df_pronto)
+                        linhas_log.append(f"✅ **{f.name}** → **Formandos** ({len(df_raw)} linhas)")
+                        for dest, orig in log_map.items():
+                            if str(orig) != str(dest):
+                                linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ `{orig}` → `{dest}`")
+                        vazias = [c for c in ["Estado", "No_formando", "Formando"] if c not in log_map and c not in df_raw.columns]
+                        if vazias:
+                            linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;⚠️ Colunas não encontradas: `{'`, `'.join(vazias)}`")
+                        linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;ℹ️ Colunas originais: `{'`, `'.join(df_raw.columns.tolist())}`")
+                    else:
+                        linhas_log.append(f"⚠️ **{f.name}** → tipo não reconhecido. Colunas: `{'`, `'.join(df_raw.columns.tolist())}`")
+                except Exception as e:
+                    linhas_log.append(f"❌ **{f.name}** → erro: `{e}`")
+            if novos_cursos:
+                df_nc = pd.concat(novos_cursos, ignore_index=True)
+                st.session_state.acoes_df = df_nc if modo_cursos == "Substituir" else pd.concat([st.session_state.acoes_df, df_nc], ignore_index=True)
+                st.session_state.editor_key_cursos += 1
+            if novos_formandos:
+                df_nf = pd.concat(novos_formandos, ignore_index=True)
+                st.session_state.formandos_df = df_nf if modo_form == "Substituir" else pd.concat([st.session_state.formandos_df, df_nf], ignore_index=True)
+                st.session_state.editor_key_form += 1
+            if novos_cursos or novos_formandos:
+                st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
+                st.session_state.uploader_key += 1
+            for linha in linhas_log:
+                st.markdown(linha, unsafe_allow_html=True)
+            if novos_cursos or novos_formandos:
+                st.rerun()
 
     st.markdown("---")
-    col_bot1, col_bot2 = st.columns(2)
-
-    with col_bot1:
-        if st.button("🗑️ Limpar todos os dados", use_container_width=True):
-            st.session_state.acoes_editaveis = pd.DataFrame(columns=colunas_com_apagar)
-            st.session_state.colunas_selecionadas = [
-                col for col in todas_colunas_dados
-                if not col.startswith("Taxa de Satisfação M") or col in ["Taxa de Satisfação M01", "Taxa de Satisfação M02"]
-            ]
-            st.session_state.editor_key_counter += 1
+    st.subheader("📋 Tabela por Ação")
+    st.caption("**Devedor**, **Valor total a receber** e **Valor Total Recebido** são calculados automaticamente a partir da tabela de Formandos.")
+    with st.expander("⚙️ Opções da tabela de Ações", expanded=True):
+        colunas_vis = st.multiselect("Colunas a visualizar/editar:", options=COLUNAS_CURSOS, default=st.session_state.colunas_vis, key="sel_col_cursos")
+        if set(colunas_vis) != set(st.session_state.colunas_vis):
+            st.session_state.colunas_vis = colunas_vis
             st.rerun()
-
-    with col_bot2:
-        if st.button("✖️ Apagar selecionados", use_container_width=True):
-            df = st.session_state.acoes_editaveis.copy()
-            if "Apagar" in df.columns:
-                linhas_apagar = df[df["Apagar"] == True].index.tolist()
-                if linhas_apagar:
-                    df.drop(index=linhas_apagar, inplace=True)
-                    df.reset_index(drop=True, inplace=True)
-                    df["Apagar"] = False
-                    st.session_state.acoes_editaveis = normalizar_dataframe(df)
-                    st.session_state.editor_key_counter += 1
-                    st.rerun()
-                else:
-                    st.warning("Nenhuma linha marcada para apagar.")
+        df_cv = garantir_colunas(st.session_state.acoes_df.copy(), st.session_state.colunas_vis)
+        df_cv = converter_numericos_cursos(df_cv)
+        cfg_c = {"Apagar": st.column_config.CheckboxColumn("Apagar", default=False)}
+        for col in CALC_CURSOS:
+            if col in df_cv.columns:
+                cfg_c[col] = st.column_config.NumberColumn(col, disabled=True, help="Calculado a partir dos Formandos")
+        edited_c = st.data_editor(df_cv, use_container_width=True, num_rows="dynamic", height=400, key=f"ed_c_{st.session_state.editor_key_cursos}", column_config=cfg_c)
+        if dfs_diferentes(edited_c, df_cv):
+            base = st.session_state.acoes_df.copy()
+            for col in edited_c.columns:
+                if col not in CALC_CURSOS:
+                    base[col] = edited_c[col].values
+            st.session_state.acoes_df = recalcular_cursos(converter_numericos_cursos(base), st.session_state.formandos_df)
+            st.session_state.editor_key_cursos += 1
+            st.rerun()
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("🗑️ Limpar todas as ações", use_container_width=True):
+            st.session_state.acoes_df = pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS)
+            st.session_state.editor_key_cursos += 1
+            st.rerun()
+    with c2:
+        if st.button("✖️ Apagar selecionadas (ações)", use_container_width=True):
+            df = st.session_state.acoes_df.copy()
+            mask = df.get("Apagar", pd.Series(False, index=df.index)) == True
+            if mask.any():
+                df = df[~mask].reset_index(drop=True)
+                df["Apagar"] = False
+                st.session_state.acoes_df = recalcular_cursos(converter_numericos_cursos(df), st.session_state.formandos_df)
+                st.session_state.editor_key_cursos += 1
+                st.rerun()
             else:
-                st.warning("Coluna 'Apagar' não encontrada.")
+                st.warning("Nenhuma linha marcada.")
+    with c3:
+        df_exp_c = st.session_state.acoes_df.drop(columns=["Apagar"], errors="ignore")
+        st.download_button("📥 Exportar Ações (Excel)", data=exportar_excel(df_exp_c, "Ações"), file_name="acoes_exportadas.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     st.markdown("---")
-    st.subheader("📎 Exportar dados")
+    st.subheader("👥 Tabela por Formando")
+    st.caption("**Valor_curso_final**, **Total_a_pagar** e **Devedor** são calculados automaticamente. Qualquer alteração atualiza os totais da tabela de Ações.")
+    with st.expander("⚙️ Opções da tabela de Formandos", expanded=True):
+        df_fv = garantir_colunas(st.session_state.formandos_df.copy(), COLUNAS_FORMANDOS)
+        df_fv = calcular_formandos(df_fv)
+        if 'No_formando' in df_fv.columns:
+            df_fv['No_formando'] = df_fv['No_formando'].astype(str).replace('nan', '').replace('None', '')
+        cfg_f = {
+            "Apagar": st.column_config.CheckboxColumn("Apagar", default=False),
+            "Valor_curso_final": st.column_config.NumberColumn("Valor_curso_final", disabled=True),
+            "Total_a_pagar": st.column_config.NumberColumn("Total_a_pagar", disabled=True),
+            "Devedor": st.column_config.CheckboxColumn("Devedor", disabled=True),
+        }
+        edited_f = st.data_editor(df_fv, use_container_width=True, num_rows="dynamic", height=400, key=f"ed_f_{st.session_state.editor_key_form}", column_config=cfg_f)
+        if dfs_diferentes(edited_f, df_fv):
+            base_f = st.session_state.formandos_df.copy()
+            for col in edited_f.columns:
+                if col not in CALC_FORMANDOS:
+                    base_f[col] = edited_f[col].values
+            base_f = calcular_formandos(base_f)
+            st.session_state.formandos_df = base_f
+            st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
+            st.session_state.editor_key_form += 1
+            st.rerun()
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        if st.button("🗑️ Limpar todos os formandos", use_container_width=True):
+            st.session_state.formandos_df = pd.DataFrame(columns=["Apagar"] + COLUNAS_FORMANDOS)
+            st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
+            st.session_state.editor_key_form += 1
+            st.rerun()
+    with f2:
+        if st.button("✖️ Apagar selecionados (formandos)", use_container_width=True):
+            df = st.session_state.formandos_df.copy()
+            mask = df.get("Apagar", pd.Series(False, index=df.index)) == True
+            if mask.any():
+                df = df[~mask].reset_index(drop=True)
+                df["Apagar"] = False
+                st.session_state.formandos_df = calcular_formandos(df)
+                st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
+                st.session_state.editor_key_form += 1
+                st.rerun()
+            else:
+                st.warning("Nenhum formando marcado.")
+    with f3:
+        df_exp_f = st.session_state.formandos_df.drop(columns=["Apagar"], errors="ignore")
+        st.download_button("📥 Exportar Formandos (Excel)", data=exportar_excel(df_exp_f, "Formandos"), file_name="formandos_exportadas.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-    df_export = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore")
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_export.to_excel(writer, index=False, sheet_name="Cursos")
-    output.seek(0)
-
-    st.download_button(
-        label="📥 Descarregar dados em Excel",
-        data=output,
-        file_name="cursos_exportados.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-        key="download_cursos_excel"
-    )
-
-    df_metricas = st.session_state.acoes_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
-    df_metricas = converter_colunas_numericas(df_metricas)
-
-    if "Ação" in df_metricas.columns:
-        df_metricas["Ação"] = df_metricas["Ação"].replace({"": None, "None": None, "nan": None, "NaN": None})
-        df_metricas = df_metricas.dropna(subset=["Ação"])
-        df_metricas = df_metricas[df_metricas["Ação"].astype(str).str.strip() != ""]
-
-    if not df_metricas.empty:
-        st.markdown("---")
+    st.markdown("---")
+    df_m = st.session_state.acoes_df.drop(columns=["Apagar"], errors="ignore").copy()
+    df_m = converter_numericos_cursos(df_m)
+    if "Ação" in df_m.columns:
+        df_m["Ação"] = df_m["Ação"].replace({"": None, "None": None, "nan": None})
+        df_m = df_m.dropna(subset=["Ação"])
+        df_m = df_m[df_m["Ação"].astype(str).str.strip() != ""]
+    if not df_m.empty:
         st.subheader("📊 Resumo Geral")
-
-        total_acoes = df_metricas["Ação"].nunique() if "Ação" in df_metricas.columns else 0
-        total_inscricoes = (
-            df_metricas["Inscritos"].sum()
-            if "Inscritos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Inscritos"])
-            else 0
-        )
-        total_aptos = (
-            df_metricas["Aptos"].sum()
-            if "Aptos" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Aptos"])
-            else 0
-        )
-        taxa_aprovacao = (total_aptos / total_inscricoes * 100) if total_inscricoes > 0 else 0
-        media_satisfacao = (
-            df_metricas["Taxa de satisfação Final"].mean()
-            if "Taxa de satisfação Final" in df_metricas.columns and pd.api.types.is_numeric_dtype(df_metricas["Taxa de satisfação Final"])
-            else 0
-        )
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total de Ações", total_acoes)
-        col2.metric("Total de Inscrições", f"{total_inscricoes:,.0f}".replace(",", "."))
-        col3.metric("Taxa de Aprovação (Aptos)", f"{taxa_aprovacao:.1f}%")
-        col4.metric("Satisfação Final Média", f"{media_satisfacao:.1f}%")
+        def fmt_eur(v): return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+        total_acoes = df_m["Ação"].nunique()
+        total_inscritos = df_m["Inscritos"].sum() if "Inscritos" in df_m.columns else 0
+        total_aptos = df_m["Aptos"].sum() if "Aptos" in df_m.columns else 0
+        taxa_aprov = (total_aptos / total_inscritos * 100) if total_inscritos > 0 else 0
+        media_sat = df_m["Taxa de satisfação Final"].mean() if "Taxa de satisfação Final" in df_m.columns else 0
+        total_a_rec = df_m["Valor total a receber"].sum() if "Valor total a receber" in df_m.columns else 0
+        total_rec = df_m["Valor Total Recebido"].sum() if "Valor Total Recebido" in df_m.columns else 0
+        total_dev = df_m["Devedor"].sum() if "Devedor" in df_m.columns else 0
+        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+        r1c1.metric("Total de Ações", total_acoes)
+        r1c2.metric("Total de Inscrições", f"{int(total_inscritos):,}".replace(",", "."))
+        r1c3.metric("Taxa de Aprovação", f"{taxa_aprov:.1f}%")
+        r1c4.metric("Satisfação Final Média", f"{media_sat:.1f}%" if media_sat else "—")
+        r2c1, r2c2, r2c3 = st.columns(3)
+        r2c1.metric("Valor Total a Receber", fmt_eur(total_a_rec))
+        r2c2.metric("Valor Total Recebido", fmt_eur(total_rec))
+        r2c3.metric("Total de Devedores", int(total_dev))
     else:
-        st.info("ℹ️ Tabela sem dados válidos. Adicione ou carregue dados.")
+        st.info("ℹ️ Nenhum curso com dados válidos. Carregue ficheiros ou adicione dados manualmente.")
 
 if __name__ == "__main__":
     mostrar_cursos()

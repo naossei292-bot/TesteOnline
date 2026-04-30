@@ -136,6 +136,24 @@ st.markdown("""
     hr {
         margin: 2rem 0;
     }
+    .config-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem;
+        border-radius: 16px;
+        margin-bottom: 1.5rem;
+        color: white;
+    }
+    .config-card h3 {
+        color: white;
+        margin-top: 0;
+    }
+    .upload-card {
+        background-color: #f0f4f8;
+        padding: 1.5rem;
+        border-radius: 16px;
+        margin-bottom: 1.5rem;
+        border: 2px dashed #cbd5e1;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,7 +178,7 @@ def exibir_sec_ficheiros(titulo, ficheiros, chave_prefix, mostrar_titulo=True):
 
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button(f"📦 Descarregar tudo (ZIP)", key=f"zip_{chave_prefix}", width='stretch'):
+        if st.button(f"📦 Descarregar tudo (ZIP)", key=f"zip_{chave_prefix}", use_container_width=True):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for f in ficheiros:
@@ -173,7 +191,7 @@ def exibir_sec_ficheiros(titulo, ficheiros, chave_prefix, mostrar_titulo=True):
                 key=f"down_zip_{chave_prefix}"
             )
     with col_btn2:
-        if st.button(f"🔥 Apagar todos", key=f"del_all_{chave_prefix}", width='stretch'):
+        if st.button(f"🔥 Apagar todos", key=f"del_all_{chave_prefix}", use_container_width=True):
             for f in ficheiros:
                 try:
                     os.remove(f["caminho"])
@@ -203,10 +221,10 @@ def exibir_sec_ficheiros(titulo, ficheiros, chave_prefix, mostrar_titulo=True):
                         data=file,
                         file_name=f["nome"],
                         key=f"down_{chave_prefix}_{f['nome']}",
-                        width='stretch'
+                        use_container_width=True
                     )
             with col_c:
-                if st.button("🗑️ Apagar", key=f"del_{chave_prefix}_{f['nome']}", width='stretch'):
+                if st.button("🗑️ Apagar", key=f"del_{chave_prefix}_{f['nome']}", use_container_width=True):
                     os.remove(f["caminho"])
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
@@ -222,10 +240,10 @@ def _exibir_card_dados(f):
             st.markdown(f'<div class="file-meta">{f["tamanho_kb"]} KB · {f["modificado"].strftime("%d/%m/%Y %H:%M")}</div>', unsafe_allow_html=True)
         with col_b:
             with open(f["caminho"], "rb") as file:
-                st.download_button("📥", data=file, file_name=f["nome"], key=f"down_dados_{f['nome']}", width='stretch')
+                st.download_button("📥", data=file, file_name=f["nome"], key=f"down_dados_{f['nome']}", use_container_width=True)
         with col_c:
             if f["extensao"] in [".xlsx", ".xls", ".csv"]:
-                if st.button("👁️ Pré‑ver", key=f"view_dados_{f['nome']}", width='stretch'):
+                if st.button("👁️ Pré‑ver", key=f"view_dados_{f['nome']}", use_container_width=True):
                     try:
                         if f["extensao"] == ".csv":
                             df_preview = pd.read_csv(f["caminho"])
@@ -236,7 +254,7 @@ def _exibir_card_dados(f):
                     except Exception as e:
                         st.error(f"Erro ao ler: {e}")
         with col_d:
-            if st.button("🗑️", key=f"del_dados_{f['nome']}", width='stretch'):
+            if st.button("🗑️", key=f"del_dados_{f['nome']}", use_container_width=True):
                 os.remove(f["caminho"])
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
@@ -263,7 +281,7 @@ def exibir_sec_dados(ano, mostrar_titulo=True):
     
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button(f"📦 Descarregar todos os dados de {ano} (ZIP)", key="zip_dados_all", width='stretch'):
+        if st.button(f"📦 Descarregar todos os dados de {ano} (ZIP)", key="zip_dados_all", use_container_width=True):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for f in ficheiros:
@@ -276,7 +294,7 @@ def exibir_sec_dados(ano, mostrar_titulo=True):
                 key="down_dados_all"
             )
     with col_btn2:
-        if st.button(f"🔥 Apagar todos os ficheiros de {ano}", key="del_dados_all", width='stretch'):
+        if st.button(f"🔥 Apagar todos os ficheiros de {ano}", key="del_dados_all", use_container_width=True):
             for f in ficheiros:
                 try:
                     os.remove(f["caminho"])
@@ -295,74 +313,86 @@ def mostrar_relatorios():
     Função que desenha a interface de gestão de balanços e relatórios.
     """
     st.title("📁 Sistema de Gestão de Ficheiros")
-
-    # ======================== BARRA LATERAL (Configurações) ========================
-    with st.sidebar:
-        st.header("⚙️ Configurações")
-        ano_exec = st.number_input("Ano", min_value=2000, max_value=2030, step=1, value=2025)
-        operacao = st.selectbox(
-            "Operação",
-            ["Gerar balanços e relatórios (completo)", "Apenas balanços", "Apenas relatórios"]
-        )
-        st.divider()
-
-        # ========== NOVO BOTÃO PARA DESCARREGAR A PASTA "Modelos" ==========
-        st.subheader("📁 Descarregar modelos")
-        caminho_modelos = os.path.join(BALANCOS_DIR, "Modelos")
-        if os.path.exists(caminho_modelos) and os.path.isdir(caminho_modelos):
-            # Botão que aciona a criação do ZIP
-            if st.button("⬇️ Descarregar pasta 'Modelos' (ZIP)", key="download_modelos_btn"):
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    for root, dirs, files in os.walk(caminho_modelos):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            # Guarda na ZIP com o caminho relativo a "Modelos"
-                            arcname = os.path.relpath(file_path, start=BALANCOS_DIR)
-                            zipf.write(file_path, arcname=arcname)
-                zip_buffer.seek(0)
-                st.download_button(
-                    label="✅ Clique para descarregar",
-                    data=zip_buffer,
-                    file_name="Modelos.zip",
-                    key="download_modelos_zip"
-                )
-        else:
-            st.info("Pasta 'Modelos' não encontrada dentro de 'balancos'.", icon="⚠️")
-        st.divider()
-
-        st.subheader("📥 Carregar múltiplos ficheiros")
+    
+    # ======================== LAYOUT PRINCIPAL COM COLUNAS ========================
+    col_config, col_upload = st.columns(2)
+    
+    # Coluna de Configurações
+    with col_config:
+        with st.container():
+            st.markdown('<div class="config-card">', unsafe_allow_html=True)
+            st.markdown("### ⚙️ Configurações")
+            ano_exec = st.number_input("Ano", min_value=2000, max_value=2030, step=1, value=2025, key="ano_exec")
+            operacao = st.selectbox(
+                "Operação",
+                ["Gerar balanços e relatórios (completo)", "Apenas balanços", "Apenas relatórios"],
+                key="operacao"
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        ficheiros_carregados = st.file_uploader(
-            "Selecione um ou mais ficheiros (Excel/CSV)",
-            type=["xlsx", "xls", "csv"],
-            accept_multiple_files=True
-        )
-        
-        if st.button("🚀 EXECUTAR", type="primary"):
-            if not ficheiros_carregados:
-                st.error("Por favor, carregue pelo menos um ficheiro antes de executar.")
+        # Secção de Download de Modelos
+        with st.container():
+            st.markdown('<div class="config-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">', unsafe_allow_html=True)
+            st.markdown("### 📁 Descarregar modelos")
+            caminho_modelos = os.path.join(BALANCOS_DIR, "Modelos")
+            if os.path.exists(caminho_modelos) and os.path.isdir(caminho_modelos):
+                if st.button("⬇️ Descarregar pasta 'Modelos' (ZIP)", key="download_modelos_btn", use_container_width=True):
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                        for root, dirs, files in os.walk(caminho_modelos):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                arcname = os.path.relpath(file_path, start=BALANCOS_DIR)
+                                zipf.write(file_path, arcname=arcname)
+                    zip_buffer.seek(0)
+                    st.download_button(
+                        label="✅ Clique para descarregar",
+                        data=zip_buffer,
+                        file_name="Modelos.zip",
+                        key="download_modelos_zip"
+                    )
             else:
-                with st.spinner("A processar ficheiros..."):
-                    dados_ano_dir = os.path.join(PASTA_DADOS, str(ano_exec))
-                    os.makedirs(dados_ano_dir, exist_ok=True)
-                    
-                    for ficheiro in ficheiros_carregados:
-                        caminho_destino = os.path.join(dados_ano_dir, ficheiro.name)
-                        with open(caminho_destino, "wb") as f:
-                            f.write(ficheiro.getbuffer())
-                        st.success(f"✓ {ficheiro.name} guardado em {caminho_destino}")
-                    
-                    try:
-                        if operacao in ["Gerar balanços e relatórios (completo)", "Apenas relatórios"]:
-                            preparar_dados_moodle(ano_exec)
-                            st.success(f"Relatórios Excel preparados para {ano_exec}!")
-                        if operacao in ["Gerar balanços e relatórios (completo)", "Apenas balanços"]:
-                            gerar_balancos(ano_exec)
-                            st.success(f"Balanços gerados para {ano_exec}!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro durante a execução:\n\n{traceback.format_exc()}")
+                st.info("Pasta 'Modelos' não encontrada dentro de 'balancos'.", icon="⚠️")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Coluna de Upload de Ficheiros
+    with col_upload:
+        with st.container():
+            st.markdown('<div class="upload-card">', unsafe_allow_html=True)
+            st.markdown("### 📥 Carregar múltiplos ficheiros")
+            
+            ficheiros_carregados = st.file_uploader(
+                "Selecione um ou mais ficheiros (Excel/CSV)",
+                type=["xlsx", "xls", "csv"],
+                accept_multiple_files=True,
+                key="upload_files"
+            )
+            
+            if st.button("🚀 EXECUTAR", type="primary", use_container_width=True):
+                if not ficheiros_carregados:
+                    st.error("Por favor, carregue pelo menos um ficheiro antes de executar.")
+                else:
+                    with st.spinner("A processar ficheiros..."):
+                        dados_ano_dir = os.path.join(PASTA_DADOS, str(ano_exec))
+                        os.makedirs(dados_ano_dir, exist_ok=True)
+                        
+                        for ficheiro in ficheiros_carregados:
+                            caminho_destino = os.path.join(dados_ano_dir, ficheiro.name)
+                            with open(caminho_destino, "wb") as f:
+                                f.write(ficheiro.getbuffer())
+                            st.success(f"✓ {ficheiro.name} guardado em {caminho_destino}")
+                        
+                        try:
+                            if operacao in ["Gerar balanços e relatórios (completo)", "Apenas relatórios"]:
+                                preparar_dados_moodle(ano_exec)
+                                st.success(f"Relatórios Excel preparados para {ano_exec}!")
+                            if operacao in ["Gerar balanços e relatórios (completo)", "Apenas balanços"]:
+                                gerar_balancos(ano_exec)
+                                st.success(f"Balanços gerados para {ano_exec}!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro durante a execução:\n\n{traceback.format_exc()}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
     # ======================== ÁREA DE FILTROS (Balanços, Relatórios e Dados) ========================
     st.markdown("---")
@@ -371,7 +401,8 @@ def mostrar_relatorios():
     with col_f1:
         tipo_filtro = st.multiselect(
             "Tipo de ficheiro",
-            ["Excel", "Word", "Balanços", "Relatórios", "Moodle"]
+            ["Excel", "Word", "Balanços", "Relatórios", "Moodle"],
+            key="tipo_filtro"
         )
     with col_f2:
         # Recolher anos disponíveis para balanços, relatórios e dados (sem "Todos")
@@ -396,9 +427,9 @@ def mostrar_relatorios():
         # Se não houver anos, definir um valor padrão
         if not anos_ordenados:
             anos_ordenados = ["2025"]  # valor dummy para evitar erro
-        ano_filtro = st.selectbox("Filtrar por Ano", anos_ordenados)
+        ano_filtro = st.selectbox("Filtrar por Ano", anos_ordenados, key="ano_filtro")
     with col_f3:
-        pesquisa = st.text_input("Pesquisar por nome", placeholder="digite parte do nome...")
+        pesquisa = st.text_input("Pesquisar por nome", placeholder="digite parte do nome...", key="pesquisa")
 
     # ======================== CARREGAR FICHEIROS (Balanços e Relatórios) ========================
     balancos_raw = listar_ficheiros(PASTA_BALANCO, extensoes=["*.docx"])
