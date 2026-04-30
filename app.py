@@ -39,14 +39,8 @@ def verificar_autenticacao():
         try:
             passwords_config = st.secrets["passwords"]
         except (KeyError, AttributeError):
-            # Fallback APENAS PARA TESTES LOCAIS - NÃO USAR EM PRODUÇÃO
-            st.warning("⚠️ Usando passwords hardcoded (apenas desenvolvimento).")
-            passwords_config = {
-                "admin": "admin123",
-                "gestor_BALANÇOS": "balancos123",
-                "gestor_qualidade": "qualidade123",
-                "gestor_questionarios": "questionarios123"
-            }
+            st.error("❌ Configuração de segurança em falta. Contacte o administrador.")
+            st.stop()
         
         # Verifica qual password corresponde
         role_encontrado = None
