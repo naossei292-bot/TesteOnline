@@ -39,7 +39,7 @@ def verificar_autenticacao():
         try:
             passwords_config = st.secrets["passwords"]
         except (KeyError, AttributeError):
-            st.error("❌ Configuração de segurança em falta. Contacte o administrador.")
+            st.error("❌ Configuração de passwords não encontrada. Verifique o ficheiro secrets.toml.")
             st.stop()
         
         # Verifica qual password corresponde
