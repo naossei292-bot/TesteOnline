@@ -136,7 +136,7 @@ if "📚 Balanços e Relatórios" in paginas_autorizadas:
         st.session_state.pagina = "📚 Balanços e Relatórios"
         st.rerun()
 
-# --- Questionários ---
+# --- Questionarios ---
 if "📋 Questionários" in paginas_autorizadas:
     if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
         st.session_state.pagina = "📋 Questionários"
