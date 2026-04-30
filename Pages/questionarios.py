@@ -624,84 +624,111 @@ def mostrar_questionarios():
 
     st.markdown("---")
 
-    # ── Filtros ────────────────────────────────────────────────
+        # ── Filtros (agora sempre visíveis, fora do expansor) ──
     df_atual = garantir_todas_colunas(st.session_state.quest_editaveis.copy())
 
-    with st.expander("🔍 Filtrar visualização"):
-        if not df_atual.empty and df_atual["Shortname"].notna().any():
-            col_f1, col_f2, col_f3 = st.columns(3)
+    # Aplicar filtros diretamente
+    df_filtrado = df_atual.copy()
+    
+    # Título dos filtros
+    st.markdown("## 🔍 Filtros")
+    
+    if not df_atual.empty and df_atual["Shortname"].notna().any():
+        # Primeira linha de filtros
+        col_f1, col_f2, col_f3 = st.columns(3)
 
-            with col_f1:
-                centros       = sorted(df_atual["Centro"].dropna().unique())
-                filtro_centro = st.multiselect("Centro", centros, default=centros, key="fq_centro")
-            with col_f2:
-                modulos       = sorted(df_atual["Módulo"].dropna().unique())
-                filtro_modulo = st.multiselect("Módulo", modulos, default=modulos, key="fq_modulo")
-            with col_f3:
-                folhas        = sorted(df_atual["Folha"].dropna().unique())
-                filtro_folha  = st.multiselect("Folha", folhas, default=folhas, key="fq_folha")
+        with col_f1:
+            centros = sorted(df_atual["Centro"].dropna().unique())
+            filtro_centro = st.multiselect("Centro", centros, default=[], key="fq_centro")
+        
+        with col_f2:
+            modulos = sorted(df_atual["Módulo"].dropna().unique())
+            filtro_modulo = st.multiselect("Módulo", modulos, default=[], key="fq_modulo")
+        
+        with col_f3:
+            folhas = sorted(df_atual["Folha"].dropna().unique())
+            filtro_folha = st.multiselect("Folha", folhas, default=[], key="fq_folha")
 
-            col_f4, col_f5 = st.columns(2)
-            with col_f4:
-                respondentes      = sorted(df_atual["Respondente"].dropna().unique())
-                filtro_respondente = st.multiselect("Respondente", respondentes, default=respondentes, key="fq_respondente")
-            with col_f5:
-                modalidades       = sorted(df_atual["Modalidade"].dropna().unique())
-                filtro_modalidade = st.multiselect("Modalidade", modalidades, default=modalidades, key="fq_modalidade")
+        # Segunda linha de filtros
+        col_f4, col_f5, col_f6 = st.columns(3)
+        
+        with col_f4:
+            respondentes = sorted(df_atual["Respondente"].dropna().unique())
+            filtro_respondente = st.multiselect("Respondente", respondentes, default=[], key="fq_respondente")
+        
+        with col_f5:
+            modalidades = sorted(df_atual["Modalidade"].dropna().unique())
+            filtro_modalidade = st.multiselect("Modalidade", modalidades, default=[], key="fq_modalidade")
+        
+        with col_f6:
+            u_status_list = sorted(df_atual["U_status"].dropna().unique())
+            filtro_status = st.multiselect("Status", u_status_list, default=[], key="fq_status")
 
-            col_d1, col_d2 = st.columns(2)
-            df_datas       = df_atual.copy()
-            df_datas["Datini_dt"] = pd.to_datetime(df_datas["Datini"], errors="coerce")
-            data_min       = df_datas["Datini_dt"].min()
-            data_max       = df_datas["Datini_dt"].max()
+        # Terceira linha: Datas
+        col_d1, col_d2 = st.columns(2)
+        df_datas = df_atual.copy()
+        df_datas["Datini_dt"] = pd.to_datetime(df_datas["Datini"], errors="coerce")
+        data_min = df_datas["Datini_dt"].min()
+        data_max = df_datas["Datini_dt"].max()
 
-            with col_d1:
-                filtro_data_ini = (
-                    st.date_input("Data início (a partir de)", value=data_min.date(), key="fq_data_ini")
-                    if pd.notna(data_min) else None
-                )
-            with col_d2:
-                filtro_data_fim = (
-                    st.date_input("Data início (até)", value=data_max.date(), key="fq_data_fim")
-                    if pd.notna(data_max) else None
-                )
+        with col_d1:
+            filtro_data_ini = (
+                st.date_input("Data início (a partir de)", value=data_min.date(), key="fq_data_ini")
+                if pd.notna(data_min) else None
+            )
+        with col_d2:
+            filtro_data_fim = (
+                st.date_input("Data início (até)", value=data_max.date(), key="fq_data_fim")
+                if pd.notna(data_max) else None
+            )
+        
+        # Botão para limpar todos os filtros
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 2])
+        with col_btn1:
+            if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
+                st.session_state.filtros_limpos = True
+                st.rerun()
+        
+        # Aplicar filtros
+        if filtro_centro:
+            df_filtrado = df_filtrado[
+                df_filtrado["Centro"].isin(filtro_centro) | df_filtrado["Centro"].isna()
+            ]
+        if filtro_modulo:
+            df_filtrado = df_filtrado[df_filtrado["Módulo"].isin(filtro_modulo)]
+        if filtro_folha:
+            df_filtrado = df_filtrado[df_filtrado["Folha"].isin(filtro_folha)]
+        if filtro_respondente:
+            df_filtrado = df_filtrado[df_filtrado["Respondente"].isin(filtro_respondente)]
+        if filtro_modalidade:
+            df_filtrado = df_filtrado[df_filtrado["Modalidade"].isin(filtro_modalidade)]
+        if filtro_status:
+            df_filtrado = df_filtrado[df_filtrado["U_status"].isin(filtro_status)]
+        if filtro_data_ini and filtro_data_fim:
+            df_datas_f = df_filtrado.copy()
+            df_datas_f["Datini_dt"] = pd.to_datetime(df_datas_f["Datini"], errors="coerce")
+            mask_data = df_datas_f["Datini_dt"].isna() | (
+                (df_datas_f["Datini_dt"].dt.date >= filtro_data_ini) &
+                (df_datas_f["Datini_dt"].dt.date <= filtro_data_fim)
+            )
+            df_filtrado = df_filtrado[mask_data.values]
+        
+        # Mostrar contagem de registos filtrados
+        st.markdown(f"**📊 {len(df_filtrado):,} registos após filtros** (total: {len(df_atual):,})")
+        
+        # Linha separadora
+        st.markdown("---")
+        
+    else:
+        st.info("Carregue ficheiros para ativar os filtros.")
+        df_filtrado = df_atual
 
-            df_filtrado = df_atual.copy()
-            if filtro_centro:
-                df_filtrado = df_filtrado[
-                    df_filtrado["Centro"].isin(filtro_centro) | df_filtrado["Centro"].isna()
-                ]
-            if filtro_modulo:
-                df_filtrado = df_filtrado[df_filtrado["Módulo"].isin(filtro_modulo)]
-            if filtro_folha:
-                df_filtrado = df_filtrado[df_filtrado["Folha"].isin(filtro_folha)]
-            if filtro_respondente:
-                df_filtrado = df_filtrado[df_filtrado["Respondente"].isin(filtro_respondente)]
-            if filtro_modalidade:
-                df_filtrado = df_filtrado[df_filtrado["Modalidade"].isin(filtro_modalidade)]
-            if filtro_data_ini and filtro_data_fim:
-                df_datas_f = df_filtrado.copy()
-                df_datas_f["Datini_dt"] = pd.to_datetime(df_datas_f["Datini"], errors="coerce")
-                mask_data = df_datas_f["Datini_dt"].isna() | (
-                    (df_datas_f["Datini_dt"].dt.date >= filtro_data_ini) &
-                    (df_datas_f["Datini_dt"].dt.date <= filtro_data_fim)
-                )
-                df_filtrado = df_filtrado[mask_data.values]
-
-            if not df_filtrado.empty:
-                st.markdown(f"**📋 Visualização filtrada:** {len(df_filtrado)} registos")
-                st.dataframe(
-                    df_filtrado.drop(columns=["Apagar"], errors="ignore"),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            else:
-                st.info("Nenhum registo corresponde aos filtros selecionados.")
-        else:
-            st.info("Carregue ficheiros para ativar os filtros.")
+    # Reset dos filtros se necessário
+    if st.session_state.get("filtros_limpos", False):
+        st.session_state.filtros_limpos = False
+        st.rerun()
 
     # ── Adicionar linhas ───────────────────────────────────────
-    st.markdown("---")
     st.subheader("➕ Adicionar linhas vazias")
     col_add1, col_add2 = st.columns([1, 2])
     with col_add1:
@@ -720,30 +747,27 @@ def mostrar_questionarios():
             st.rerun()
 
     # ── Exportar ───────────────────────────────────────────────
-    # O Excel só é regenerado quando os dados mudam (via hash).
     df_para_export = st.session_state.quest_editaveis.drop(columns=["Apagar"], errors="ignore").copy()
-    tem_dados      = not df_para_export.empty and df_para_export["Shortname"].notna().any()
+    tem_dados = not df_para_export.empty and df_para_export["Shortname"].notna().any()
 
     if tem_dados:
         COLS_FILTRO_EXP = ["Centro", "Shortname", "Datini", "Datfim", "U_status",
                            "Respondente", "Modalidade", "Tipo"]
-        COLS_REST_EXP   = [c for c in COLUNAS_DADOS if c not in COLS_FILTRO_EXP]
-        ordem_exp       = [c for c in COLS_FILTRO_EXP + COLS_REST_EXP if c in df_para_export.columns]
-        df_exp          = df_para_export[ordem_exp].copy()
+        COLS_REST_EXP = [c for c in COLUNAS_DADOS if c not in COLS_FILTRO_EXP]
+        ordem_exp = [c for c in COLS_FILTRO_EXP + COLS_REST_EXP if c in df_para_export.columns]
+        df_exp = df_para_export[ordem_exp].copy()
 
-        # ── MELHORIA 2: formatação de datas vectorizada ────────────────────────
         for col_data in ["Datini", "Datfim", "Data"]:
             if col_data in df_exp.columns:
                 df_exp[col_data] = formatar_coluna_data(df_exp[col_data])
 
-        # ── MELHORIA 3: só regenera Excel se os dados mudaram ─────────────────
         hash_atual = hash_df(df_exp)
         if st.session_state.quest_excel_hash != hash_atual:
             st.session_state.quest_excel_cache = _gerar_excel_com_filtros(df_exp)
-            st.session_state.quest_excel_hash  = hash_atual
+            st.session_state.quest_excel_hash = hash_atual
 
     st.markdown("---")
-    st.subheader("📎 Exportar dados com filtros")
+    st.subheader("📎 Exportar Tabela de Questionários")
     st.caption("O ficheiro Excel inclui **filtros nativos** em todas as colunas — Centro, Ação, Data, Respondente, U_status, etc.")
 
     if st.session_state.quest_excel_cache is not None:
@@ -758,37 +782,58 @@ def mostrar_questionarios():
     else:
         st.info("Carregue dados para activar a exportação.")
 
-    # ── Tabela editável ────────────────────────────────────────
+    # ── Tabela editável PRINCIPAL (com os dados filtrados) ────────
     st.markdown("---")
     st.subheader("✏️ Tabela de questionários")
 
+    # Verificar se há filtros aplicados
+    if len(df_filtrado) != len(df_atual):
+        st.info(f"📌 A mostrar {len(df_filtrado)} registos filtrados (de {len(df_atual)} totais)")
+
     edited_df = st.data_editor(
-        df_atual,
+        df_filtrado,  # Usar df_filtrado em vez de df_atual
         use_container_width=True,
         num_rows="dynamic",
         height=420,
         key=f"quest_editor_{st.session_state.quest_editor_key}",
         column_config={
-            "Apagar":      st.column_config.CheckboxColumn("Apagar", default=False),
+            "Apagar": st.column_config.CheckboxColumn("Apagar", default=False),
             "Valor Médio": st.column_config.NumberColumn("Valor Médio", format="%.2f"),
         },
     )
 
-    # ── MELHORIA 3: comparação por hash em vez de .astype(str).equals() ───────
-    if hash_df(edited_df) != hash_df(df_atual):
-        st.session_state.quest_editaveis  = edited_df
+    # Quando o utilizador edita a tabela filtrada, temos que fazer o merge com os dados originais
+    if hash_df(edited_df) != hash_df(df_filtrado):
+        # Criar um índice para fazer o merge
+        if len(edited_df) == len(df_filtrado) and len(df_filtrado) > 0:
+            # Preservar as alterações feitas nos dados filtrados
+            # Encontrar as linhas que foram editadas baseado no índice
+            for idx in edited_df.index:
+                if idx < len(df_filtrado):
+                    original_row = df_filtrado.iloc[idx]
+                    edited_row = edited_df.iloc[idx]
+                    
+                    # Encontrar a linha correspondente no df completo
+                    mask = (st.session_state.quest_editaveis["Shortname"] == original_row.get("Shortname")) & \
+                           (st.session_state.quest_editaveis["Item"] == original_row.get("Item"))
+                    
+                    if mask.any():
+                        for col in edited_row.index:
+                            if col in st.session_state.quest_editaveis.columns:
+                                st.session_state.quest_editaveis.loc[mask, col] = edited_row[col]
+        
         st.session_state.quest_editor_key += 1
         st.rerun()
 
-    # ── Apagar selecionados ────────────────────────────────────
+ # ── Apagar selecionados ────────────────────────────────────
     st.markdown("---")
     if st.button("✖️ Apagar selecionados", use_container_width=True):
-        df   = st.session_state.quest_editaveis.copy()
+        df = st.session_state.quest_editaveis.copy()
         mask = df.get("Apagar", pd.Series(False, index=df.index)) == True
         if mask.any():
-            df             = df[~mask].reset_index(drop=True)
-            df["Apagar"]   = False
-            st.session_state.quest_editaveis  = df
+            df = df[~mask].reset_index(drop=True)
+            df["Apagar"] = False
+            st.session_state.quest_editaveis = df
             st.session_state.quest_editor_key += 1
             st.rerun()
         else:
