@@ -68,7 +68,7 @@ if not verificar_autenticacao():
 # ============================================
 PERMISSOES = {
     "admin": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial", 
         "📚 Balanços e Relatórios",
         "📋 Questionários",
         "🎯 Gestão de Qualidade",
@@ -78,18 +78,18 @@ PERMISSOES = {
         "📊 Dashboard - Questionários"
     ],
     "gestor_BALANCOS": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
     ],
     "gestor_qualidade": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
         "⚔️ Comparador Versus"
     ],
     "gestor_questionarios": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial", 
         "📋 Questionários",
         "📊 Dashboard - Questionários"
     ]
