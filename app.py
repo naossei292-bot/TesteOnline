@@ -142,12 +142,6 @@ if "📚 Balanços e Relatórios" in paginas_autorizadas:
         st.session_state.pagina = "📚 Balanços e Relatórios"
         st.rerun()
 
-# --- Cursos (apenas para quem tem permissão) ---
-if "📚 Cursos" in paginas_autorizadas:
-    if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
-        st.session_state.pagina = "📚 Cursos"
-        st.rerun()
-
 # --- Questionários ---
 if "📋 Questionários" in paginas_autorizadas:
     if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
@@ -159,6 +153,13 @@ if "📊 Dashboard - Questionários" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Questionários"
         st.rerun()
 
+
+# --- Cursos (apenas para quem tem permissão) ---
+if "📚 Cursos" in paginas_autorizadas:
+    if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
+        st.session_state.pagina = "📚 Cursos"
+        st.rerun()
+        
 # --- Gestão de Qualidade ---
 if "🎯 Gestão de Qualidade" in paginas_autorizadas:
     if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):

@@ -6,7 +6,7 @@ import unicodedata
 import re
 
 # ------------------------------------------------------------
-# Funções auxiliares (caso não existam em utils.data_utils)
+# Funções auxiliares
 # ------------------------------------------------------------
 def get_col(df, pattern):
     """Retorna a primeira coluna cujo nome contenha o pattern (case-insensitive)."""
@@ -24,7 +24,6 @@ def aplicar_filtros(df):
     if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro:
         if 'Centro' in df.columns:
             df = df[df['Centro'].isin(st.session_state.filtro_centro)]
-    # Outros filtros podem ser adicionados aqui (datas, etc.)
     return df
 
 # ------------------------------------------------------------
@@ -33,24 +32,27 @@ def aplicar_filtros(df):
 def mostrar_qualidade():
     st.header("🎯 Scorecard de Qualidade Pedagógica")
 
-    # ----- Dados dos Cursos (da página "Análise de Formações") -----
-    df_cursos_raw = st.session_state.get("acoes_editaveis", None)
+    # ----- Dados dos Cursos (NOVA ESTRUTURA: usa st.session_state.acoes_df) -----
+    df_cursos_raw = st.session_state.get("acoes_df", None)   # <--- ALTERADO
     if df_cursos_raw is not None and not df_cursos_raw.empty:
         if "Apagar" in df_cursos_raw.columns:
             df_cursos_raw = df_cursos_raw.drop(columns=["Apagar"])
         # Conversões de tipo
-        for col in ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        for col in ["Inscritos", "Aptos", "Inaptos", "Desistentes",
                     "Taxa de satisfação Final", "Avaliação formador",
                     "Valor total a receber", "Valor Total Recebido"]:
             if col in df_cursos_raw.columns:
                 df_cursos_raw[col] = pd.to_numeric(df_cursos_raw[col], errors="coerce")
+        # A coluna "Devedores" pode chamar-se "Devedor" na nova estrutura
+        if "Devedor" in df_cursos_raw.columns:
+            df_cursos_raw["Devedores"] = df_cursos_raw["Devedor"]   # compatibilidade
         for col in ["Data Inicial", "Data Final"]:
             if col in df_cursos_raw.columns:
                 df_cursos_raw[col] = pd.to_datetime(df_cursos_raw[col], errors="coerce", dayfirst=True)
     else:
         df_cursos_raw = None
 
-    # ----- Dados dos Questionários (se existirem) -----
+    # ----- Dados dos Questionários (inalterado) -----
     df_quest_raw = st.session_state.get("quest_editaveis", None)
 
     # Aplicar filtros (centro, datas, etc.)
@@ -60,7 +62,7 @@ def mostrar_qualidade():
     has_cursos = df_cursos is not None and not df_cursos.empty
     has_quest = df_quest is not None and not df_quest.empty
 
-    # Inicializar objectivos (metas) no session_state
+    # Inicializar objectivos (metas) no session_state (inalterado)
     if 'obj_satisfacao' not in st.session_state:
         st.session_state.obj_satisfacao = 4.2
     if 'obj_conclusao' not in st.session_state:
@@ -86,7 +88,7 @@ def mostrar_qualidade():
     if 'obj_conformidade' not in st.session_state:
         st.session_state.obj_conformidade = 100.0
 
-    # Expander para editar as metas
+    # Expander para editar as metas (inalterado)
     with st.expander("⚙️ Definir Objetivos (Metas) dos KPI's", expanded=False):
         st.markdown("Ajuste os valores desejados para cada indicador:")
         col1, col2 = st.columns(2)
@@ -200,7 +202,7 @@ def mostrar_qualidade():
     avaliacao_formador_valor = media_formador_quest if media_formador_quest is not None else 0
 
     # ------------------------------------------------------------
-    # CSS personalizado para os cards
+    # CSS personalizado para os cards (inalterado)
     # ------------------------------------------------------------
     st.markdown("""
     <style>
@@ -235,9 +237,6 @@ def mostrar_qualidade():
         color: var(--text-color);
         opacity: 0.6;
     }
-    .detail-button {
-        margin-top: 10px;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -247,14 +246,12 @@ def mostrar_qualidade():
     if 'detalhe_ativo' not in st.session_state:
         st.session_state.detalhe_ativo = None
 
-    # Função para alternar o detalhe
     def set_detalhe(kpi):
         if st.session_state.detalhe_ativo == kpi:
-            st.session_state.detalhe_ativo = None   # fecha se clicar no mesmo
+            st.session_state.detalhe_ativo = None
         else:
-            st.session_state.detalhe_ativo = kpi    # abre o novo, fechando o anterior
+            st.session_state.detalhe_ativo = kpi
 
-    # Layout em 5 colunas (3 + 2)
     col1, col2, col3 = st.columns(3)
     col4, col5 = st.columns(2)
 
@@ -296,6 +293,7 @@ def mostrar_qualidade():
         """, unsafe_allow_html=True)
         if st.button("🔍 Ver detalhes", key="btn_aprov", use_container_width=True):
             set_detalhe('aprov')
+
     with col4:
         if cumprimento_plano is not None:
             delta_plano = cumprimento_plano - st.session_state.obj_plano
@@ -340,31 +338,22 @@ def mostrar_qualidade():
         if st.button("🔍 Ver detalhes", key="btn_avf", use_container_width=True):
             set_detalhe('avf')
 
-    # ---------- ÁREAS DE DETALHE (apenas uma aberta de cada vez) ----------
-    # Satisfação
-        # Satisfação
+    # ---------- ÁREAS DE DETALHE (mantidas inalteradas, mas com referência ao novo df_cursos) ----------
     if st.session_state.detalhe_ativo == 'sat':
         with st.expander("📊 Detalhe da Satisfação dos Formandos", expanded=True):
             st.markdown("**Dados que compõem este indicador:**")
             if has_quest and "Média" in df_quest.columns:
                 df_sat = df_quest[['Ação', 'Centro', 'Categoria', 'Média', 'Respondente']].copy()
-                # Garantir que a coluna Média é numérica
                 df_sat['Média'] = pd.to_numeric(df_sat['Média'], errors='coerce')
                 meta_sat = st.session_state.obj_satisfacao
-                
                 def highlight_by_goal(val, meta):
                     if pd.notna(val):
                         if val < meta:
-                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'   # vermelho
+                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
                         else:
-                            return 'background-color: #d4edda; border-left: 4px solid #28a745;'   # verde claro
+                            return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                     return ''
-
-                styled_sat = df_sat.style.map(
-                    lambda x: highlight_by_goal(x, meta_sat),
-                    subset=['Média']
-                )
-                
+                styled_sat = df_sat.style.map(lambda x: highlight_by_goal(x, meta_sat), subset=['Média'])
                 st.markdown("**Filtros:**")
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
@@ -376,11 +365,7 @@ def mostrar_qualidade():
                     df_filt = df_filt[df_filt['Centro'].isin(centros)]
                 if categorias:
                     df_filt = df_filt[df_filt['Categoria'].isin(categorias)]
-                # Reaplicar estilo no DataFrame filtrado
-                styled_filt = df_filt.style.map(
-                    lambda x: highlight_by_goal(x, meta_sat),
-                    subset=['Média']
-                )
+                styled_filt = df_filt.style.map(lambda x: highlight_by_goal(x, meta_sat), subset=['Média'])
                 st.dataframe(styled_filt, use_container_width=True)
                 st.caption(f"Média global: {df_filt['Média'].mean():.2f} | Total de respostas: {len(df_filt)}")
             else:
@@ -389,21 +374,16 @@ def mostrar_qualidade():
                     df_sat_cursos = df_cursos[['Ação', 'Centro', 'Taxa de satisfação Final']].dropna()
                     df_sat_cursos['Taxa de satisfação Final'] = pd.to_numeric(df_sat_cursos['Taxa de satisfação Final'], errors='coerce')
                     meta_sat = st.session_state.obj_satisfacao
-                    
                     def highlight_by_goal_sat(val):
                         if pd.notna(val):
                             if val < meta_sat:
-                                return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'   # vermelho
+                                return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
                             else:
-                                return 'background-color: #d4edda; border-left: 4px solid #28a745;'   # verde claro 
+                                return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                         return ''
-                    
-                    styled_cursos = df_sat_cursos.style.map(
-                        highlight_by_goal_sat,
-                        subset=['Taxa de satisfação Final']
-                    )
+                    styled_cursos = df_sat_cursos.style.map(highlight_by_goal_sat, subset=['Taxa de satisfação Final'])
                     st.dataframe(styled_cursos, use_container_width=True)
-    # Taxa de Conclusão
+
     if st.session_state.detalhe_ativo == 'conc':
         with st.expander("📊 Detalhe da Taxa de Conclusão", expanded=True):
             if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Inscritos', 'Aptos', 'Inaptos']):
@@ -411,18 +391,15 @@ def mostrar_qualidade():
                 df_conc['Concluíram'] = df_conc['Aptos'] + df_conc['Inaptos']
                 df_conc['Taxa_Conclusão_%'] = (df_conc['Concluíram'] / df_conc['Inscritos'] * 100).round(1)
                 meta_conc = st.session_state.obj_conclusao
-                
                 def highlight_row(row):
                     if pd.notna(row['Taxa_Conclusão_%']):
                         if row['Taxa_Conclusão_%'] < meta_conc:
-                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)  # vermelho
+                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
                         else:
-                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)  # verde claro
+                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)
                     return [''] * len(row)
-                
                 styled_conc = df_conc.style.apply(highlight_row, axis=1)
                 st.dataframe(styled_conc, use_container_width=True)
-                
                 st.markdown("**Filtros:**")
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
@@ -440,7 +417,6 @@ def mostrar_qualidade():
             else:
                 st.warning("Dados insuficientes para calcular conclusão por curso.")
 
-    # Taxa de Aprovação
     if st.session_state.detalhe_ativo == 'aprov':
         with st.expander("📊 Detalhe da Taxa de Aprovação", expanded=True):
             if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Aptos', 'Inaptos']):
@@ -448,30 +424,15 @@ def mostrar_qualidade():
                 df_aprov['Avaliados'] = df_aprov['Aptos'] + df_aprov['Inaptos']
                 df_aprov['Taxa_Aprovação_%'] = (df_aprov['Aptos'] / df_aprov['Avaliados'] * 100).round(1)
                 meta_aprov = st.session_state.obj_aprovacao
-                
-                # Taxa de Aprovação
-                if st.session_state.detalhe_ativo == 'aprov':
-                    with st.expander("📊 Detalhe da Taxa de Aprovação", expanded=True):
-                        if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Aptos', 'Inaptos']):
-                            df_aprov = df_cursos[['Ação', 'Centro', 'Aptos', 'Inaptos']].copy()
-                            df_aprov['Avaliados'] = df_aprov['Aptos'] + df_aprov['Inaptos']
-                            df_aprov['Taxa_Aprovação_%'] = (df_aprov['Aptos'] / df_aprov['Avaliados'] * 100).round(1)
-                            meta_aprov = st.session_state.obj_aprovacao
-                            
-                            # CORREÇÃO: agora usa a coluna correta e pinta verde se >= meta
-                            def highlight_row(row):
-                                if pd.notna(row['Taxa_Aprovação_%']):
-                                    if row['Taxa_Aprovação_%'] < meta_aprov:
-                                        return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)  # vermelho
-                                    else:
-                                        return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)  # verde claro
-                                return [''] * len(row)
-                            
-                            styled_aprov = df_aprov.style.apply(highlight_row, axis=1)
-                            st.dataframe(styled_aprov, use_container_width=True)
-                            
-                            # ... resto do código (filtros, etc.) mantém-se igual ...
-                
+                def highlight_row(row):
+                    if pd.notna(row['Taxa_Aprovação_%']):
+                        if row['Taxa_Aprovação_%'] < meta_aprov:
+                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
+                        else:
+                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)
+                    return [''] * len(row)
+                styled_aprov = df_aprov.style.apply(highlight_row, axis=1)
+                st.dataframe(styled_aprov, use_container_width=True)
                 st.markdown("**Filtros:**")
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
@@ -489,7 +450,6 @@ def mostrar_qualidade():
             else:
                 st.warning("Dados insuficientes para calcular aprovação por curso.")
 
-    # Cumprimento do Plano
     if st.session_state.detalhe_ativo == 'plano':
         with st.expander("📊 Detalhe do Cumprimento do Plano", expanded=True):
             if has_cursos and "Status" in df_cursos.columns:
@@ -514,7 +474,6 @@ def mostrar_qualidade():
             else:
                 st.info("Coluna 'Status' não disponível nos cursos.")
 
-    # Avaliação dos Formadores
     if st.session_state.detalhe_ativo == 'avf':
         with st.expander("📊 Detalhe da Avaliação dos Formadores", expanded=True):
             if has_quest and "Média" in df_quest.columns and "Respondente" in df_quest.columns:
@@ -522,7 +481,6 @@ def mostrar_qualidade():
                 if not df_avf.empty:
                     df_avf['Média'] = pd.to_numeric(df_avf['Média'], errors='coerce')
                     meta_avf = st.session_state.obj_formador
-                    
                     def highlight_by_goal(val, meta):
                         if pd.notna(val):
                             if val < meta:
@@ -530,10 +488,8 @@ def mostrar_qualidade():
                             else:
                                 return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                         return ''
-
                     styled_avf = df_avf.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Média'])
                     st.dataframe(styled_avf, use_container_width=True)
-                    
                     st.markdown("**Filtros:**")
                     col_f1, col_f2 = st.columns(2)
                     with col_f1:
@@ -555,7 +511,6 @@ def mostrar_qualidade():
                 df_avf_cursos['Avaliação formador'] = pd.to_numeric(df_avf_cursos['Avaliação formador'], errors='coerce')
                 df_avf_cursos = df_avf_cursos.dropna(subset=['Avaliação formador'])
                 meta_avf = st.session_state.obj_formador
-                
                 def highlight_by_goal(val, meta):
                     if pd.notna(val):
                         if val < meta:
@@ -563,10 +518,8 @@ def mostrar_qualidade():
                         else:
                             return 'background-color: #d4edda; border-left: 4px solid #28a745;'
                     return ''
-                
                 styled_cursos = df_avf_cursos.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Avaliação formador'])
                 st.dataframe(styled_cursos, use_container_width=True)
-                
                 st.markdown("**Filtros:**")
                 col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
@@ -575,7 +528,6 @@ def mostrar_qualidade():
                     acoes = st.multiselect("Ação", options=sorted(df_avf_cursos['Ação'].unique()), key="avf_cursos_acao")
                 with col_f3:
                     formadores = st.multiselect("Formador", options=sorted(df_avf_cursos['Formador'].unique()), key="avf_cursos_formador")
-                
                 df_filt_cursos = df_avf_cursos.copy()
                 if centros:
                     df_filt_cursos = df_filt_cursos[df_filt_cursos['Centro'].isin(centros)]
@@ -583,21 +535,20 @@ def mostrar_qualidade():
                     df_filt_cursos = df_filt_cursos[df_filt_cursos['Ação'].isin(acoes)]
                 if formadores:
                     df_filt_cursos = df_filt_cursos[df_filt_cursos['Formador'].isin(formadores)]
-                
                 styled_filt_cursos = df_filt_cursos.style.map(lambda x: highlight_by_goal(x, meta_avf), subset=['Avaliação formador'])
                 st.dataframe(styled_filt_cursos, use_container_width=True)
                 st.caption(f"Média: {df_filt_cursos['Avaliação formador'].mean():.2f} | Total registos: {len(df_filt_cursos)}")
             else:
                 st.warning("Sem dados de avaliação de formadores.")
+
     # ------------------------------------------------------------
-    # KPI 4 – Ações com mais de um formador
+    # KPI 4 – Ações com mais de um formador (compatível com nova estrutura)
     # ------------------------------------------------------------
     if has_cursos and "Formador" in df_cursos.columns:
         def contar_formadores(valor):
             if pd.isna(valor):
                 return 0
             valor_str = str(valor)
-            # Separadores comuns
             for sep in [',', ';', '/', ' e ']:
                 if sep in valor_str:
                     return len([n.strip() for n in re.split(r'[,;/]| e ', valor_str) if n.strip()])
@@ -621,7 +572,7 @@ def mostrar_qualidade():
     else:
         st.info("Carregue um ficheiro de cursos com a coluna 'Formador' para ver ações com múltiplos formadores.")
 
-    # ------------------------------------------------------------
+        # ------------------------------------------------------------
     # KPI 5 – Taxa de Substituição de Formadores (com edição)
     # ------------------------------------------------------------
     st.markdown("---")
@@ -645,8 +596,14 @@ def mostrar_qualidade():
         # Preparar DataFrame para edição
         df_edit_formadores = df_cursos[["Ação", "Formador"]].copy()
         df_edit_formadores.columns = ["ID Ação", "Formador Atual"]
+
+        # 🔧 CORREÇÃO: converter colunas para string (evita erro de tipo float vs TextColumn)
+        df_edit_formadores["Formador Atual"] = df_edit_formadores["Formador Atual"].astype(str)
+
         original_map = st.session_state.formadores_originais_exibicao.set_index("Ação")["Formador"].to_dict()
         df_edit_formadores["Formador Original"] = df_edit_formadores["ID Ação"].map(original_map)
+        df_edit_formadores["Formador Original"] = df_edit_formadores["Formador Original"].astype(str)
+
         df_edit_formadores = df_edit_formadores[["ID Ação", "Formador Original", "Formador Atual"]]
 
         st.info("✏️ Edite o campo 'Formador Atual' para simular uma substituição. O KPI será atualizado automaticamente.")
@@ -671,7 +628,7 @@ def mostrar_qualidade():
                     mask = df_cursos["Ação"] == acao
                     if mask.any():
                         df_cursos.loc[mask, "Formador"] = novo_formador
-                st.session_state.acoes_editaveis = df_cursos
+                st.session_state.acoes_df = df_cursos   # guarda no state atualizado
                 st.success("✅ Formadores atualizados! A página vai recarregar.")
                 st.rerun()
 
@@ -718,7 +675,7 @@ def mostrar_qualidade():
         st.info("Carregue um ficheiro de cursos com as colunas 'Ação' e 'Formador' para calcular a taxa de substituição.")
 
     # ------------------------------------------------------------
-    # KPI 6 e 7 – Incidentes Operacionais e TMRP
+    # KPI 6 e 7 – Incidentes Operacionais e TMRP (inalterado)
     # ------------------------------------------------------------
     st.markdown("---")
     st.subheader("⚠️ Incidentes Operacionais e Resolução")
@@ -763,7 +720,6 @@ def mostrar_qualidade():
             try:
                 df_inc = pd.read_excel(incidente_file)
                 df_inc.columns = df_inc.columns.str.strip()
-                # Validar colunas obrigatórias
                 required = ['Ação', 'Centro', 'Descrição', 'Status', 'Data_Abertura']
                 missing = [c for c in required if c not in df_inc.columns]
                 if missing:
@@ -781,25 +737,22 @@ def mostrar_qualidade():
 
     if df_inc is not None:
         try:
-            # Converter datas
             df_inc['Data_Abertura'] = pd.to_datetime(df_inc['Data_Abertura'], errors='coerce')
             if 'Data_Resolução' in df_inc.columns:
                 df_inc['Data_Resolução'] = pd.to_datetime(df_inc['Data_Resolução'], errors='coerce')
             else:
                 df_inc['Data_Resolução'] = pd.NaT
 
-            # Normalizar Status (mapeamento para categorias padrão)
             status_map = {
                 'aberto': 'Aberto',
                 'em resolução': 'Em resolução',
                 'resolvido': 'Resolvido',
-                'aprovado': 'Resolvido',   # se existir "Aprovado", trata como resolvido
+                'aprovado': 'Resolvido',
                 '': 'Aberto',
                 None: 'Aberto'
             }
             df_inc['Status'] = df_inc['Status'].astype(str).str.lower().map(status_map).fillna('Desconhecido')
 
-            # Calcular TMRP em horas (apenas para resolvidos com ambas as datas)
             mask_resolvido = (df_inc['Status'] == 'Resolvido') & df_inc['Data_Abertura'].notna() & df_inc['Data_Resolução'].notna()
             df_inc['TMRP_horas'] = None
             df_inc.loc[mask_resolvido, 'TMRP_horas'] = (
@@ -807,16 +760,13 @@ def mostrar_qualidade():
                 .dt.total_seconds() / 3600
             )
 
-            # Aplicar filtro de centro (global)
             if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro and 'Centro' in df_inc.columns:
                 df_inc = df_inc[df_inc['Centro'].isin(st.session_state.filtro_centro)]
 
             if not df_inc.empty:
-                # ---------- KPI 6: Nº Incidentes e tendência mensal ----------
                 total_incidentes = len(df_inc)
                 st.metric("📌 Nº Total de Incidentes Operacionais", total_incidentes)
 
-                # Gráfico de evolução mensal (Data_Abertura)
                 if not df_inc['Data_Abertura'].isna().all():
                     df_inc['AnoMes'] = df_inc['Data_Abertura'].dt.to_period('M')
                     incidentes_mensal = df_inc.groupby('AnoMes').size().reset_index(name='Quantidade')
@@ -830,7 +780,6 @@ def mostrar_qualidade():
                 else:
                     st.info("Sem datas de abertura válidas para evolução mensal.")
 
-                # ---------- KPI 7: TMRP ----------
                 df_resolvidos = df_inc[df_inc['Status'] == 'Resolvido']
                 tmrp_medio = df_resolvidos['TMRP_horas'].mean() if not df_resolvidos.empty else None
                 meta_tmrp = st.session_state.obj_tmrp
@@ -846,7 +795,6 @@ def mostrar_qualidade():
                 else:
                     st.metric(label="⏱️ Tempo Médio de Resolução (TMRP)", value="Sem incidentes resolvidos")
 
-                # ---------- Análise por Status ----------
                 st.subheader("📊 Distribuição por Estado")
                 status_counts = df_inc['Status'].value_counts().reindex(['Aberto', 'Em resolução', 'Resolvido'], fill_value=0)
                 col_s1, col_s2, col_s3 = st.columns(3)
@@ -857,7 +805,6 @@ def mostrar_qualidade():
                 with col_s3:
                     st.metric("🟢 Resolvido", status_counts.get('Resolvido', 0))
 
-                # Gráfico de barras dos estados
                 fig_status = px.bar(
                     x=status_counts.index, y=status_counts.values,
                     labels={'x': 'Estado', 'y': 'Nº Incidentes'},
@@ -867,17 +814,13 @@ def mostrar_qualidade():
                 )
                 st.plotly_chart(fig_status, use_container_width=True)
 
-                # ---------- Análise por Centro (TMRP e contagem) ----------
                 if 'Centro' in df_inc.columns:
                     st.subheader("🏢 Desempenho por Centro")
-                    # Contagem por centro e estado
                     centro_status = df_inc.groupby(['Centro', 'Status']).size().unstack(fill_value=0)
-                    # Garantir que as colunas de estado existem
                     for estado in ['Aberto', 'Em resolução', 'Resolvido']:
                         if estado not in centro_status.columns:
                             centro_status[estado] = 0
 
-                    # Contagem de resolvidos dentro e fora da meta (<=48h e >48h)
                     df_resolvidos_centro = df_resolvidos.copy()
                     if not df_resolvidos_centro.empty:
                         df_resolvidos_centro['Dentro_meta'] = df_resolvidos_centro['TMRP_horas'] <= 48
@@ -887,10 +830,7 @@ def mostrar_qualidade():
                         dentro_meta = pd.Series(dtype=int)
                         fora_meta = pd.Series(dtype=int)
 
-                    # TMRP médio por centro (apenas resolvidos)
                     tmrp_centro = df_resolvidos.groupby('Centro')['TMRP_horas'].mean().round(1)
-
-                    # Construir DataFrame de resumo
                     centros = centro_status.index
                     centro_resumo = pd.DataFrame(index=centros)
                     centro_resumo['Aberto'] = centro_status['Aberto']
@@ -899,26 +839,18 @@ def mostrar_qualidade():
                     centro_resumo['Resolvidos dentro da meta (≤48h)'] = dentro_meta.reindex(centros, fill_value=0)
                     centro_resumo['Resolvidos fora da meta (>48h)'] = fora_meta.reindex(centros, fill_value=0)
                     centro_resumo['TMRP médio (h)'] = tmrp_centro.reindex(centros)
-
-                    # Ordenar por centro
                     centro_resumo = centro_resumo.sort_index()
                     st.dataframe(centro_resumo, use_container_width=True)
 
-                # ---------- Tabela detalhada com datas e tempos (com filtros) ----------
                 st.subheader("📋 Lista detalhada de Incidentes")
-                
-                # Preparar DataFrame para exibição
                 df_display = df_inc.copy()
                 df_display['Tempo (horas)'] = df_display['TMRP_horas'].apply(lambda x: f"{x:.1f} h" if pd.notna(x) else "-")
                 df_display['Data Abertura'] = df_display['Data_Abertura'].dt.strftime('%d/%m/%Y')
                 df_display['Data Resolução'] = df_display['Data_Resolução'].dt.strftime('%d/%m/%Y')
                 cols_show = ['Ação', 'Centro', 'Descrição', 'Status', 'Data Abertura', 'Data Resolução', 'Tempo (horas)']
                 df_filtravel = df_display[cols_show].copy()
-                
-                # Criar filtros na sidebar da tabela (usando colunas)
                 st.markdown("**Filtros:**")
                 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-                
                 with col_f1:
                     acoes = st.multiselect("Ação", options=sorted(df_filtravel['Ação'].unique()), key="filt_acao")
                 with col_f2:
@@ -927,8 +859,6 @@ def mostrar_qualidade():
                     estados = st.multiselect("Estado", options=sorted(df_filtravel['Status'].unique()), key="filt_status")
                 with col_f4:
                     busca_desc = st.text_input("🔍 Buscar na Descrição", placeholder="Palavra-chave", key="filt_desc")
-                
-                # Aplicar filtros
                 df_filtrado = df_filtravel.copy()
                 if acoes:
                     df_filtrado = df_filtrado[df_filtrado['Ação'].isin(acoes)]
@@ -938,12 +868,8 @@ def mostrar_qualidade():
                     df_filtrado = df_filtrado[df_filtrado['Status'].isin(estados)]
                 if busca_desc:
                     df_filtrado = df_filtrado[df_filtrado['Descrição'].str.contains(busca_desc, case=False, na=False)]
-                
                 st.dataframe(df_filtrado, use_container_width=True, height=400)
-                
-                # Mostrar contagem de registos após filtros
                 st.caption(f"📌 Mostrando {len(df_filtrado)} de {len(df_filtravel)} incidentes.")
-                # ---------- Expansor: Incidentes com TMRP acima da meta ----------
                 with st.expander("⚠️ Incidentes resolvidos com TMRP > 48h (fora da meta)"):
                     if not df_resolvidos.empty:
                         fora_meta = df_resolvidos[df_resolvidos['TMRP_horas'] > meta_tmrp]
@@ -954,18 +880,16 @@ def mostrar_qualidade():
                             st.success("✅ Nenhum incidente resolvido ultrapassou as 48h.")
                     else:
                         st.info("Sem incidentes resolvidos para análise.")
-
             else:
                 st.info("Nenhum incidente após aplicação dos filtros.")
         except Exception as e:
             st.error(f"Erro ao processar incidentes: {e}")
     else:
         st.info("⬆️ Carregue um ficheiro Excel com os dados de incidentes (colunas: Ação, Centro, Descrição, Status, Data_Abertura, Data_Resolução opcional) para visualizar os KPIs 6 e 7.")
-    
+
     # ------------------------------------------------------------
-    # KPI 8 – Taxa de Reclamações
+    # KPI 8 – Taxa de Reclamações (inalterado)
     # ------------------------------------------------------------
-   
     st.markdown("---")
     st.subheader("📢 Taxa de Reclamações")
 
@@ -1012,12 +936,9 @@ def mostrar_qualidade():
             df_recl = None
 
     if df_recl is not None and has_cursos:
-        # Aplicar filtro de centro
         if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro and 'Centro' in df_recl.columns:
             df_recl = df_recl[df_recl['Centro'].isin(st.session_state.filtro_centro)]
 
-        # ---------- PRÉ-PROCESSAMENTO DOS DADOS ----------
-        # 1. Limpeza da coluna 'Valor Devolvido'
         if 'Valor Devolvido' in df_recl.columns:
             df_recl['Valor Devolvido'] = (
                 df_recl['Valor Devolvido']
@@ -1030,7 +951,6 @@ def mostrar_qualidade():
         else:
             df_recl['Valor Devolvido'] = 0
 
-        # 2. Garantir coluna de identificação do curso (Ação)
         if 'Ação' not in df_recl.columns:
             if 'Curso' in df_recl.columns:
                 df_recl.rename(columns={'Curso': 'Ação'}, inplace=True)
@@ -1039,35 +959,27 @@ def mostrar_qualidade():
                 df_recl = None
 
         if df_recl is not None:
-            # ---------- CÁLCULO DAS MÉTRICAS ----------
             total_reclamacoes = len(df_recl)
-
-            # Número de cursos realizados (com base no ficheiro de cursos)
             if 'Ação' in df_cursos.columns:
                 total_cursos_realizados = df_cursos['Ação'].nunique()
             else:
                 total_cursos_realizados = 0
                 st.warning("O ficheiro de cursos não contém a coluna 'Ação' para contar os cursos realizados.")
 
-            # Taxa de reclamações por curso (KPI principal)
             if total_cursos_realizados > 0:
                 taxa_reclamacoes_curso = (total_reclamacoes / total_cursos_realizados) * 100
             else:
                 taxa_reclamacoes_curso = 0
 
-            # Taxa de reclamações aceites
             if 'Status' in df_recl.columns:
                 aceites = (df_recl['Status'].astype(str).str.lower() == 'aceite').sum()
                 taxa_aceites = (aceites / total_reclamacoes * 100) if total_reclamacoes > 0 else 0
             else:
                 taxa_aceites = None
 
-            # Total de valor devolvido
             total_devolvido = df_recl['Valor Devolvido'].sum()
 
-            # ---------- EXIBIÇÃO DOS KPIs ----------
             col_recl1, col_recl2, col_recl3 = st.columns(3)
-
             with col_recl1:
                 meta_reclamacao = st.session_state.obj_reclamacao_curso
                 delta_recl = taxa_reclamacoes_curso - meta_reclamacao
@@ -1078,60 +990,41 @@ def mostrar_qualidade():
                     delta=f"{delta_color} {abs(delta_recl):.1f}%",
                     help=f"Objetivo: ≤ {meta_reclamacao}%  |  {total_reclamacoes} reclamações em {total_cursos_realizados} cursos"
                 )
-
             with col_recl2:
                 if taxa_aceites is not None:
                     st.metric(label="✅ Reclamações Aceites", value=f"{taxa_aceites:.1f}%")
                 else:
                     st.metric(label="✅ Reclamações Aceites", value="N/D")
-
             with col_recl3:
                 st.metric(label="💰 Total Devolvido", value=f"{total_devolvido:,.2f} €".replace(',', ' '))
 
-            # (Opcional) Tabela de apoio com contagem de reclamações por curso
             if 'Ação' in df_recl.columns:
                 recl_por_curso = df_recl.groupby('Ação').size().reset_index(name='Reclamações')
                 with st.expander("📋 Reclamações por Curso (detalhe)"):
                     st.dataframe(recl_por_curso, use_container_width=True)
 
-            # ---------- LISTA COMPLETA DE RECLAMAÇÕES COM FILTROS ----------
             with st.expander("📋 Lista completa de Reclamações", expanded=False):
-                # Preparar DataFrame para exibição (remover colunas técnicas se necessário)
                 df_lista = df_recl.copy()
-                
-                # Garantir que colunas existem para filtros
                 cols_disponiveis = df_lista.columns.tolist()
-                
-                # Criar filtros dinâmicos baseados nas colunas disponíveis
                 st.markdown("**🔍 Filtrar reclamações:**")
                 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-                
-                # Filtro por Ação (se existir)
                 if 'Ação' in cols_disponiveis:
                     with col_f1:
                         acao_filter = st.multiselect("Ação", options=sorted(df_lista['Ação'].dropna().unique()), key="recl_acao")
                 else:
                     acao_filter = []
-                
-                # Filtro por Centro (se existir)
                 if 'Centro' in cols_disponiveis:
                     with col_f2:
                         centro_filter = st.multiselect("Centro", options=sorted(df_lista['Centro'].dropna().unique()), key="recl_centro")
                 else:
                     centro_filter = []
-                
-                # Filtro por Status (se existir)
                 if 'Status' in cols_disponiveis:
                     with col_f3:
                         status_filter = st.multiselect("Status", options=sorted(df_lista['Status'].dropna().unique()), key="recl_status")
                 else:
                     status_filter = []
-                
-                # Busca textual em todas as colunas de texto (ex: Motivo, Descrição, etc.)
                 with col_f4:
                     texto_busca = st.text_input("🔍 Buscar texto", placeholder="Palavra-chave", key="recl_busca")
-                
-                # Aplicar filtros
                 df_filtrado = df_lista.copy()
                 if acao_filter:
                     df_filtrado = df_filtrado[df_filtrado['Ação'].isin(acao_filter)]
@@ -1140,23 +1033,20 @@ def mostrar_qualidade():
                 if status_filter:
                     df_filtrado = df_filtrado[df_filtrado['Status'].isin(status_filter)]
                 if texto_busca:
-                    # Procurar em todas as colunas de texto (object)
                     mask = pd.Series([False] * len(df_filtrado))
                     for col in df_filtrado.select_dtypes(include=['object']).columns:
                         mask |= df_filtrado[col].astype(str).str.contains(texto_busca, case=False, na=False)
                     df_filtrado = df_filtrado[mask]
-                
-                # Exibir tabela com contagem
                 st.dataframe(df_filtrado, use_container_width=True)
                 st.caption(f"📌 Mostrando {len(df_filtrado)} de {len(df_lista)} reclamações.")
-
     else:
         if not has_cursos:
             st.warning("Carregue o ficheiro de Cursos (com a coluna 'Ação') para calcular a taxa de reclamações por curso.")
         else:
             st.info("⬆️ Carregue um ficheiro Excel com os dados de reclamações para visualizar os KPIs.")
+
     # ------------------------------------------------------------
-    # KPI 9 – Ações de Melhoria Implementadas e Recorrência
+    # KPI 9 – Ações de Melhoria Implementadas e Recorrência (inalterado)
     # ------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔧 Ações de Melhoria e Recorrência")
@@ -1209,7 +1099,6 @@ def mostrar_qualidade():
 
         if not df_acoes.empty:
             total_acoes_melhoria = len(df_acoes)
-            # Verificar implementação
             if 'Implementada' in df_acoes.columns:
                 if df_acoes['Implementada'].dtype == 'object':
                     implementadas = (df_acoes['Implementada'].str.lower() == 'sim').sum()
@@ -1259,7 +1148,7 @@ def mostrar_qualidade():
         st.info("⬆️ Carregue um ficheiro Excel com as Ações de Melhoria para visualizar o KPI 9.")
 
     # ------------------------------------------------------------
-    # KPI 10 – Conformidade Documental (DGERT/PSP)
+    # KPI 10 – Conformidade Documental (DGERT/PSP) (inalterado)
     # ------------------------------------------------------------
     st.markdown("---")
     st.subheader("📄 Conformidade Documental (DGERT/PSP)")
