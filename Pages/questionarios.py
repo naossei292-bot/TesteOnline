@@ -435,6 +435,35 @@ def _gerar_excel_com_filtros(df: pd.DataFrame) -> io.BytesIO:
     buf.seek(0)
     return buf
 
+def ajustar_modalidade(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ajusta a coluna Modalidade baseada nas seguintes regras:
+    1. Se 'BL' estiver presente no Shortname -> "B-Learning"
+    2. Se 'Online' estiver presente no Centro -> "E-Learning"
+    3. Caso contrário -> "Presencial"
+    """
+    df = df.copy()
+    
+    def definir_modalidade(row):
+        shortname = str(row.get("Shortname", ""))
+        centro = str(row.get("Centro", ""))
+        
+        # Regra 1: Verificar 'BL' no Shortname (case insensitive)
+        if "bl" in shortname.lower() or "b-learning" in shortname.lower():
+            return "B-Learning"
+        
+        # Regra 2: Verificar 'Online' no Centro (case insensitive)
+        if "online" in centro.lower() or "e-learning" in centro.lower():
+            return "E-Learning"
+        
+        # Regra 3: Caso contrário - Presencial
+        return "Presencial"
+    
+    # Aplicar a função apenas onde a coluna Modalidade existe
+    if "Modalidade" in df.columns:
+        df["Modalidade"] = df.apply(definir_modalidade, axis=1)
+    
+    return df
 
 # ─────────────────────────────────────────────────────────────
 # Página Streamlit
@@ -561,11 +590,15 @@ def mostrar_questionarios():
                 df_rejoin["Apagar"] = False
                 st.session_state.quest_editaveis = df_rejoin
 
+                df_rejoin = ajustar_modalidade(df_rejoin)
+
         if dfs_csv:
             df_csv_total = pd.concat(dfs_csv, ignore_index=True)
             df_joined    = juntar_dados(df_csv_total, st.session_state.quest_acoes_df)
             df_joined    = garantir_todas_colunas(df_joined)
             df_joined["Apagar"] = False
+
+            df_joined = ajustar_modalidade(df_joined)
 
             if modo_carga == "Substituir dados existentes":
                 st.session_state.quest_editaveis = df_joined
@@ -802,6 +835,9 @@ def mostrar_questionarios():
                 st.dataframe(resumo_centro, use_container_width=True, hide_index=True)
     else:
         st.info("ℹ️ Carregue ficheiros para ver os dados.")
+
+    if not st.session_state.quest_editaveis.empty:
+        st.session_state.quest_editaveis = ajustar_modalidade(st.session_state.quest_editaveis)
 
 
 if __name__ == "__main__":
