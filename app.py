@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import hmac
+from datetime import datetime, timedelta
 from utils.data_utils import processar_questionarios_excel, get_col
 
 # --------------------------
@@ -20,56 +21,64 @@ st.markdown("""
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
 
 # ============================================
-# 🔒 SISTEMA DE AUTENTICAÇÃO (MULTI-PASSWORD)
+# 🔒 SISTEMA DE AUTENTICAÇÃO SIMPLES
 # ============================================
 
+def obter_passwords_config():
+    """Obtém as passwords das secrets."""
+    try:
+        passwords_config = st.secrets["passwords"]
+        # Converte bytes para string se necessário
+        passwords_config_str = {}
+        for role, pwd in passwords_config.items():
+            if isinstance(pwd, bytes):
+                passwords_config_str[role] = pwd.decode('utf-8')
+            else:
+                passwords_config_str[role] = str(pwd)
+        return passwords_config_str
+    except (KeyError, AttributeError):
+        st.error("🔐 Erro: Configuração de passwords não encontrada!")
+        st.stop()
+        return {}
+
 def verificar_autenticacao():
-    """Verifica a password e define o role (nível de acesso) na sessão."""
+    """Verifica a password e mantém sessão."""
+    
+    # Verificar se já está autenticado
     if st.session_state.get("autenticado", False):
         return True
     
+    # Verificar se existe sessão guardada (apenas para o mesmo browser/aba)
+    if "sessao_guardada" in st.session_state:
+        return True
+    
+    # Mostrar formulário de login
     st.title("🔒 Acesso Restrito")
     st.markdown("### Esta aplicação é privada")
     st.markdown("Introduza a sua palavra-passe para continuar.")
     
     password_input = st.text_input("Palavra-passe:", type="password", key="login_password")
     
-    if st.button("🔓 Entrar", use_container_width=True):
-        # Carrega as passwords APENAS dos secrets
-        try:
-            passwords_config = st.secrets["passwords"]
-            
-            # Converte bytes para string se necessário (para o Streamlit Cloud)
-            passwords_config_str = {}
-            for role, pwd in passwords_config.items():
-                if isinstance(pwd, bytes):
-                    passwords_config_str[role] = pwd.decode('utf-8')
-                else:
-                    passwords_config_str[role] = str(pwd)
-                    
-        except (KeyError, AttributeError, Exception) as e:
-            # ERRO CLARO: não existem secrets configuradas
-            st.error("🔐 Erro de configuração: Passwords não encontradas!")
-            st.error("""
-            ⚠️ **Aplicação mal configurada**
-            
-            Para usar esta aplicação, é necessário configurar as passwords:
-            
-            **Localmente**: Criar ficheiro `.streamlit/secrets.toml`
-            **Cloud**: Configurar Secrets no Streamlit Cloud
-            """)
-            st.stop()  # Interrompe completamente a execução
+    if st.button("🔓 Entrar", use_container_width=True, type="primary"):
+        passwords_config = obter_passwords_config()
         
-        # Verifica a password
+        # Verifica qual password corresponde
         role_encontrado = None
-        for role, pwd_correta in passwords_config_str.items():
-            if hmac.compare_digest(str(password_input), pwd_correta):
-                role_encontrado = role
-                break
+        for role, pwd_correta in passwords_config.items():
+            try:
+                if hmac.compare_digest(password_input.encode('utf-8'), pwd_correta.encode('utf-8')):
+                    role_encontrado = role
+                    break
+            except:
+                if password_input == pwd_correta:
+                    role_encontrado = role
+                    break
         
         if role_encontrado:
             st.session_state["autenticado"] = True
             st.session_state["role"] = role_encontrado
+            st.session_state["sessao_guardada"] = True
+            st.session_state["login_time"] = datetime.now()
             st.rerun()
         else:
             st.error("❌ Palavra-passe incorreta!")
@@ -77,16 +86,19 @@ def verificar_autenticacao():
     
     return False
 
-# Se não autenticado, mostra apenas o formulário de login (sem sidebar)
+# ============================================
+# EXECUTAR AUTENTICAÇÃO
+# ============================================
+
 if not verificar_autenticacao():
     st.stop()
 
 # ============================================
-# DEFINIÇÃO DE PERMISSÕES (páginas por role)
+# DEFINIÇÃO DE PERMISSÕES
 # ============================================
 PERMISSOES = {
     "admin": [
-        "🏠 Página Inicial", 
+        "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
         "📋 Questionários",
         "🎯 Gestão de Qualidade",
@@ -95,7 +107,7 @@ PERMISSOES = {
         "📊 Dashboard - Ações",
         "📊 Dashboard - Questionários"
     ],
-    "gestor_BALANCOS": [
+    "gestor_BALANÇOS": [
         "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
     ],
@@ -107,13 +119,12 @@ PERMISSOES = {
         "⚔️ Comparador Versus"
     ],
     "gestor_questionarios": [
-        "🏠 Página Inicial", 
+        "🏠 Página Inicial",
         "📋 Questionários",
         "📊 Dashboard - Questionários"
     ]
 }
 
-# Obtém o role do utilizador logado
 role = st.session_state.get("role", "")
 paginas_autorizadas = PERMISSOES.get(role, [])
 
@@ -127,20 +138,16 @@ if 'quest_df' not in st.session_state:
 if 'filtro_centro' not in st.session_state: 
     st.session_state.filtro_centro = []
 if 'pagina' not in st.session_state:
-    # Define a página inicial como padrão (se disponível)
     st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
 
 # ============================================
-# BARRA LATERAL CONDICIONAL (baseada no role)
+# BARRA LATERAL
 # ============================================
 
 st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
-
-# Mostrar informações do utilizador logado
 st.sidebar.info(f"👤 **Utilizador:** {role.replace('_', ' ').title()}", icon="ℹ️")
 
-# --- Página Inicial (sempre visível para todos os roles autenticados) ---
 st.sidebar.markdown("### 🏠 Navegação")
 if st.sidebar.button("🏠 Página Inicial", use_container_width=True, key="nav_home"):
     st.session_state.pagina = "🏠 Página Inicial"
@@ -148,13 +155,11 @@ if st.sidebar.button("🏠 Página Inicial", use_container_width=True, key="nav_
 
 st.sidebar.markdown("---")
 
-# --- Balanços e Relatórios (apenas para quem tem permissão) ---
 if "📚 Balanços e Relatórios" in paginas_autorizadas:
     if st.sidebar.button("📚 Balanços e Relatórios", use_container_width=True, key="nav_relatorios"):
         st.session_state.pagina = "📚 Balanços e Relatórios"
         st.rerun()
 
-# --- Questionários ---
 if "📋 Questionários" in paginas_autorizadas:
     if st.sidebar.button("📋 Questionários", use_container_width=True, key="nav_questionarios"):
         st.session_state.pagina = "📋 Questionários"
@@ -165,14 +170,11 @@ if "📊 Dashboard - Questionários" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Questionários"
         st.rerun()
 
-
-# --- Cursos (apenas para quem tem permissão) ---
 if "📚 Cursos" in paginas_autorizadas:
     if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
         st.session_state.pagina = "📚 Cursos"
         st.rerun()
         
-# --- Gestão de Qualidade ---
 if "🎯 Gestão de Qualidade" in paginas_autorizadas:
     if st.sidebar.button("🎯 Gestão de Qualidade", use_container_width=True, key="nav_qualidade"):
         st.session_state.pagina = "🎯 Gestão de Qualidade"
@@ -188,23 +190,23 @@ if "⚔️ Comparador Versus" in paginas_autorizadas:
         st.session_state.pagina = "⚔️ Comparador Versus"
         st.rerun()
 
-# Botão de logout (sempre visível)
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
-    st.session_state.clear()
+    # Limpar apenas os dados de autenticação
+    for key in ['autenticado', 'role', 'sessao_guardada', 'login_time']:
+        if key in st.session_state:
+            del st.session_state[key]
     st.rerun()
 st.sidebar.markdown("---")
 
 # ============================================
-# CONTEÚDO PRINCIPAL (BASEADO NA SELEÇÃO)
+# CONTEÚDO PRINCIPAL
 # ============================================
 
-# Segurança extra: se a página atual não está autorizada, redefine para a página inicial
 if st.session_state.pagina not in paginas_autorizadas and paginas_autorizadas:
     st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
     st.rerun()
 
-# Navegação condicional
 if st.session_state.pagina == "🏠 Página Inicial":
     from Pages.welcome import mostrar_welcome
     mostrar_welcome()
