@@ -267,7 +267,7 @@ if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout"):
 st.sidebar.markdown("---")
 
 # ============================================
-# CONTEÚDO Principal
+# CONTEÚDO PRINCIPAL
 # ============================================
 
 if st.session_state.pagina not in paginas_autorizadas and paginas_autorizadas:
