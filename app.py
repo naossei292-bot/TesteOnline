@@ -9,6 +9,9 @@ from utils.data_utils import processar_questionarios_excel, get_col
 # --------------------------
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide", initial_sidebar_state="collapsed")
 
+# FORÇAR PERSISTÊNCIA DA SESSÃO NO STREAMLIT CLOUD
+st.session_state.setdefault("keep_alive", True)
+
 # Esconder o menu lateral automático do Streamlit
 st.markdown("""
     <style>
@@ -21,14 +24,13 @@ st.markdown("""
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
 
 # ============================================
-# 🔒 SISTEMA DE AUTENTICAÇÃO SIMPLES
+# 🔒 SISTEMA DE AUTENTICAÇÃO PERSISTENTE
 # ============================================
 
 def obter_passwords_config():
     """Obtém as passwords das secrets."""
     try:
         passwords_config = st.secrets["passwords"]
-        # Converte bytes para string se necessário
         passwords_config_str = {}
         for role, pwd in passwords_config.items():
             if isinstance(pwd, bytes):
@@ -42,14 +44,16 @@ def obter_passwords_config():
         return {}
 
 def verificar_autenticacao():
-    """Verifica a password e mantém sessão."""
+    """Verifica a password e mantém sessão de forma persistente."""
+    
+    # Inicializar last_activity se não existir
+    if "last_activity" not in st.session_state:
+        st.session_state.last_activity = datetime.now()
     
     # Verificar se já está autenticado
     if st.session_state.get("autenticado", False):
-        return True
-    
-    # Verificar se existe sessão guardada (apenas para o mesmo browser/aba)
-    if "sessao_guardada" in st.session_state:
+        # Atualizar timestamp da atividade
+        st.session_state.last_activity = datetime.now()
         return True
     
     # Mostrar formulário de login
@@ -59,30 +63,36 @@ def verificar_autenticacao():
     
     password_input = st.text_input("Palavra-passe:", type="password", key="login_password")
     
-    if st.button("🔓 Entrar", use_container_width=True, type="primary"):
-        passwords_config = obter_passwords_config()
-        
-        # Verifica qual password corresponde
-        role_encontrado = None
-        for role, pwd_correta in passwords_config.items():
-            try:
-                if hmac.compare_digest(password_input.encode('utf-8'), pwd_correta.encode('utf-8')):
-                    role_encontrado = role
-                    break
-            except:
-                if password_input == pwd_correta:
-                    role_encontrado = role
-                    break
-        
-        if role_encontrado:
-            st.session_state["autenticado"] = True
-            st.session_state["role"] = role_encontrado
-            st.session_state["sessao_guardada"] = True
-            st.session_state["login_time"] = datetime.now()
-            st.rerun()
-        else:
-            st.error("❌ Palavra-passe incorreta!")
-            return False
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔓 Entrar", use_container_width=True, type="primary"):
+            passwords_config = obter_passwords_config()
+            
+            # Verifica qual password corresponde
+            role_encontrado = None
+            for role, pwd_correta in passwords_config.items():
+                try:
+                    if hmac.compare_digest(password_input.encode('utf-8'), pwd_correta.encode('utf-8')):
+                        role_encontrado = role
+                        break
+                except:
+                    if password_input == pwd_correta:
+                        role_encontrado = role
+                        break
+            
+            if role_encontrado:
+                st.session_state["autenticado"] = True
+                st.session_state["role"] = role_encontrado
+                st.session_state["sessao_guardada"] = True
+                st.session_state["login_time"] = datetime.now()
+                st.session_state["last_activity"] = datetime.now()
+                st.session_state["keep_alive"] = True
+                
+                st.success(f"✅ Bem-vindo, {role_encontrado.replace('_', ' ').title()}!")
+                st.rerun()
+            else:
+                st.error("❌ Palavra-passe incorreta!")
+                return False
     
     return False
 
@@ -192,15 +202,14 @@ if "⚔️ Comparador Versus" in paginas_autorizadas:
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
-    # Limpar apenas os dados de autenticação
-    for key in ['autenticado', 'role', 'sessao_guardada', 'login_time']:
+    for key in ['autenticado', 'role', 'sessao_guardada', 'login_time', 'last_activity']:
         if key in st.session_state:
             del st.session_state[key]
     st.rerun()
 st.sidebar.markdown("---")
 
 # ============================================
-# CONTEÚDO Principal
+# CONTEÚDO PRINCIPAL
 # ============================================
 
 if st.session_state.pagina not in paginas_autorizadas and paginas_autorizadas:
