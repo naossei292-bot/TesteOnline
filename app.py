@@ -21,11 +21,7 @@ st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>",
 # ============================================
 # 🍪 COOKIE CONTROLLER
 # ============================================
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO PERSISTENTE
