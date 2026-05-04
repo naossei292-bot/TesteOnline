@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import hmac
 import hashlib
+import warnings
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 from utils.data_utils import processar_questionarios_excel, get_col
+from streamlit.errors import StreamlitAPIException
 
 # --------------------------
 # CONFIGURAÇÃO DA PÁGINA
@@ -21,6 +23,9 @@ st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>",
 # ============================================
 # 🍪 COOKIE CONTROLLER
 # ============================================
+warnings.filterwarnings("ignore", category=UserWarning, message=".*CachedWidgetWarning.*")
+warnings.filterwarnings("ignore", message=".*cached function.*") 
+
 @st.cache_resource
 def get_cookie_manager():
     return stx.CookieManager()
