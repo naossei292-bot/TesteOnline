@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import hmac
+import hashlib
+from streamlit_cookies_controller import CookieController
 from datetime import datetime, timedelta
 from utils.data_utils import processar_questionarios_excel, get_col
 
@@ -9,23 +11,63 @@ from utils.data_utils import processar_questionarios_excel, get_col
 # --------------------------
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide", initial_sidebar_state="collapsed")
 
-# FORÇAR PERSISTÊNCIA DA SESSÃO NO STREAMLIT CLOUD
-st.session_state.setdefault("keep_alive", True)
-
-# Esconder o menu lateral automático do Streamlit
 st.markdown("""
     <style>
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
+        [data-testid="stSidebarNav"] { display: none; }
     </style>
 """, unsafe_allow_html=True)
-
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
+
+# ============================================
+# 🍪 COOKIE CONTROLLER
+# ============================================
+controller = CookieController()
 
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO PERSISTENTE
 # ============================================
+COOKIE_NAME = "dashboard_auth"
+COOKIE_DURATION_HORAS = 8  # Cookie expira após 8 horas de inatividade
+
+def gerar_token(role: str) -> str:
+    """Gera um token seguro assinado com a secret key."""
+    secret = st.secrets.get("cookie_secret", "fallback_secret_muda_isto")
+    timestamp = datetime.now().strftime("%Y%m%d%H")  # Muda a cada hora
+    payload = f"{role}:{timestamp}"
+    token = hmac.new(
+        secret.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return f"{role}:{token}"
+
+def verificar_token(cookie_value: str) -> str | None:
+    """
+    Verifica se o token do cookie é válido.
+    Retorna o role se válido, None se inválido.
+    """
+    try:
+        partes = cookie_value.split(":")
+        if len(partes) != 2:
+            return None
+        role, token_recebido = partes
+        
+        secret = st.secrets.get("cookie_secret", "fallback_secret_muda_isto")
+        
+        # Verifica para a hora atual e a hora anterior (tolerância)
+        for horas_atras in range(COOKIE_DURATION_HORAS + 1):
+            timestamp = (datetime.now() - timedelta(hours=horas_atras)).strftime("%Y%m%d%H")
+            payload = f"{role}:{timestamp}"
+            token_esperado = hmac.new(
+                secret.encode(),
+                payload.encode(),
+                hashlib.sha256
+            ).hexdigest()
+            if hmac.compare_digest(token_recebido, token_esperado):
+                return role
+        return None
+    except Exception:
+        return None
 
 def obter_passwords_config():
     """Obtém as passwords das secrets."""
@@ -44,56 +86,72 @@ def obter_passwords_config():
         return {}
 
 def verificar_autenticacao():
-    """Verifica a password e mantém sessão de forma persistente."""
-    
-    # Inicializar last_activity se não existir
-    if "last_activity" not in st.session_state:
-        st.session_state.last_activity = datetime.now()
-    
-    # Verificar se já está autenticado
+    """
+    Verifica autenticação via session_state (refresh) ou cookie (nova sessão).
+    Mostra formulário de login se necessário.
+    """
+
+    # 1️⃣ Já autenticado nesta sessão (ex: navegação entre páginas)
     if st.session_state.get("autenticado", False):
-        # Atualizar timestamp da atividade
-        st.session_state.last_activity = datetime.now()
         return True
-    
-    # Mostrar formulário de login
+
+    # 2️⃣ Tentar restaurar sessão via cookie
+    cookie_value = controller.get(COOKIE_NAME)
+    if cookie_value:
+        role = verificar_token(cookie_value)
+        if role:
+            st.session_state["autenticado"] = True
+            st.session_state["role"] = role
+            return True
+        else:
+            # Cookie inválido ou expirado — apagar
+            controller.remove(COOKIE_NAME)
+
+    # 3️⃣ Mostrar formulário de login
     st.title("🔒 Acesso Restrito")
     st.markdown("### Esta aplicação é privada")
     st.markdown("Introduza a sua palavra-passe para continuar.")
-    
+
     password_input = st.text_input("Palavra-passe:", type="password", key="login_password")
-    
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if st.button("🔓 Entrar", use_container_width=True, type="primary"):
             passwords_config = obter_passwords_config()
-            
-            # Verifica qual password corresponde
             role_encontrado = None
+
             for role, pwd_correta in passwords_config.items():
                 try:
-                    if hmac.compare_digest(password_input.encode('utf-8'), pwd_correta.encode('utf-8')):
+                    if hmac.compare_digest(
+                        password_input.encode('utf-8'),
+                        pwd_correta.encode('utf-8')
+                    ):
                         role_encontrado = role
                         break
-                except:
+                except Exception:
                     if password_input == pwd_correta:
                         role_encontrado = role
                         break
-            
+
             if role_encontrado:
+                # Guardar na sessão
                 st.session_state["autenticado"] = True
                 st.session_state["role"] = role_encontrado
-                st.session_state["sessao_guardada"] = True
-                st.session_state["login_time"] = datetime.now()
-                st.session_state["last_activity"] = datetime.now()
-                st.session_state["keep_alive"] = True
-                
+
+                # Guardar cookie assinado no browser
+                token = gerar_token(role_encontrado)
+                controller.set(
+                    COOKIE_NAME,
+                    token,
+                    max_age=COOKIE_DURATION_HORAS * 3600  # segundos
+                )
+
                 st.success(f"✅ Bem-vindo, {role_encontrado.replace('_', ' ').title()}!")
                 st.rerun()
             else:
                 st.error("❌ Palavra-passe incorreta!")
                 return False
-    
+
     return False
 
 # ============================================
@@ -200,8 +258,8 @@ if "⚔️ Comparador Versus" in paginas_autorizadas:
         st.session_state.pagina = "⚔️ Comparador Versus"
         st.rerun()
 
-st.sidebar.markdown("---")
-if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
+if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout"):
+    controller.remove(COOKIE_NAME)  # ← Apaga o cookie
     for key in ['autenticado', 'role', 'sessao_guardada', 'login_time', 'last_activity']:
         if key in st.session_state:
             del st.session_state[key]
