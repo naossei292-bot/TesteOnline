@@ -21,7 +21,11 @@ st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>",
 # ============================================
 # 🍪 COOKIE CONTROLLER
 # ============================================
-cookie_manager = stx.CookieManager()
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # ============================================
 # 🔒 SISTEMA DE AUTENTICAÇÃO PERSISTENTE
@@ -86,7 +90,7 @@ def verificar_autenticacao():
     if st.session_state.get("autenticado", False):
         return True
 
-    # Tentar restaurar via cookie
+    # 2️⃣ Tentar restaurar via cookie
     cookie_value = cookie_manager.get(cookie=COOKIE_NAME)
     if cookie_value:
         role = verificar_token(cookie_value)
