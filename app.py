@@ -86,7 +86,7 @@ def verificar_autenticacao():
     if st.session_state.get("autenticado", False):
         return True
 
-    # 2️⃣ Tentar restaurar via cookie
+    # Tentar restaurar via cookie
     cookie_value = cookie_manager.get(cookie=COOKIE_NAME)
     if cookie_value:
         role = verificar_token(cookie_value)
