@@ -129,7 +129,7 @@ PERMISSOES = {
         "📊 Dashboard - Ações",
         "📊 Dashboard - Questionários"
     ],
-    "gestor_BALANÇOS": [
+    "gestor_BALANCOS": [
         "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
     ],
