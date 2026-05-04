@@ -86,7 +86,7 @@ def obter_passwords_config():
 def verificar_autenticacao():
     """Verifica autenticação via session_state ou cookie."""
 
-    # 1️⃣ Já autenticado nesta sessão
+    # Já autenticado nesta sessão
     if st.session_state.get("autenticado", False):
         return True
 
