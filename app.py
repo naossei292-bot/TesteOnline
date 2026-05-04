@@ -35,7 +35,7 @@ def verificar_autenticacao():
     password_input = st.text_input("Palavra-passe:", type="password", key="login_password")
     
     if st.button("🔓 Entrar", use_container_width=True):
-        # Carrega as passwords APENAS dos secrets (sem fallback)
+        # Carrega as passwords APENAS dos secrets
         try:
             passwords_config = st.secrets["passwords"]
             
