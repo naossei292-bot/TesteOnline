@@ -21,7 +21,7 @@ st.markdown("""
 st.markdown("<style>[data-testid='stMetricValue'] { font-size: 25px; }</style>", unsafe_allow_html=True)
 
 # ============================================
-# 🍪 COOKIE CONTROLLER
+# 🍪 COOKIE controller
 # ============================================
 warnings.filterwarnings("ignore", category=UserWarning, message=".*CachedWidgetWarning.*")
 warnings.filterwarnings("ignore", message=".*cached function.*") 
