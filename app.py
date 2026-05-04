@@ -4,7 +4,7 @@ import hmac
 from utils.data_utils import processar_questionarios_excel, get_col
 
 # --------------------------
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIGURAÇÃO DA pagina
 # --------------------------
 st.set_page_config(page_title="Dashboard KPI & Qualidade", layout="wide", initial_sidebar_state="collapsed")
 
