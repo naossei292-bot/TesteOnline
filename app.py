@@ -35,17 +35,35 @@ def verificar_autenticacao():
     password_input = st.text_input("Palavra-passe:", type="password", key="login_password")
     
     if st.button("🔓 Entrar", use_container_width=True):
-        # Tenta obter as passwords dos secrets (recomendado)
+        # Carrega as passwords APENAS dos secrets (sem fallback)
         try:
             passwords_config = st.secrets["passwords"]
-        except (KeyError, AttributeError):
-            st.error("❌ Configuração de passwords não encontrada. Verifique o ficheiro secrets.toml.")
-            st.stop()
+            
+            # Converte bytes para string se necessário (para o Streamlit Cloud)
+            passwords_config_str = {}
+            for role, pwd in passwords_config.items():
+                if isinstance(pwd, bytes):
+                    passwords_config_str[role] = pwd.decode('utf-8')
+                else:
+                    passwords_config_str[role] = str(pwd)
+                    
+        except (KeyError, AttributeError, Exception) as e:
+            # ERRO CLARO: não existem secrets configuradas
+            st.error("🔐 Erro de configuração: Passwords não encontradas!")
+            st.error("""
+            ⚠️ **Aplicação mal configurada**
+            
+            Para usar esta aplicação, é necessário configurar as passwords:
+            
+            **Localmente**: Criar ficheiro `.streamlit/secrets.toml`
+            **Cloud**: Configurar Secrets no Streamlit Cloud
+            """)
+            st.stop()  # Interrompe completamente a execução
         
-        # Verifica qual password corresponde
+        # Verifica a password
         role_encontrado = None
-        for role, pwd_correta in passwords_config.items():
-            if hmac.compare_digest(password_input, pwd_correta):
+        for role, pwd_correta in passwords_config_str.items():
+            if hmac.compare_digest(str(password_input), pwd_correta):
                 role_encontrado = role
                 break
         
