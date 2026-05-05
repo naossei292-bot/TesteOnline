@@ -145,22 +145,6 @@ def _tutorial_gestor_balancos():
         5. Descarrega os resultados
         """)
     
-    with col2:
-        st.markdown("""
-        #### 📊 Dashboard - Ações
-        
-        **O que podes fazer:**
-        - Visualizar métricas de desempenho
-        - Analisar tendências
-        - Monitorizar indicadores-chave
-        
-        **Como utilizar:**
-        1. Acede à página **"📊 Dashboard - Ações"**
-        2. Aplica os filtros desejados
-        3. Explora os gráficos interativos
-        4. Exporta dados para análise
-        """)
-    
     st.markdown("---")
     
     # Tutorial passo a passo
