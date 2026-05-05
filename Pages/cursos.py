@@ -11,6 +11,7 @@ COLUNAS_CURSOS = [
     "Status", "Ação", "Centro", "Data Inicial", "Data Final",
     "Aptos", "Inaptos", "Desistentes", "Inscritos",
     "Devedor", "Valor total a receber", "Valor Total Recebido",
+    "Taxa de Satisfação M00",
     "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
     "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
     "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
@@ -21,9 +22,9 @@ COLUNAS_CURSOS = [
 COLUNAS_FORMANDOS = [
     "Ação", "Data_inicial", "Data_final", "Estado", "Formando",
     "No_formando", "Valor_curso", "Desconto",
-    "Valor_curso_final",   # calculado
-    "Total_ja_pago", "Total_a_pagar",  # calculado
-    "Proximo_acordo", "Devedor",       # calculado
+    "Valor_curso_final",
+    "Total_ja_pago", "Total_a_pagar",
+    "Proximo_acordo", "Devedor",
 ]
 
 CALC_CURSOS    = {"Devedor", "Valor total a receber", "Valor Total Recebido"}
@@ -31,9 +32,10 @@ CALC_FORMANDOS = {"Valor_curso_final", "Total_a_pagar", "Devedor"}
 
 _ASSIN_CURSOS     = {"Centro", "Data Inicial", "Data Final", "Formador"}
 _ASSIN_FORMANDOS  = {"Formando", "No_formando", "Valor_curso", "Total_ja_pago"}
+_ASSIN_QUEST      = {"Shortname", "Módulo", "Respondente", "Tipo", "Valor Médio"}
 
 # ═══════════════════════════════════════════════════════════════
-# MAPEAMENTO DE ALIASES — corrigido para "Formando" (número)
+# MAPEAMENTO DE ALIASES
 # ═══════════════════════════════════════════════════════════════
 
 ALIASES_FORMANDOS: dict[str, list[str]] = {
@@ -45,11 +47,9 @@ ALIASES_FORMANDOS: dict[str, list[str]] = {
                        "Data de fim", "Fim"],
     "Estado":         ["Situação", "Situacao", "Estado formando", "Estado_formando",
                        "Situação formando", "Situacao formando", "Status"],
-    "Formando":       ["Formando", "Nome de formando", "Nome formando", "Nome_formando", 
+    "Formando":       ["Formando", "Nome de formando", "Nome formando", "Nome_formando",
                        "Nome do formando", "Nome completo", "Designação", "Designacao"],
-    "No_formando":    ["No_Formando",   # <-- Mapeia a coluna 'Formando' do Excel para No_formando
-                       "num do formando",
-                       "No_formando",
+    "No_formando":    ["No_Formando", "num do formando", "No_formando",
                        "Nº Formando", "N_formando", "Numero formando", "Número formando",
                        "Nformando", "Nº_formando", "No formando", "Num formando",
                        "Número do formando", "ID formando", "Id_formando"],
@@ -145,6 +145,7 @@ def converter_numericos_cursos(df: pd.DataFrame) -> pd.DataFrame:
     num_cols = [
         "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedor",
         "Valor total a receber", "Valor Total Recebido", "Avaliação formador",
+        "Taxa de Satisfação M00",
     ] + [f"Taxa de Satisfação M{i:02d}" for i in range(1, 13)] + ["Taxa de satisfação Final"]
     for col in num_cols:
         if col in df.columns:
@@ -195,6 +196,128 @@ def recalcular_cursos(df_cursos: pd.DataFrame, df_formandos: pd.DataFrame) -> pd
     return df_res
 
 # ═══════════════════════════════════════════════════════════════
+# PROCESSAMENTO DE QUESTIONÁRIOS
+# ═══════════════════════════════════════════════════════════════
+
+def _escala_para_pct(valor: float) -> float:
+    """Converte escala 1-4 para percentagem 0-100%."""
+    return round((valor / 4.0) * 100, 1)
+
+def processar_questionarios(df_q: pd.DataFrame, df_cursos: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Lê o ficheiro de questionários exportado e preenche na tabela de Ações:
+    - Taxa de Satisfação MXX  → média dos Formandos por módulo (escala 1-4 → %)
+    - Taxa de satisfação Final → média dos Formandos no questionário de Ação global (escala 1-4 → %)
+    - Avaliação formador       → média das avaliações de Formador/Tutor por Coord. Pedagógica (escala 1-4 → %)
+
+    Retorna (df_cursos_atualizado, lista_de_log).
+    """
+    log: list[str] = []
+    df_q = df_q.copy()
+
+    # Verificar colunas obrigatórias
+    colunas_necessarias = {"Shortname", "Módulo", "Respondente", "Tipo", "Valor Médio", "Item"}
+    faltam = colunas_necessarias - set(df_q.columns)
+    if faltam:
+        log.append(f"❌ Ficheiro de questionários sem colunas: `{'`, `'.join(faltam)}`")
+        return df_cursos, log
+
+    df_q["Shortname"]    = df_q["Shortname"].astype(str).str.strip()
+    df_q["Módulo"]       = df_q["Módulo"].astype(str).str.strip()
+    df_q["Respondente"]  = df_q["Respondente"].astype(str).str.strip()
+    df_q["Tipo"]         = df_q["Tipo"].astype(str).str.strip()
+    df_q["Item"]         = df_q["Item"].astype(str).str.strip()
+    df_q["Valor Médio"]  = pd.to_numeric(df_q["Valor Médio"], errors="coerce")
+
+    acoes_processadas = 0
+    acoes_sem_dados   = []
+
+    df_cursos = df_cursos.copy()
+
+    # Garantir que as colunas de satisfação existem
+    for col in COLUNAS_CURSOS:
+        if col not in df_cursos.columns:
+            df_cursos[col] = None
+
+    for acao in df_cursos["Ação"].dropna().unique():
+        acao_str = str(acao).strip()
+        if not acao_str or acao_str in ("None", "nan"):
+            continue
+
+        mask_acao = df_q["Shortname"] == acao_str
+        df_acao = df_q[mask_acao]
+
+        if df_acao.empty:
+            acoes_sem_dados.append(acao_str)
+            continue
+
+        idx = df_cursos[df_cursos["Ação"].astype(str).str.strip() == acao_str].index
+        if len(idx) == 0:
+            continue
+
+        acoes_processadas += 1
+        modulos_preenchidos = []
+
+        # ── 1. Satisfação por módulo (Respondente=Formando, Tipo=Módulo, excl. Obs) ──
+        df_mod = df_acao[
+            (df_acao["Respondente"] == "Formando") &
+            (df_acao["Tipo"] == "Módulo") &
+            (~df_acao["Item"].str.endswith(".Obs"))
+        ]
+        for modulo in sorted(df_mod["Módulo"].dropna().unique()):
+            modulo_str = str(modulo).strip()
+            col_sat = f"Taxa de Satisfação {modulo_str}"   # ex: "Taxa de Satisfação M00"
+            avg = df_mod[df_mod["Módulo"] == modulo]["Valor Médio"].mean()
+            if pd.notna(avg):
+                pct = _escala_para_pct(avg)
+                if col_sat in df_cursos.columns:
+                    df_cursos.loc[idx, col_sat] = pct
+                    modulos_preenchidos.append(f"{modulo_str}={pct}%")
+
+        # ── 2. Satisfação Final (Respondente=Formando, Tipo=Ação, excl. Obs) ──
+        df_final = df_acao[
+            (df_acao["Respondente"] == "Formando") &
+            (df_acao["Tipo"] == "Ação") &
+            (~df_acao["Item"].str.endswith(".Obs"))
+        ]
+        if not df_final.empty:
+            avg_final = df_final["Valor Médio"].mean()
+            if pd.notna(avg_final):
+                pct_final = _escala_para_pct(avg_final)
+                df_cursos.loc[idx, "Taxa de satisfação Final"] = pct_final
+                modulos_preenchidos.append(f"Final={pct_final}%")
+
+        # ── 3. Avaliação do Formador (Tipo=Formador ou Tutor, excl. Sug) ──
+        df_form = df_acao[
+            (df_acao["Tipo"].isin(["Formador", "Tutor"])) &
+            (~df_acao["Item"].str.endswith(".Sug"))
+        ]
+        if not df_form.empty:
+            avg_form = df_form["Valor Médio"].mean()
+            if pd.notna(avg_form):
+                pct_form = _escala_para_pct(avg_form)
+                df_cursos.loc[idx, "Avaliação formador"] = pct_form
+                modulos_preenchidos.append(f"Formador={pct_form}%")
+
+        log.append(
+            f"&nbsp;&nbsp;&nbsp;&nbsp;📝 **{acao_str}** → {', '.join(modulos_preenchidos) if modulos_preenchidos else 'sem dados'}"
+        )
+
+    log.insert(0, f"✅ Questionários: **{acoes_processadas}** ação(ões) atualizadas.")
+    if acoes_sem_dados:
+        log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;⚠️ Ações sem dados no ficheiro: `{'`, `'.join(acoes_sem_dados[:10])}`{'…' if len(acoes_sem_dados) > 10 else ''}")
+
+    return df_cursos, log
+
+
+def detectar_questionario(df: pd.DataFrame) -> bool:
+    """Retorna True se o DataFrame parecer um ficheiro de questionários exportado."""
+    cols_norm = {_normalizar(c) for c in df.columns}
+    assin_norm = {_normalizar(c) for c in _ASSIN_QUEST}
+    return len(assin_norm & cols_norm) >= 4
+
+
+# ═══════════════════════════════════════════════════════════════
 # LEITURA E PREPARAÇÃO DE FICHEIROS
 # ═══════════════════════════════════════════════════════════════
 
@@ -211,6 +334,8 @@ def ler_ficheiro(f) -> pd.DataFrame:
     return df
 
 def detectar_tipo_ficheiro(df: pd.DataFrame) -> str:
+    if detectar_questionario(df):
+        return "questionario"
     cols_norm = {_normalizar(c) for c in df.columns}
     score_c = sum(1 for s in _ASSIN_CURSOS if _normalizar(s) in cols_norm)
     score_f = sum(1 for s in _ASSIN_FORMANDOS if _normalizar(s) in cols_norm)
@@ -255,7 +380,8 @@ def mostrar_cursos():
         "editor_key_cursos": 0,
         "editor_key_form":   0,
         "uploader_key":      0,
-        "colunas_vis":       [c for c in COLUNAS_CURSOS if not c.startswith("Taxa de Satisfação M") or c in ("Taxa de Satisfação M01", "Taxa de Satisfação M02")],
+        "uploader_key_q":    0,
+        "colunas_vis":       [c for c in COLUNAS_CURSOS if not c.startswith("Taxa de Satisfação M") or c in ("Taxa de Satisfação M00", "Taxa de Satisfação M01", "Taxa de Satisfação M02")],
     }
     for k, v in defaults.items():
         if k not in st.session_state or st.session_state[k] is None:
@@ -263,24 +389,44 @@ def mostrar_cursos():
 
     st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
 
+    # ── Carregamento de Ações e Formandos ──────────────────────────────────────
     with st.expander("📤 Carregar ficheiros (Ações e/ou Formandos)", expanded=False):
-        st.markdown("Selecione **um ou mais ficheiros**. O sistema identifica automaticamente se cada ficheiro é de **Ações** ou de **Formandos** e mapeia as colunas.")
+        st.markdown("Selecione **um ou mais ficheiros**. O sistema identifica automaticamente se cada ficheiro é de **Ações**, **Formandos** ou **Questionários** e mapeia as colunas.")
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             modo_cursos = st.radio("Modo para Ações:", ["Substituir", "Adicionar"], horizontal=True, key="modo_up_cursos")
         with col_m2:
             modo_form   = st.radio("Modo para Formandos:", ["Substituir", "Adicionar"], horizontal=True, key="modo_up_form")
 
-        ficheiros = st.file_uploader("Selecione ficheiros Excel (.xlsx) ou CSV", type=None, accept_multiple_files=True, key=f"upload_{st.session_state.uploader_key}")
+        ficheiros = st.file_uploader(
+            "Selecione ficheiros Excel (.xlsx) ou CSV",
+            type=None, accept_multiple_files=True,
+            key=f"upload_{st.session_state.uploader_key}"
+        )
 
         if ficheiros:
             novos_cursos, novos_formandos = [], []
             linhas_log = []
+            quest_pendentes = []   # questionários carregados antes de haver ações
+
             for f in ficheiros:
                 try:
                     df_raw = ler_ficheiro(f)
                     tipo = detectar_tipo_ficheiro(df_raw)
-                    if tipo == "cursos":
+
+                    if tipo == "questionario":
+                        # Processamento imediato se já existirem ações
+                        if not st.session_state.acoes_df.empty and "Ação" in st.session_state.acoes_df.columns:
+                            df_atualizado, log_q = processar_questionarios(df_raw, st.session_state.acoes_df)
+                            st.session_state.acoes_df = df_atualizado
+                            st.session_state.editor_key_cursos += 1
+                            linhas_log.append(f"📊 **{f.name}** → **Questionários**")
+                            linhas_log.extend(log_q)
+                        else:
+                            quest_pendentes.append((f.name, df_raw))
+                            linhas_log.append(f"⚠️ **{f.name}** → Questionários detetado mas sem Ações carregadas. Carregue primeiro as Ações.")
+
+                    elif tipo == "cursos":
                         df_pronto, log_map = preparar_cursos(df_raw)
                         novos_cursos.append(df_pronto)
                         linhas_log.append(f"✅ **{f.name}** → **Ações** ({len(df_raw)} linhas)")
@@ -288,6 +434,7 @@ def mostrar_cursos():
                             mapeados = ", ".join(f"`{orig}` → `{dest}`" for dest, orig in log_map.items() if orig != dest)
                             if mapeados:
                                 linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ Colunas remapeadas: {mapeados}")
+
                     elif tipo == "formandos":
                         df_pronto, log_map = preparar_formandos(df_raw)
                         novos_formandos.append(df_pronto)
@@ -303,21 +450,111 @@ def mostrar_cursos():
                         linhas_log.append(f"⚠️ **{f.name}** → tipo não reconhecido. Colunas: `{'`, `'.join(df_raw.columns.tolist())}`")
                 except Exception as e:
                     linhas_log.append(f"❌ **{f.name}** → erro: `{e}`")
+
             if novos_cursos:
                 df_nc = pd.concat(novos_cursos, ignore_index=True)
                 st.session_state.acoes_df = df_nc if modo_cursos == "Substituir" else pd.concat([st.session_state.acoes_df, df_nc], ignore_index=True)
                 st.session_state.editor_key_cursos += 1
+
+                # Aplicar questionários pendentes agora que temos ações
+                for nome_q, df_q in quest_pendentes:
+                    df_atualizado, log_q = processar_questionarios(df_q, st.session_state.acoes_df)
+                    st.session_state.acoes_df = df_atualizado
+                    linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;✅ Questionários de **{nome_q}** aplicados após carregar Ações.")
+                    linhas_log.extend(log_q)
+
             if novos_formandos:
                 df_nf = pd.concat(novos_formandos, ignore_index=True)
                 st.session_state.formandos_df = df_nf if modo_form == "Substituir" else pd.concat([st.session_state.formandos_df, df_nf], ignore_index=True)
                 st.session_state.editor_key_form += 1
+
             if novos_cursos or novos_formandos:
                 st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
                 st.session_state.uploader_key += 1
+
             for linha in linhas_log:
                 st.markdown(linha, unsafe_allow_html=True)
-            if novos_cursos or novos_formandos:
+            if novos_cursos or novos_formandos or any(t == "questionario" for t in []):
                 st.rerun()
+            if linhas_log:
+                st.rerun()
+
+    # ── Carregamento de Questionários (secção dedicada) ───────────────────────
+    with st.expander("📊 Importar Questionários de Satisfação", expanded=False):
+        st.markdown(
+            "Carregue o ficheiro exportado de questionários. O sistema irá preencher automaticamente "
+            "as colunas de **Taxa de Satisfação por módulo**, **Taxa de satisfação Final** e "
+            "**Avaliação do Formador** nas ações correspondentes."
+        )
+        st.info(
+            "ℹ️ **Lógica de cálculo (escala 1-4 → %):**\n"
+            "- **Taxa de Satisfação MXX** — média das respostas dos Formandos por módulo\n"
+            "- **Taxa de satisfação Final** — média das respostas dos Formandos ao questionário global da Ação\n"
+            "- **Avaliação formador** — média das avaliações de Formador/Tutor feitas pela Coordenação Pedagógica",
+            icon="📋"
+        )
+
+        if st.session_state.acoes_df.empty or "Ação" not in st.session_state.acoes_df.columns or \
+           st.session_state.acoes_df["Ação"].dropna().empty:
+            st.warning("⚠️ Não existem Ações carregadas. Carregue primeiro o ficheiro de Ações.")
+        else:
+            ações_disponiveis = st.session_state.acoes_df["Ação"].dropna().unique()
+            st.caption(f"Ações disponíveis para associação: {len(ações_disponiveis)} ação(ões)")
+
+        fich_quest = st.file_uploader(
+            "Selecione o ficheiro de questionários (.xlsx ou .csv)",
+            type=None,
+            accept_multiple_files=False,
+            key=f"upload_q_{st.session_state.uploader_key_q}"
+        )
+
+        modo_quest = st.radio(
+            "Modo de importação:",
+            ["Atualizar (sobrescreve satisfação/formador existentes)", "Manter valores existentes (só preenche vazios)"],
+            horizontal=False,
+            key="modo_quest"
+        )
+
+        if fich_quest:
+            try:
+                df_q_raw = ler_ficheiro(fich_quest)
+                if not detectar_questionario(df_q_raw):
+                    st.error(f"❌ O ficheiro não parece ser de questionários. Colunas detetadas: `{'`, `'.join(df_q_raw.columns.tolist())}`")
+                else:
+                    st.success(f"✅ Ficheiro reconhecido como **Questionários** ({len(df_q_raw)} linhas, {df_q_raw['Shortname'].nunique() if 'Shortname' in df_q_raw.columns else '?'} ações).")
+
+                    # Preview das ações presentes no ficheiro
+                    if "Shortname" in df_q_raw.columns:
+                        sn_set = set(df_q_raw["Shortname"].astype(str).str.strip().unique())
+                        acoes_set = set(st.session_state.acoes_df["Ação"].astype(str).str.strip().unique()) if "Ação" in st.session_state.acoes_df.columns else set()
+                        matches = sn_set & acoes_set
+                        sem_match = sn_set - acoes_set
+                        st.caption(f"🔗 Ações encontradas em ambos os ficheiros: **{len(matches)}** | Apenas no questionário (serão ignoradas): **{len(sem_match)}**")
+
+                    if st.button("▶️ Aplicar Questionários às Ações", type="primary", use_container_width=True):
+                        df_base = st.session_state.acoes_df.copy()
+
+                        if "Manter valores existentes" in modo_quest:
+                            # Guardar valores existentes não-nulos
+                            cols_sat = ["Taxa de Satisfação M00"] + [f"Taxa de Satisfação M{i:02d}" for i in range(1, 13)] + ["Taxa de satisfação Final", "Avaliação formador"]
+                            snap = {col: df_base[col].copy() for col in cols_sat if col in df_base.columns}
+                            df_atualizado, log_q = processar_questionarios(df_q_raw, df_base)
+                            # Restaurar valores que já existiam
+                            for col, serie_orig in snap.items():
+                                mascara_tinha = serie_orig.notna()
+                                df_atualizado.loc[mascara_tinha, col] = serie_orig[mascara_tinha]
+                        else:
+                            df_atualizado, log_q = processar_questionarios(df_q_raw, df_base)
+
+                        st.session_state.acoes_df = df_atualizado
+                        st.session_state.editor_key_cursos += 1
+                        st.session_state.uploader_key_q += 1
+
+                        for linha in log_q:
+                            st.markdown(linha, unsafe_allow_html=True)
+                        st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro ao processar ficheiro: `{e}`")
 
     st.markdown("---")
     st.subheader("📋 Tabela por Ação")
