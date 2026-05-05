@@ -30,7 +30,7 @@ def mostrar_welcome():
     # Conteúdo personalizado por role
     if role == "admin":
         _tutorial_admin()
-    elif role == "gestor_BALANÇOS":
+    elif role == "gestor_BALANCOS":
         _tutorial_gestor_balancos()
     elif role == "gestor_qualidade":
         _tutorial_gestor_qualidade()
