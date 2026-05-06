@@ -63,18 +63,24 @@ ALIASES_FORMANDOS: dict[str, list[str]] = {
 }
 
 ALIASES_CURSOS: dict[str, list[str]] = {
-    "Ação":                   ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao"],
-    "Data Inicial":           ["Data_Inicial", "DataInicial", "Data inicio", "Data de início"],
-    "Data Final":             ["Data_Final", "DataFinal", "Data fim", "Data de fim"],
-    "Inscritos":              ["Total inscritos", "Num inscritos", "Nº inscritos"],
+    "Ação":                   ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao",
+                                "Id"],
+    "Data Inicial":           ["Data_Inicial", "DataInicial", "Data inicio", "Data de início",
+                                "Data_inici", "Data_Inici"],
+    "Data Final":             ["Data_Final", "DataFinal", "Data fim", "Data de fim",
+                                "Data_fim", "Data_Fim"],
+    "Centro":                 ["Local"],
+    "Status":                 ["Estado"],
+    "Inscritos":              ["Total inscritos", "Num inscritos", "Nº inscritos",
+                                "Total"],
     "Aptos":                  ["Total aptos", "Certificados", "Aprovados"],
     "Inaptos":                ["Total inaptos", "Reprovados", "Não aptos"],
-    "Desistentes":            ["Total desistentes", "Desistiu", "Desistencias"],
+    "Desistentes":            ["Total desistentes", "Desistiu", "Desistencias",
+                                "Desistente"],
     "Avaliação formador":     ["Avaliacao formador", "Aval formador", "Nota formador"],
     "Taxa de satisfação Final": ["Taxa satisfacao final", "Satisfacao final",
                                   "Taxa final", "Satisfação final"],
 }
-
 # ═══════════════════════════════════════════════════════════════
 # FUNÇÕES DE NORMALIZAÇÃO E MAPEAMENTO
 # ═══════════════════════════════════════════════════════════════
@@ -324,7 +330,12 @@ def detectar_questionario(df: pd.DataFrame) -> bool:
 def ler_ficheiro(f) -> pd.DataFrame:
     nome = f.name.lower()
     if nome.endswith(".csv"):
-        df = pd.read_csv(f)
+        # Tenta UTF-8 primeiro; se falhar, usa Latin-1 (ISO-8859-1)
+        try:
+            df = pd.read_csv(f, encoding="utf-8")
+        except UnicodeDecodeError:
+            f.seek(0)  # volta ao início do ficheiro
+            df = pd.read_csv(f, encoding="latin1")
     else:
         df = pd.read_excel(f, header=0)
         if df.shape[1] < 3:
@@ -339,10 +350,19 @@ def detectar_tipo_ficheiro(df: pd.DataFrame) -> str:
     cols_norm = {_normalizar(c) for c in df.columns}
     score_c = sum(1 for s in _ASSIN_CURSOS if _normalizar(s) in cols_norm)
     score_f = sum(1 for s in _ASSIN_FORMANDOS if _normalizar(s) in cols_norm)
+
+    # Tentar aliases para cursos (igual ao que já existe para formandos)
+    df_c, _ = mapear_colunas(df.copy(), ALIASES_CURSOS)
+    cols_c = set(df_c.columns)
+    score_c_alias = len(cols_c & _ASSIN_CURSOS)
+    score_c = max(score_c, score_c_alias)
+
+    # Tentar aliases para formandos
     df_m, _ = mapear_colunas(df.copy(), ALIASES_FORMANDOS)
     cols_m = set(df_m.columns)
     score_f_alias = len(cols_m & _ASSIN_FORMANDOS)
     score_f = max(score_f, score_f_alias)
+
     if score_c == 0 and score_f == 0:
         return "desconhecido"
     return "cursos" if score_c >= score_f else "formandos"
