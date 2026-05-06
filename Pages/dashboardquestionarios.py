@@ -10,6 +10,53 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.drawing.image import Image as XLImage
 import plotly.io as pio
+import subprocess
+
+# Configuração específica para Streamlit Cloud
+def configurar_chrome_para_kaleido():
+    """Configura o Chrome/Chromium para ser usado pelo kaleido"""
+    
+    # Verifica se está no Streamlit Cloud
+    is_cloud = any(var in os.environ for var in 
+                   ["STREAMLIT_SHARING", "STREAMLIT_CLOUD", "IS_STREAMLIT_CLOUD"])
+    
+    if is_cloud:
+        # Possíveis caminhos do Chromium
+        chrome_paths = [
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium", 
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable"
+        ]
+        
+        # Procura o Chrome instalado
+        for path in chrome_paths:
+            if os.path.exists(path):
+                os.environ["KALEIDO_GOOGLE_CHROME_PATH"] = path
+                print(f"✅ Chrome/Chromium configurado: {path}")
+                return True
+        
+        # Se não encontrou, tenta instalar (fallback)
+        print("⚠️ Chrome não encontrado, tentando instalar...")
+        try:
+            subprocess.run(["apt-get", "update"], check=True, capture_output=True)
+            subprocess.run(["apt-get", "install", "-y", "chromium-browser"], 
+                          check=True, capture_output=True)
+            
+            # Verifica novamente
+            if os.path.exists("/usr/bin/chromium-browser"):
+                os.environ["KALEIDO_GOOGLE_CHROME_PATH"] = "/usr/bin/chromium-browser"
+                print("✅ Chrome instalado e configurado com sucesso!")
+                return True
+        except Exception as e:
+            print(f"❌ Falha ao instalar Chrome: {e}")
+        
+        return False
+    
+    return True
+
+# Executar configuração
+configurar_chrome_para_kaleido()
 
 # ─────────────────────────────────────────────────────────────
 # Funções de exportação (mantidas iguais)
