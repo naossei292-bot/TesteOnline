@@ -18,7 +18,7 @@ def preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
     colunas_num = [
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Inscritos", "Aptos", # "Inaptos", "Desistentes", "Devedores",  # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
@@ -55,7 +55,7 @@ def fmt_euro(v):
 def fmt_num(v):
     return f"{v:,.0f}".replace(",", ".")
 
-# ── Painéis de detalhe (igual ao original) ───────────────────────────────────
+# ── Painéis de detalhe ────────────────────────────────────────────────────────
 def painel_detalhe_acoes(df: pd.DataFrame):
     if "Centro" not in df.columns or "Ação" not in df.columns:
         return
@@ -81,24 +81,24 @@ def painel_detalhe_aptos(df: pd.DataFrame):
     st.markdown("### ✅ Ações ordenadas por Aptos")
     st.dataframe(df_todas, use_container_width=True, hide_index=True)
 
-def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):
-    if "Ação" not in df.columns:
-        return
-    cols = ["Ação", "Centro"]
-    if "Inaptos" in df.columns:
-        cols.append("Inaptos")
-    if "Desistentes" in df.columns:
-        cols.append("Desistentes")
-    if "Devedores" in df.columns:
-        cols.append("Devedores")
-    df_filt = df[cols].copy()
-    mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0) | (df_filt.get("Devedores", 0) > 0)
-    df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes", "Devedores"], ascending=False)
-    if df_filt.empty:
-        st.info("Nenhuma ação com inaptos, desistentes ou devedores.")
-        return
-    st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
-    st.dataframe(df_filt, use_container_width=True, hide_index=True)
+# def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):  # COMENTADO — envolve Inaptos, Desistentes, Devedores
+#     if "Ação" not in df.columns:
+#         return
+#     cols = ["Ação", "Centro"]
+#     if "Inaptos" in df.columns:
+#         cols.append("Inaptos")
+#     if "Desistentes" in df.columns:
+#         cols.append("Desistentes")
+#     if "Devedores" in df.columns:
+#         cols.append("Devedores")
+#     df_filt = df[cols].copy()
+#     mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0) | (df_filt.get("Devedores", 0) > 0)
+#     df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes", "Devedores"], ascending=False)
+#     if df_filt.empty:
+#         st.info("Nenhuma ação com inaptos, desistentes ou devedores.")
+#         return
+#     st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
+#     st.dataframe(df_filt, use_container_width=True, hide_index=True)
 
 def painel_detalhe_satisfacao(df: pd.DataFrame):
     col_sat = "Taxa de satisfação Final"
@@ -134,7 +134,7 @@ def painel_detalhe_satisfacao(df: pd.DataFrame):
             st.info("Nenhuma ação está abaixo deste objetivo.")
         else:
             st.dataframe(df_abaixo, use_container_width=True, hide_index=True)
-            
+
 def painel_detalhe_valor_recebido(df: pd.DataFrame):
     if "Valor Total Recebido" not in df.columns or "Ação" not in df.columns:
         return
@@ -155,9 +155,9 @@ def secao_kpis(df: pd.DataFrame):
     total_acoes     = df["Ação"].nunique() if "Ação" in df.columns else 0
     total_inscritos = safe_sum(df, "Inscritos")
     total_aptos     = safe_sum(df, "Aptos")
-    total_inaptos   = safe_sum(df, "Inaptos")
-    total_desist    = safe_sum(df, "Desistentes")
-    total_deved     = safe_sum(df, "Devedores")
+    # total_inaptos   = safe_sum(df, "Inaptos")       # COMENTADO
+    # total_desist    = safe_sum(df, "Desistentes")   # COMENTADO
+    # total_deved     = safe_sum(df, "Devedores")     # COMENTADO
     t_aprovacao     = taxa(total_aptos, total_inscritos)
     media_sat       = safe_mean(df, "Taxa de satisfação Final")
     media_form      = safe_mean(df, "Avaliação formador")
@@ -171,8 +171,8 @@ def secao_kpis(df: pd.DataFrame):
         st.session_state.mostrar_inscritos = False
     if "mostrar_aptos" not in st.session_state:
         st.session_state.mostrar_aptos = False
-    if "mostrar_inaptos_desist" not in st.session_state:
-        st.session_state.mostrar_inaptos_desist = False
+    # if "mostrar_inaptos_desist" not in st.session_state:   # COMENTADO
+    #     st.session_state.mostrar_inaptos_desist = False    # COMENTADO
     if "mostrar_satisfacao" not in st.session_state:
         st.session_state.mostrar_satisfacao = False
     if "mostrar_valor" not in st.session_state:
@@ -183,7 +183,7 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"🎓 Ações\n\n{fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False
+            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_acoes = not st.session_state.mostrar_acoes
@@ -192,7 +192,7 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"👥 Inscritos\n\n{fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False
+            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_inscritos = not st.session_state.mostrar_inscritos
@@ -201,28 +201,28 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"✅ Aptos\n\n{fmt_num(total_aptos)}\nTaxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
-            st.session_state.mostrar_inaptos_desist = False
+            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_aptos = not st.session_state.mostrar_aptos
             st.rerun()
-    with col4:
-        if st.button(f"⚠️ Inaptos / Desist.\n\n{fmt_num(total_inaptos)} / {fmt_num(total_desist)}\nDevedores: {fmt_num(total_deved)}",
-                     key="btn_inaptos", use_container_width=True):
-            st.session_state.mostrar_acoes = False
-            st.session_state.mostrar_inscritos = False
-            st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_satisfacao = False
-            st.session_state.mostrar_valor = False
-            st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
-            st.rerun()
+    # with col4:   # COMENTADO — botão Inaptos / Desistentes / Devedores
+    #     if st.button(f"⚠️ Inaptos / Desist.\n\n{fmt_num(total_inaptos)} / {fmt_num(total_desist)}\nDevedores: {fmt_num(total_deved)}",
+    #                  key="btn_inaptos", use_container_width=True):
+    #         st.session_state.mostrar_acoes = False
+    #         st.session_state.mostrar_inscritos = False
+    #         st.session_state.mostrar_aptos = False
+    #         st.session_state.mostrar_satisfacao = False
+    #         st.session_state.mostrar_valor = False
+    #         st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
+    #         st.rerun()
     with col5:
         if st.button(f"⭐ Satisfação Final\n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
                      use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False
+            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
             st.rerun()
@@ -232,7 +232,7 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False
+            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = not st.session_state.mostrar_valor
             st.rerun()
@@ -246,9 +246,9 @@ def secao_kpis(df: pd.DataFrame):
     if st.session_state.mostrar_aptos:
         with st.expander("📌 Detalhe: Top Aptos", expanded=True):
             painel_detalhe_aptos(df)
-    if st.session_state.mostrar_inaptos_desist:
-        with st.expander("📌 Detalhe: Inaptos / Desistentes", expanded=True):
-            painel_detalhe_inaptos_desistentes(df)
+    # if st.session_state.mostrar_inaptos_desist:   # COMENTADO — painel Inaptos/Desistentes/Devedores
+    #     with st.expander("📌 Detalhe: Inaptos / Desistentes", expanded=True):
+    #         painel_detalhe_inaptos_desistentes(df)
     if st.session_state.mostrar_satisfacao:
         with st.expander("📌 Detalhe: Satisfação (melhores/piores)", expanded=True):
             painel_detalhe_satisfacao(df)
@@ -262,8 +262,6 @@ def grafico_status(df: pd.DataFrame):
         return None
     counts = df["Status"].value_counts().reset_index()
     counts.columns = ["Status", "Total"]
-    
-    # Gráfico de rosca ampliado com percentagens
     fig = go.Figure(go.Pie(
         labels=counts["Status"],
         values=counts["Total"],
@@ -283,8 +281,6 @@ def grafico_status(df: pd.DataFrame):
         margin=dict(t=60, l=20, r=150, b=20)
     )
     st.plotly_chart(fig, use_container_width=True, key="status_chart")
-    
-    # Clique para detalhe (mantido)
     selecao = st.session_state.get("status_chart", {}).get("selection", {})
     estado_selecionado = st.session_state.get("estado_selecionado", None)
     if selecao and selecao.get("points"):
@@ -317,31 +313,29 @@ def painel_detalhe_estado(df: pd.DataFrame, estado: str):
 def grafico_funil(df: pd.DataFrame):
     inscritos = safe_sum(df, "Inscritos")
     aptos = safe_sum(df, "Aptos")
-    inaptos = safe_sum(df, "Inaptos")
-    desist = safe_sum(df, "Desistentes")
-    deved = safe_sum(df, "Devedores")
+    # inaptos = safe_sum(df, "Inaptos")       # COMENTADO
+    # desist  = safe_sum(df, "Desistentes")   # COMENTADO
+    # deved   = safe_sum(df, "Devedores")     # COMENTADO
 
-    # Se não houver inscritos, não exibe
     if inscritos == 0:
         st.info("Sem dados de inscritos.")
         return
 
-    # Calcular percentagens em relação aos inscritos
+    # Percentagens e categorias sem Inaptos, Desistentes e Devedores   # COMENTADO
     data = {
-        "Categoria": ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"],
-        "Valor": [inscritos, aptos, inaptos, desist, deved],
-        "Percentagem": [100.0, (aptos/inscritos)*100, (inaptos/inscritos)*100, (desist/inscritos)*100, (deved/inscritos)*100]
+        "Categoria": ["Inscritos", "Aptos"],  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
+        "Valor": [inscritos, aptos],           # inaptos, desist, deved removidos                  # COMENTADO
+        "Percentagem": [100.0, (aptos/inscritos)*100]  # entradas de inaptos/desist/deved removidas # COMENTADO
     }
     df_plot = pd.DataFrame(data)
 
-    # Gráfico de barras horizontais com percentagens
     fig = go.Figure(go.Bar(
         x=df_plot["Percentagem"],
         y=df_plot["Categoria"],
         orientation='h',
         text=df_plot.apply(lambda r: f"{r['Valor']:,.0f} ({r['Percentagem']:.1f}%)", axis=1),
         textposition='outside',
-        marker_color=['#1f77b4', '#2ca02c', '#d62728', '#ff7f0e', '#9467bd'],
+        marker_color=['#1f77b4', '#2ca02c'],  # cores de Inaptos, Desist., Devedores removidas   # COMENTADO
         hovertemplate='<b>%{y}</b><br>Valor: %{customdata[0]:,.0f}<br>Percentagem: %{x:.1f}%<extra></extra>',
         customdata=df_plot[["Valor"]].values
     ))
@@ -354,36 +348,25 @@ def grafico_funil(df: pd.DataFrame):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# ── Timeline com escolha: Ano específico ou Intervalo ─────────────────────────
+# ── Timeline ─────────────────────────────────────────────────────────────────
 def grafico_timeline_mensal_intervalo(df: pd.DataFrame, data_inicio: date, data_fim: date):
-    """
-    Gera gráfico mensal para um intervalo de datas (pode abranger vários anos).
-    Retorna o DataFrame agregado (com colunas 'AnoMês', 'Mês_num', 'Ano', 'Ações', 'Inscritos', 'Aptos')
-    e o DataFrame original filtrado para esse intervalo.
-    """
     if "Data Inicial" not in df.columns or df["Data Inicial"].isna().all():
         return None, None
     df_t = df.dropna(subset=["Data Inicial"]).copy()
-    # Filtrar pelo intervalo
     df_t = df_t[(df_t["Data Inicial"].dt.date >= data_inicio) & (df_t["Data Inicial"].dt.date <= data_fim)]
     if df_t.empty:
         return None, None
-    # Criar coluna de ano-mês para agregação
     df_t["AnoMês"] = df_t["Data Inicial"].dt.to_period("M")
     df_t["Mês_num"] = df_t["Data Inicial"].dt.month
     df_t["Ano"] = df_t["Data Inicial"].dt.year
-    # Agregar por AnoMês
     agg = (df_t.groupby(["AnoMês", "Ano", "Mês_num"])
                 .agg(Ações=("Ação", "count"),
                      Inscritos=("Inscritos", "sum"),
                      Aptos=("Aptos", "sum"))
                 .reset_index())
-    # Ordenar por AnoMês
     agg = agg.sort_values("AnoMês")
-    # Criar rótulos: "Mês Ano" (ex: "Jan 2024")
     nomes_meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
     agg["Rótulo"] = agg.apply(lambda r: f"{nomes_meses[r['Mês_num']-1]} {r['Ano']}", axis=1)
-    # Construir gráfico
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=agg["Rótulo"], y=agg["Ações"], name="Nº Ações",
                          hovertemplate="<b>%{x}</b><br>Ações: %{y}<br><i>Clique para ver detalhe</i><extra></extra>"),
@@ -401,7 +384,6 @@ def grafico_timeline_mensal_intervalo(df: pd.DataFrame, data_inicio: date, data_
     return agg, df_t
 
 def grafico_timeline_ano_especifico(df: pd.DataFrame, ano: int):
-    """Gráfico mensal para um ano específico (12 meses). Retorna agg e df filtrado."""
     if "Data Inicial" not in df.columns or df["Data Inicial"].isna().all():
         return None, None
     df_t = df.dropna(subset=["Data Inicial"]).copy()
@@ -436,7 +418,6 @@ def grafico_timeline_ano_especifico(df: pd.DataFrame, ano: int):
     return agg, df_ano
 
 def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int, mes_num: int):
-    """Exibe detalhe do mês/ano a partir de um DataFrame já filtrado (pode vir de ano específico ou intervalo)."""
     df_mes = df_filtrado[(df_filtrado["Data Inicial"].dt.year == ano) & (df_filtrado["Data Inicial"].dt.month == mes_num)].copy()
     if df_mes.empty:
         return
@@ -444,7 +425,6 @@ def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int
                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][mes_num-1]
     st.markdown(f"### 📅 Detalhe — **{nome_mes} de {ano}**")
     st.markdown("*Clique novamente na barra do gráfico para fechar*")
-    
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         n_acoes = df_mes["Ação"].nunique() if "Ação" in df_mes.columns else len(df_mes)
@@ -456,15 +436,15 @@ def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int
         apt = safe_sum(df_mes, "Aptos")
         st.metric("Aptos", fmt_num(apt), delta=f"Taxa: {taxa(apt, ins)}%")
     with k4:
-        st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")
+        # st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
+        pass
     with k5:
         media_s = safe_mean(df_mes, "Taxa de satisfação Final")
         st.metric("Satisfação Média", f"{media_s:.2f}" if media_s else "—")
-    
     st.markdown("<div style='margin:10px 0'></div>", unsafe_allow_html=True)
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes",
+        "Inscritos", "Aptos", # "Inaptos", "Desistentes",   # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
     ] if c in df_mes.columns]
@@ -520,14 +500,14 @@ def grafico_receita(df: pd.DataFrame):
                       yaxis=dict(showgrid=False), legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig, use_container_width=True)
 
-# ── Tabela Geral de Ações (com todas as colunas por defeito) ─────────────────
+# ── Tabela Geral de Ações ─────────────────────────────────────────────────────
 def tabela_geral_acoes(df: pd.DataFrame):
     if df.empty:
         st.info("Nenhum dado para exibir.")
         return
     ordem_canonica = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",
+        "Inscritos", "Aptos", # "Inaptos", "Desistentes", "Devedores",   # COMENTADO
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
         "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
         "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
@@ -554,7 +534,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
     column_config = {}
     for col in df_exibir.columns:
-        if col in ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"]:
+        if col in ["Inscritos", "Aptos"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
             valores = df_exibir[col].dropna()
             if not valores.empty and pd.api.types.is_numeric_dtype(valores):
                 max_val = valores.max()
@@ -566,165 +546,94 @@ def tabela_geral_acoes(df: pd.DataFrame):
             column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
     st.dataframe(df_exibir, use_container_width=True, hide_index=True, column_config=column_config, height=min(600, 35 + len(df_exibir) * 35))
 
-# ── Filtros na sidebar (data mínima 2010) ─────────────────────────────────────
+# ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
         st.markdown("## 🔍 Filtros")
         st.markdown("---")
-
-        # --- Estado da Ação (normalizar maiúsculas/minúsculas) ---
         if "Status" in df.columns:
-            # Guardar os valores originais
             valores_status = sorted(df["Status"].dropna().unique().tolist())
-            # Criar uma cópia normalizada para comparação (maiúsculas)
-            status_norm = {v: v.upper() for v in valores_status}
-            sel_status = st.multiselect(
-                "Estado da Ação",
-                options=valores_status,
-                default=valores_status,
-                key="dash_status"
-            )
+            sel_status = st.multiselect("Estado da Ação", options=valores_status, default=valores_status, key="dash_status")
             if sel_status:
-                # Filtrar usando os valores exatos (para preservar a escrita original)
                 df = df[df["Status"].isin(sel_status)]
-            # Caso queira agrupar "Cancelada" e "CANCELADA" na mesma opção, precisaria de um mapeamento mais complexo
-            # Mas manteremos assim para evitar perda de dados.
-
-        # --- Tipo de Ação (extração mais robusta) ---
         if "Ação" in df.columns:
-            # Função melhorada para extrair o tipo
             def extrair_tipo(nome):
                 nome = str(nome).strip()
-                # Padrão: se contiver '_' pegar a parte antes do primeiro '_'
                 if '_' in nome:
                     return nome.split('_')[0]
-                # Se contiver '/' pegar antes da primeira '/'
                 if '/' in nome:
                     return nome.split('/')[0]
-                # Caso contrário, devolver os primeiros 4 caracteres (ou até 3 se houver número)
                 return nome[:4] if len(nome) >= 4 else nome
-
             df = df.copy()
             df["_Tipo"] = df["Ação"].astype(str).apply(extrair_tipo)
             tipos = sorted(df["_Tipo"].dropna().unique().tolist())
             if tipos:
-                tipo_sel = st.multiselect(
-                    "Tipo de Ação",
-                    tipos,
-                    default=tipos,
-                    key="dash_tipo"
-                )
+                tipo_sel = st.multiselect("Tipo de Ação", tipos, default=tipos, key="dash_tipo")
                 if tipo_sel:
                     df = df[df["_Tipo"].isin(tipo_sel)]
             df = df.drop(columns=["_Tipo"])
-
-        # --- Centro ---
         if "Centro" in df.columns:
             centros = sorted(df["Centro"].dropna().unique().tolist())
-            sel_centro = st.multiselect(
-                "Centro",
-                centros,
-                default=centros,
-                key="dash_centro"
-            )
+            sel_centro = st.multiselect("Centro", centros, default=centros, key="dash_centro")
             if sel_centro:
                 df = df[df["Centro"].isin(sel_centro)]
-
-        # --- Formador ---
         if "Formador" in df.columns:
             formadores = sorted(df["Formador"].dropna().unique().tolist())
             if formadores:
-                sel_formador = st.multiselect(
-                    "Formador",
-                    formadores,
-                    default=formadores,
-                    key="dash_formador"
-                )
+                sel_formador = st.multiselect("Formador", formadores, default=formadores, key="dash_formador")
                 if sel_formador:
                     df = df[df["Formador"].isin(sel_formador)]
-
-        # --- Período (Data Inicial) com mínimo 2010 ---
         todas_datas = pd.Series(dtype="datetime64[ns]")
         for col in ["Data Inicial", "Data Final"]:
             if col in df.columns:
                 todas_datas = pd.concat([todas_datas, df[col].dropna()])
-
         if not todas_datas.empty:
-            # Assegurar que as datas estão no tipo datetime (já estão em preparar_dados)
             data_min_global = max(todas_datas.min().date(), date(2010, 1, 1))
             data_max_global = todas_datas.max().date()
-            
-            intervalo = st.date_input(
-                "Período (Data Inicial)",
-                value=(data_min_global, data_max_global),
-                min_value=date(2010, 1, 1),
-                max_value=data_max_global,
-                key="dash_datas"
-            )
+            intervalo = st.date_input("Período (Data Inicial)", value=(data_min_global, data_max_global),
+                                      min_value=date(2010, 1, 1), max_value=data_max_global, key="dash_datas")
             if isinstance(intervalo, (list, tuple)) and len(intervalo) == 2:
                 data_inicio_filtro, data_fim_filtro = intervalo
-                # Garantir que a coluna Data Inicial existe e é datetime
                 if "Data Inicial" in df.columns and pd.api.types.is_datetime64_any_dtype(df["Data Inicial"]):
-                    # Extrair a parte da data (sem horas)
                     df_datas = df["Data Inicial"].dt.date
                     df = df[(df_datas >= data_inicio_filtro) & (df_datas <= data_fim_filtro)]
         else:
-            st.date_input(
-                "Período (Data Inicial)",
-                value=(date(2010,1,1), date(2010,1,1)),
-                min_value=date(2010,1,1),
-                max_value=date(2030,12,31),
-                key="dash_datas_vazio",
-                disabled=True
-            )
-
+            st.date_input("Período (Data Inicial)", value=(date(2010,1,1), date(2010,1,1)),
+                          min_value=date(2010,1,1), max_value=date(2030,12,31), key="dash_datas_vazio", disabled=True)
         st.markdown("---")
-        # Botão para limpar todos os filtros (reinicia a página)
         if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
-            # Limpar todas as chaves de filtro da session_state
             for key in ["dash_status", "dash_tipo", "dash_centro", "dash_formador", "dash_datas"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
-
         st.caption(f"🗂 {len(df)} ações filtradas")
     return df
 
-# ── Dashboard principal ───────────────────────────────────────────────────────
-# ── NOVAS FUNÇÕES DE TIMELINE MELHORADAS ─────────────────────────────────────
-
+# ── Funções de Timeline melhoradas ────────────────────────────────────────────
 def gerar_opcoes_rapidas(df: pd.DataFrame):
-    """Gera opções de períodos rápidos com base nos dados (trimestres do ano atual inclusive)."""
     if "Data Inicial" not in df.columns or df["Data Inicial"].isna().all():
         return {}
     today = date.today()
     ano_atual = today.year
     data_max = df["Data Inicial"].max().date()
     data_min = max(df["Data Inicial"].min().date(), date(2010, 1, 1))
-    
     opcoes = {
         "Todo o período": (data_min, data_max),
         "Ano atual": (date(ano_atual, 1, 1), date(ano_atual, 12, 31)),
         "Ano passado": (date(ano_atual - 1, 1, 1), date(ano_atual - 1, 12, 31)),
     }
-    
-    # Últimos 12 meses (a partir da data máxima dos dados)
     data_max_ts = pd.Timestamp(data_max)
     ultimos_12_inicio = (data_max_ts - pd.DateOffset(months=11)).date()
     opcoes["Últimos 12 meses"] = (ultimos_12_inicio, data_max)
-    
-    # Trimestres do ano atual
     opcoes["1º Trimestre (Jan-Mar)"] = (date(ano_atual, 1, 1), date(ano_atual, 3, 31))
     opcoes["2º Trimestre (Abr-Jun)"] = (date(ano_atual, 4, 1), date(ano_atual, 6, 30))
     opcoes["3º Trimestre (Jul-Set)"] = (date(ano_atual, 7, 1), date(ano_atual, 9, 30))
     opcoes["4º Trimestre (Out-Dez)"] = (date(ano_atual, 10, 1), date(ano_atual, 12, 31))
     opcoes["1º Semestre (Jan-Jun)"] = (date(ano_atual, 1, 1), date(ano_atual, 6, 30))
     opcoes["2º Semestre (Jul-Dez)"] = (date(ano_atual, 7, 1), date(ano_atual, 12, 31))
-    
-    
     return opcoes
+
 def grafico_timeline_intervalo_melhorado(df: pd.DataFrame, data_inicio: date, data_fim: date):
-    """Versão melhorada com suporte a intervalo e clique."""
     if "Data Inicial" not in df.columns or df["Data Inicial"].isna().all():
         return None, None
     df_t = df.dropna(subset=["Data Inicial"]).copy()
@@ -741,7 +650,6 @@ def grafico_timeline_intervalo_melhorado(df: pd.DataFrame, data_inicio: date, da
                 .reset_index().sort_values("AnoMês"))
     nomes_meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
     agg["Rótulo"] = agg.apply(lambda r: f"{nomes_meses[r['Mês_num']-1]} {r['Ano']}", axis=1)
-    
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=agg["Rótulo"], y=agg["Ações"], name="Nº Ações",
                          hovertemplate="<b>%{x}</b><br>Ações: %{y}<br><i>Clique para detalhe</i><extra></extra>"),
@@ -762,7 +670,6 @@ def grafico_timeline_intervalo_melhorado(df: pd.DataFrame, data_inicio: date, da
     return agg, df_t
 
 def grafico_timeline_ano_especifico_melhorado(df: pd.DataFrame, ano: int):
-    """Versão melhorada para ano específico."""
     if "Data Inicial" not in df.columns or df["Data Inicial"].isna().all():
         return None, None
     df_ano = df[df["Data Inicial"].dt.year == ano].copy()
@@ -779,7 +686,6 @@ def grafico_timeline_ano_especifico_melhorado(df: pd.DataFrame, ano: int):
     agg["Ações"] = agg["Ações"].astype(int)
     nomes_meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
     agg["Rótulo"] = agg["Mês"].apply(lambda x: nomes_meses[x-1])
-    
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=agg["Rótulo"], y=agg["Ações"], name="Nº Ações",
                          hovertemplate="<b>%{x}</b><br>Ações: %{y}<br><i>Clique para detalhe</i><extra></extra>"),
@@ -800,7 +706,6 @@ def grafico_timeline_ano_especifico_melhorado(df: pd.DataFrame, ano: int):
     return agg, df_ano
 
 def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: int):
-    """Exibe detalhe do mês com layout melhorado."""
     df_mes = df_filtrado[(df_filtrado["Data Inicial"].dt.year == ano) & (df_filtrado["Data Inicial"].dt.month == mes_num)].copy()
     if df_mes.empty:
         return
@@ -808,7 +713,6 @@ def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: i
                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][mes_num-1]
     st.markdown(f"### 📅 Detalhe — **{nome_mes} de {ano}**")
     st.markdown("*Clique novamente na barra do gráfico para fechar*")
-    
     cols = st.columns(5)
     with cols[0]:
         n_acoes = df_mes["Ação"].nunique() if "Ação" in df_mes.columns else len(df_mes)
@@ -820,15 +724,15 @@ def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: i
         apt = safe_sum(df_mes, "Aptos")
         st.metric("Aptos", fmt_num(apt), delta=f"Taxa: {taxa(apt, ins)}%")
     with cols[3]:
-        st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")
+        # st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
+        pass
     with cols[4]:
         media_s = safe_mean(df_mes, "Taxa de satisfação Final")
         st.metric("Satisfação Média", f"{media_s:.2f}" if media_s else "—")
-    
     st.markdown("---")
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes",
+        "Inscritos", "Aptos", # "Inaptos", "Desistentes",   # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
     ] if c in df_mes.columns]
@@ -838,6 +742,7 @@ def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: i
             df_show[col_data] = df_show[col_data].dt.strftime("%d/%m/%Y")
     st.dataframe(df_show, use_container_width=True, hide_index=True, height=min(400, 55 + len(df_show)*35))
 
+# ── Dashboard principal ───────────────────────────────────────────────────────
 def mostrar_dashboard():
     st.title("📊 Dashboard de Formações")
     st.markdown("Análise interativa — filtre pelo painel lateral")
@@ -853,11 +758,9 @@ def mostrar_dashboard():
         st.warning("Nenhuma ação corresponde aos filtros seleccionados.")
         return
 
-    # KPIs
     secao_kpis(df)
     st.markdown("---")
 
-    # Gráfico de Estado e Funil
     c1, c2 = st.columns([1, 1.4])
     with c1:
         estado_sel = grafico_status(df)
@@ -867,18 +770,14 @@ def mostrar_dashboard():
         grafico_funil(df)
     st.markdown("---")
 
-    # ========== GRÁFICO DE EVOLUÇÃO MENSAL (SEM FILTROS ADICIONAIS) ==========
     st.markdown("### 📈 Evolução Mensal (todos os meses disponíveis)")
 
     if "Data Inicial" in df.columns and not df["Data Inicial"].isna().all():
-        # Preparar dados mensais (agregar por ano-mês)
         df_t = df.dropna(subset=["Data Inicial"]).copy()
-        # Criar coluna de ano-mês
         df_t["AnoMês"] = df_t["Data Inicial"].dt.to_period("M")
         df_t["Mês_num"] = df_t["Data Inicial"].dt.month
         df_t["Ano"] = df_t["Data Inicial"].dt.year
 
-        # Agregar
         agg = (df_t.groupby(["AnoMês", "Ano", "Mês_num"])
                     .agg(Ações=("Ação", "count"),
                          Inscritos=("Inscritos", "sum"),
@@ -887,11 +786,9 @@ def mostrar_dashboard():
                     .sort_values("AnoMês"))
 
         if not agg.empty:
-            # Rótulos: "Mês Ano" (ex: "Jan 2024")
             nomes_meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
             agg["Rótulo"] = agg.apply(lambda r: f"{nomes_meses[r['Mês_num']-1]} {r['Ano']}", axis=1)
 
-            # Construir gráfico interativo
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(go.Bar(x=agg["Rótulo"], y=agg["Ações"], name="Nº Ações",
                                  hovertemplate="<b>%{x}</b><br>Ações: %{y}<br><i>Clique para detalhe</i><extra></extra>"),
@@ -910,7 +807,6 @@ def mostrar_dashboard():
             )
             st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_sem_filtro")
 
-            # Tratamento do clique (detalhe do mês)
             chart_key = "timeline_sem_filtro"
             selecao = st.session_state.get(chart_key, {}).get("selection", {})
             rotulo_sel = st.session_state.get("rotulo_mes_sem_filtro", None)
@@ -933,10 +829,8 @@ def mostrar_dashboard():
                     nome_mes = partes[0]
                     ano = int(partes[1])
                     mes_num = nomes_meses.index(nome_mes) + 1
-                    # Filtrar o DataFrame original para o mês/ano
                     df_mes = df_t[(df_t["Data Inicial"].dt.year == ano) & (df_t["Data Inicial"].dt.month == mes_num)].copy()
                     if not df_mes.empty:
-                        # Exibir detalhe (mesma função que usava antes)
                         painel_detalhe_mes_melhorado(df_mes, ano, mes_num)
         else:
             st.info("Sem dados para construir o gráfico de evolução mensal.")
@@ -944,7 +838,6 @@ def mostrar_dashboard():
         st.info("Não existem datas para construir o gráfico de evolução mensal.")
     st.markdown("---")
 
-    # Gráficos de receita e avaliação
     c5, c6 = st.columns([1.2, 1])
     with c5:
         grafico_receita(df)
