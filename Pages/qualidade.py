@@ -975,6 +975,12 @@ def mostrar_qualidade():
                     df_recl['Valor Devolvido'] = 0.0
                     df_recl.loc[cond_aceite, 'Valor Devolvido'] = df_recl.loc[cond_aceite, 'valor_clean']
                     
+                    # ---- Devoluções Negadas (não aceites, mas com valor pedido) ----
+                    df_recl['Valor_Nao_Aceite'] = 0.0
+                    cond_nao_aceite = ~cond_aceite   # todas as que não foram aceites
+                    # Só interessa se existir um valor (diferente de zero e não nulo) na coluna 'valor_clean'
+                    df_recl.loc[cond_nao_aceite & (df_recl['valor_clean'] > 0), 'Valor_Nao_Aceite'] = df_recl.loc[cond_nao_aceite & (df_recl['valor_clean'] > 0), 'valor_clean']
+
                     # Remover colunas auxiliares
                     df_recl.drop(columns=['devolucao_norm', 'valor_clean'], inplace=True, errors='ignore')
                     
@@ -1002,26 +1008,33 @@ def mostrar_qualidade():
         taxa_reclamacoes_curso = (total_reclamacoes / total_cursos_realizados * 100) if total_cursos_realizados > 0 else 0
 
         total_devolvido = df_recl['Valor Devolvido'].sum()
+        total_negado = df_recl['Valor_Nao_Aceite'].sum()
         meta_reclamacao = st.session_state.obj_reclamacao_curso
         delta_recl = taxa_reclamacoes_curso - meta_reclamacao
         delta_color = "▲" if delta_recl > 0 else "▼"
 
-        col_recl1, col_recl2, col_recl3 = st.columns(3)
-        with col_recl1:
+        col_recl11, col_recl2, col_recl3, col_recl4 = st.columns(4)
+        with col_recl11:
             st.metric("📊 Taxa de Reclamações por Curso", f"{taxa_reclamacoes_curso:.1f}%",
                       delta=f"{delta_color} {abs(delta_recl):.1f}%",
                       help=f"Objetivo: ≤ {meta_reclamacao}% | {total_reclamacoes} reclamações em {total_cursos_realizados} cursos")
         with col_recl2:
             st.metric("💰 Total Devolvido", f"{total_devolvido:,.2f} €".replace(',', ' '))
         with col_recl3:
+            st.metric("❌ Total de Devoluções Negadas", f"{total_negado:,.2f} €".replace(',', ' '))
+        with col_recl4:
             st.metric("📋 Nº Reclamações", total_reclamacoes)
 
         # Lista detalhada (sem conversão de data)
         with st.expander("📋 Lista completa de Reclamações", expanded=False):
             df_lista = df_recl.copy()
             # A coluna 'data' é exibida como "Mês"
-            df_show = df_lista[['data', 'Centro', 'Ação', 'motivo', 'Valor Devolvido', 'Status']].copy()
-            df_show.rename(columns={'data': 'Mês'}, inplace=True)
+            df_show = df_lista[['data', 'Centro', 'Ação', 'motivo', 'Valor Devolvido', 'Valor_Nao_Aceite', 'Status']].copy()
+            df_show.rename(columns={
+                'data': 'Mês',
+                'Valor Devolvido': 'Devolvido (Aceite)',
+                'Valor_Nao_Aceite': 'Valor Não Aceite'
+            }, inplace=True)
             st.dataframe(df_show, use_container_width=True)
             st.caption(f"📌 Mostrando {len(df_show)} reclamações.")
     else:
