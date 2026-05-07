@@ -999,20 +999,54 @@ def mostrar_qualidade():
             df_recl = None
 
     if df_recl is not None and has_cursos:
-        # Aplicar filtro de centro se existir
-        if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro and 'Centro' in df_recl.columns:
-            df_recl = df_recl[df_recl['Centro'].isin(st.session_state.filtro_centro)]
-
-        total_reclamacoes = len(df_recl)
+        # ------------------------------
+        # FILTROS ESPECÍFICOS PARA RECLAMAÇÕES
+        # ------------------------------
+        with st.expander("🔍 Filtrar reclamações", expanded=False):
+            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            
+            with col_f1:
+                centros_opcoes = sorted(df_recl['Centro'].dropna().unique())
+                centros_sel = st.multiselect("Centro", options=centros_opcoes, default=centros_opcoes, key="filtro_recl_centro")
+            
+            with col_f2:
+                meses_opcoes = sorted(df_recl['data'].dropna().unique())
+                meses_sel = st.multiselect("Mês", options=meses_opcoes, default=meses_opcoes, key="filtro_recl_mes")
+            
+            with col_f3:
+                cursos_opcoes = sorted(df_recl['Ação'].dropna().unique())
+                cursos_sel = st.multiselect("Curso", options=cursos_opcoes, default=cursos_opcoes, key="filtro_recl_curso")
+            
+            with col_f4:
+                status_opcoes = ['Aceite', 'Não Aceite']
+                status_sel = st.multiselect("Status", options=status_opcoes, default=status_opcoes, key="filtro_recl_status")
+            
+            busca_motivo = st.text_input("🔍 Buscar no motivo", placeholder="Palavra-chave", key="filtro_recl_motivo")
+        
+        # Aplicar filtros
+        df_filtrado = df_recl.copy()
+        if centros_sel:
+            df_filtrado = df_filtrado[df_filtrado['Centro'].isin(centros_sel)]
+        if meses_sel:
+            df_filtrado = df_filtrado[df_filtrado['data'].isin(meses_sel)]
+        if cursos_sel:
+            df_filtrado = df_filtrado[df_filtrado['Ação'].isin(cursos_sel)]
+        if status_sel:
+            df_filtrado = df_filtrado[df_filtrado['Status'].isin(status_sel)]
+        if busca_motivo:
+            df_filtrado = df_filtrado[df_filtrado['motivo'].str.contains(busca_motivo, case=False, na=False)]
+        
+        # Cálculo dos KPIs com os dados filtrados
+        total_reclamacoes = len(df_filtrado)
         total_cursos_realizados = df_cursos['Ação'].nunique() if 'Ação' in df_cursos.columns else 0
         taxa_reclamacoes_curso = (total_reclamacoes / total_cursos_realizados * 100) if total_cursos_realizados > 0 else 0
-
-        total_devolvido = df_recl['Valor Devolvido'].sum()
-        total_negado = df_recl['Valor_Nao_Aceite'].sum()
+        
+        total_devolvido = df_filtrado['Valor Devolvido'].sum()
+        total_negado = df_filtrado['Valor_Nao_Aceite'].sum()
         meta_reclamacao = st.session_state.obj_reclamacao_curso
         delta_recl = taxa_reclamacoes_curso - meta_reclamacao
         delta_color = "▲" if delta_recl > 0 else "▼"
-
+        
         col_recl11, col_recl2, col_recl3, col_recl4 = st.columns(4)
         with col_recl11:
             st.metric("📊 Taxa de Reclamações por Curso", f"{taxa_reclamacoes_curso:.1f}%",
@@ -1024,19 +1058,17 @@ def mostrar_qualidade():
             st.metric("❌ Total de Devoluções Negadas", f"{total_negado:,.2f} €".replace(',', ' '))
         with col_recl4:
             st.metric("📋 Nº Reclamações", total_reclamacoes)
-
-        # Lista detalhada (sem conversão de data)
+        
+        # Lista detalhada (filtrada)
         with st.expander("📋 Lista completa de Reclamações", expanded=False):
-            df_lista = df_recl.copy()
-            # A coluna 'data' é exibida como "Mês"
-            df_show = df_lista[['data', 'Centro', 'Ação', 'motivo', 'Valor Devolvido', 'Valor_Nao_Aceite', 'Status']].copy()
+            df_show = df_filtrado[['data', 'Centro', 'Ação', 'motivo', 'Valor Devolvido', 'Valor_Nao_Aceite', 'Status']].copy()
             df_show.rename(columns={
                 'data': 'Mês',
                 'Valor Devolvido': 'Devolvido (Aceite)',
                 'Valor_Nao_Aceite': 'Valor Não Aceite'
             }, inplace=True)
             st.dataframe(df_show, use_container_width=True)
-            st.caption(f"📌 Mostrando {len(df_show)} reclamações.")
+            st.caption(f"📌 Mostrando {len(df_show)} de {len(df_recl)} reclamações (filtradas).")
     else:
         if not has_cursos:
             st.warning("Carregue o ficheiro de Cursos (com a coluna 'Ação') para calcular a taxa de reclamações.")
