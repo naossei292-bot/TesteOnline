@@ -18,7 +18,7 @@ def preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
     colunas_num = [
-        "Inscritos", "Aptos", # "Inaptos", "Desistentes", "Devedores",  # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", #"Devedores",  # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
@@ -54,6 +54,31 @@ def fmt_euro(v):
 
 def fmt_num(v):
     return f"{v:,.0f}".replace(",", ".")
+
+def normalizar_status_para_grafico(df: pd.DataFrame) -> pd.Series:
+    """
+    Retorna uma Series com os status normalizados para:
+        - 'Finalizada' ← 'FINALIZADA' e 'FECHADA' (maiúsculas/minúsculas)
+        - 'Cancelada'  ← 'Cancelada' e 'CANCELADA'
+        - Os restantes mantêm o valor original.
+    """
+    if "Status" not in df.columns:
+        return df["Status"] if "Status" in df.columns else pd.Series()
+    
+    status_norm = df["Status"].astype(str).str.strip().copy()
+    
+    # Mapeamento (case‑insensitive)
+    mapping = {
+        "finalizada": "Finalizada",
+        "fechada": "Finalizada",
+        "cancelada": "Cancelada",
+        "CANCELADA": "Cancelada"   # se já existir exactamente assim
+    }
+    # Aplica mapeamento (convertemos para minúsculas para comparação)
+    status_norm = status_norm.apply(
+        lambda x: mapping.get(x.lower(), x)
+    )
+    return status_norm
 
 # ── Painéis de detalhe ────────────────────────────────────────────────────────
 def painel_detalhe_acoes(df: pd.DataFrame):
@@ -99,6 +124,23 @@ def painel_detalhe_aptos(df: pd.DataFrame):
 #         return
 #     st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
 #     st.dataframe(df_filt, use_container_width=True, hide_index=True)
+
+def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):  # COMENTADO — envolve Inaptos, Desistentes, Devedores
+        if "Ação" not in df.columns:
+            return
+        cols = ["Ação", "Centro"]
+        if "Inaptos" in df.columns:
+            cols.append("Inaptos")
+        if "Desistentes" in df.columns:
+            cols.append("Desistentes")
+        df_filt = df[cols].copy()
+        mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0)
+        df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes"], ascending=False)
+        if df_filt.empty:
+            st.info("Nenhuma ação com inaptos, desistentes")
+            return
+        st.markdown("### ⚠️ Ações com Inaptos / Desistentes")
+        st.dataframe(df_filt, use_container_width=True, hide_index=True)
 
 def painel_detalhe_satisfacao(df: pd.DataFrame):
     col_sat = "Taxa de satisfação Final"
@@ -155,8 +197,8 @@ def secao_kpis(df: pd.DataFrame):
     total_acoes     = df["Ação"].nunique() if "Ação" in df.columns else 0
     total_inscritos = safe_sum(df, "Inscritos")
     total_aptos     = safe_sum(df, "Aptos")
-    # total_inaptos   = safe_sum(df, "Inaptos")       # COMENTADO
-    # total_desist    = safe_sum(df, "Desistentes")   # COMENTADO
+    total_inaptos   = safe_sum(df, "Inaptos")       # COMENTADO
+    total_desist    = safe_sum(df, "Desistentes")   # COMENTADO
     # total_deved     = safe_sum(df, "Devedores")     # COMENTADO
     t_aprovacao     = taxa(total_aptos, total_inscritos)
     media_sat       = safe_mean(df, "Taxa de satisfação Final")
@@ -171,8 +213,8 @@ def secao_kpis(df: pd.DataFrame):
         st.session_state.mostrar_inscritos = False
     if "mostrar_aptos" not in st.session_state:
         st.session_state.mostrar_aptos = False
-    # if "mostrar_inaptos_desist" not in st.session_state:   # COMENTADO
-    #     st.session_state.mostrar_inaptos_desist = False    # COMENTADO
+    if "mostrar_inaptos_desist" not in st.session_state:   # COMENTADO
+        st.session_state.mostrar_inaptos_desist = False    # COMENTADO
     if "mostrar_satisfacao" not in st.session_state:
         st.session_state.mostrar_satisfacao = False
     if "mostrar_valor" not in st.session_state:
@@ -183,7 +225,7 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"🎓 Ações\n\n{fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_acoes = not st.session_state.mostrar_acoes
@@ -192,7 +234,7 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"👥 Inscritos\n\n{fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_aptos = False
-            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_inscritos = not st.session_state.mostrar_inscritos
@@ -201,7 +243,7 @@ def secao_kpis(df: pd.DataFrame):
         if st.button(f"✅ Aptos\n\n{fmt_num(total_aptos)}\nTaxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
-            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_aptos = not st.session_state.mostrar_aptos
@@ -216,26 +258,38 @@ def secao_kpis(df: pd.DataFrame):
     #         st.session_state.mostrar_valor = False
     #         st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
     #         st.rerun()
-    with col5:
-        if st.button(f"⭐ Satisfação Final\n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
-                     use_container_width=True):
+
+    with col4:   # COMENTADO — botão Inaptos / Desistentes / Devedores
+        if st.button(f"⚠️ \nInaptos: {fmt_num(total_inaptos)}\nDesistentes: {fmt_num(total_desist)}",
+                     key="btn_inaptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
-            st.session_state.mostrar_valor = False
-            st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
-            st.rerun()
-    with col6:
-        if st.button(f"💶 Valor Recebido\n\n{fmt_euro(valor_recebido)}\nCobrança: {t_cobranca}%", key="btn_valor",
-                     use_container_width=True):
-            st.session_state.mostrar_acoes = False
-            st.session_state.mostrar_inscritos = False
-            st.session_state.mostrar_aptos = False
-            # st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_satisfacao = False
-            st.session_state.mostrar_valor = not st.session_state.mostrar_valor
+            st.session_state.mostrar_valor = False
+            st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
             st.rerun()
+
+#    with col5:
+#        if st.button(f"⭐ Satisfação Final\n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
+#                     use_container_width=True):
+#            st.session_state.mostrar_acoes = False
+#            st.session_state.mostrar_inscritos = False
+#            st.session_state.mostrar_aptos = False
+#            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+#            st.session_state.mostrar_valor = False
+#            st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
+#            st.rerun()
+#    with col6:
+#        if st.button(f"💶 Valor Recebido\n\n{fmt_euro(valor_recebido)}\nCobrança: {t_cobranca}%", key="btn_valor",
+#                     use_container_width=True):
+#            st.session_state.mostrar_acoes = False
+#            st.session_state.mostrar_inscritos = False
+#            st.session_state.mostrar_aptos = False
+#            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+#            st.session_state.mostrar_satisfacao = False
+#            st.session_state.mostrar_valor = not st.session_state.mostrar_valor
+#            st.rerun()
 
     if st.session_state.mostrar_acoes:
         with st.expander("📌 Detalhe: Ações por Centro", expanded=True):
@@ -246,9 +300,9 @@ def secao_kpis(df: pd.DataFrame):
     if st.session_state.mostrar_aptos:
         with st.expander("📌 Detalhe: Top Aptos", expanded=True):
             painel_detalhe_aptos(df)
-    # if st.session_state.mostrar_inaptos_desist:   # COMENTADO — painel Inaptos/Desistentes/Devedores
-    #     with st.expander("📌 Detalhe: Inaptos / Desistentes", expanded=True):
-    #         painel_detalhe_inaptos_desistentes(df)
+    if st.session_state.mostrar_inaptos_desist:   # COMENTADO — painel Inaptos/Desistentes/Devedores
+        with st.expander("📌 Detalhe: Inaptos / Desistentes", expanded=True):
+            painel_detalhe_inaptos_desistentes(df)
     if st.session_state.mostrar_satisfacao:
         with st.expander("📌 Detalhe: Satisfação (melhores/piores)", expanded=True):
             painel_detalhe_satisfacao(df)
@@ -260,8 +314,23 @@ def secao_kpis(df: pd.DataFrame):
 def grafico_status(df: pd.DataFrame):
     if "Status" not in df.columns:
         return None
-    counts = df["Status"].value_counts().reset_index()
+
+    # ----- NORMALIZAÇÃO DOS ESTADOS APENAS PARA O GRÁFICO -----
+    def normalizar(status):
+        s = str(status).strip().upper()
+        if s in ["FINALIZADA", "FECHADA"]:
+            return "Finalizada"
+        if s in ["CANCELADA", "CANCELADA"]:  # cobre Cancelada, CANCELADA
+            return "Cancelada"
+        return status  # mantém ABERTA, PREVISTA, etc.
+    
+    df_chart = df.copy()
+    df_chart["Status_Norm"] = df_chart["Status"].apply(normalizar)
+    # ---------------------------------------------------------
+
+    counts = df_chart["Status_Norm"].value_counts().reset_index()
     counts.columns = ["Status", "Total"]
+
     fig = go.Figure(go.Pie(
         labels=counts["Status"],
         values=counts["Total"],
@@ -281,6 +350,8 @@ def grafico_status(df: pd.DataFrame):
         margin=dict(t=60, l=20, r=150, b=20)
     )
     st.plotly_chart(fig, use_container_width=True, key="status_chart")
+
+    # Lógica de clique (agora os labels são "Finalizada" ou "Cancelada")
     selecao = st.session_state.get("status_chart", {}).get("selection", {})
     estado_selecionado = st.session_state.get("estado_selecionado", None)
     if selecao and selecao.get("points"):
@@ -295,15 +366,28 @@ def grafico_status(df: pd.DataFrame):
             st.rerun()
     return st.session_state.get("estado_selecionado")
 
-def painel_detalhe_estado(df: pd.DataFrame, estado: str):
-    if estado is None:
+def painel_detalhe_estado(df: pd.DataFrame, estado_norm: str):
+    if estado_norm is None:
         return
-    df_estado = df[df["Status"] == estado].copy()
+
+    # Mapeamento para os valores reais na coluna "Status"
+    if estado_norm == "Finalizada":
+        cond = df["Status"].astype(str).str.upper().isin(["FINALIZADA", "FECHADA"])
+    elif estado_norm == "Cancelada":
+        cond = df["Status"].astype(str).str.upper().isin(["CANCELADA"])
+        # Se tiveres "Cancelada" com C maiúsculo, adiciona: 
+        # cond = df["Status"].astype(str).str.upper().isin(["CANCELADA"])
+    else:
+        cond = df["Status"] == estado_norm
+
+    df_estado = df[cond].copy()
     if df_estado.empty:
-        st.info(f"Nenhuma ação com estado '{estado}'.")
+        st.info(f"Nenhuma ação com estado equivalente a '{estado_norm}'.")
         return
-    st.markdown(f"### 📋 Ações com estado: **{estado}**")
+
+    st.markdown(f"### 📋 Ações com estado: **{estado_norm}**")
     st.markdown("*Clique novamente na fatia do gráfico para fechar*")
+
     cols_mostrar = [c for c in ["Centro", "Ação", "Status", "Inscritos", "Aptos", "Taxa de satisfação Final"] if c in df_estado.columns]
     df_show = df_estado[cols_mostrar].reset_index(drop=True)
     st.dataframe(df_show, use_container_width=True, hide_index=True)
@@ -313,8 +397,8 @@ def painel_detalhe_estado(df: pd.DataFrame, estado: str):
 def grafico_funil(df: pd.DataFrame):
     inscritos = safe_sum(df, "Inscritos")
     aptos = safe_sum(df, "Aptos")
-    # inaptos = safe_sum(df, "Inaptos")       # COMENTADO
-    # desist  = safe_sum(df, "Desistentes")   # COMENTADO
+    inaptos = safe_sum(df, "Inaptos")       # COMENTADO
+    desist  = safe_sum(df, "Desistentes")   # COMENTADO
     # deved   = safe_sum(df, "Devedores")     # COMENTADO
 
     if inscritos == 0:
@@ -323,10 +407,9 @@ def grafico_funil(df: pd.DataFrame):
 
     # Percentagens e categorias sem Inaptos, Desistentes e Devedores   # COMENTADO
     data = {
-        "Categoria": ["Inscritos", "Aptos"],  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
-        "Valor": [inscritos, aptos],           # inaptos, desist, deved removidos                  # COMENTADO
-        "Percentagem": [100.0, (aptos/inscritos)*100]  # entradas de inaptos/desist/deved removidas # COMENTADO
-    }
+        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes",],  #  "Devedores" removidos   # COMENTADO
+        "Valor": [inscritos, aptos, inaptos, desist],           # inaptos, desist, deved removidos                  # COMENTADO
+        "Percentagem": [100.0, (aptos/inscritos)*100, (inaptos/inscritos)*100, (desist/inscritos)*100]    }
     df_plot = pd.DataFrame(data)
 
     fig = go.Figure(go.Bar(
@@ -335,7 +418,7 @@ def grafico_funil(df: pd.DataFrame):
         orientation='h',
         text=df_plot.apply(lambda r: f"{r['Valor']:,.0f} ({r['Percentagem']:.1f}%)", axis=1),
         textposition='outside',
-        marker_color=['#1f77b4', '#2ca02c'],  # cores de Inaptos, Desist., Devedores removidas   # COMENTADO
+        marker_color=['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728'],  # cores de Inaptos, Desist., Devedores removidas   # COMENTADO
         hovertemplate='<b>%{y}</b><br>Valor: %{customdata[0]:,.0f}<br>Percentagem: %{x:.1f}%<extra></extra>',
         customdata=df_plot[["Valor"]].values
     ))
@@ -436,7 +519,7 @@ def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int
         apt = safe_sum(df_mes, "Aptos")
         st.metric("Aptos", fmt_num(apt), delta=f"Taxa: {taxa(apt, ins)}%")
     with k4:
-        # st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
+        st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
         pass
     with k5:
         media_s = safe_mean(df_mes, "Taxa de satisfação Final")
@@ -444,7 +527,7 @@ def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int
     st.markdown("<div style='margin:10px 0'></div>", unsafe_allow_html=True)
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
-        "Inscritos", "Aptos", # "Inaptos", "Desistentes",   # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes",   # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
     ] if c in df_mes.columns]
@@ -507,7 +590,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
         return
     ordem_canonica = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Aptos", # "Inaptos", "Desistentes", "Devedores",   # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes",# "Devedores",   # COMENTADO
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
         "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
         "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
@@ -534,7 +617,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
     column_config = {}
     for col in df_exibir.columns:
-        if col in ["Inscritos", "Aptos"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
+        if col in ["Inscritos", "Aptos","Inaptos", "Desistentes"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
             valores = df_exibir[col].dropna()
             if not valores.empty and pd.api.types.is_numeric_dtype(valores):
                 max_val = valores.max()
@@ -584,23 +667,66 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
                 if sel_formador:
                     df = df[df["Formador"].isin(sel_formador)]
         todas_datas = pd.Series(dtype="datetime64[ns]")
+        
+        # ----- FILTRO DE DATAS RELATIVO (com opções rápidas) -----
+        todas_datas = pd.Series(dtype="datetime64[ns]")
         for col in ["Data Inicial", "Data Final"]:
             if col in df.columns:
                 todas_datas = pd.concat([todas_datas, df[col].dropna()])
+        
         if not todas_datas.empty:
             data_min_global = max(todas_datas.min().date(), date(2010, 1, 1))
             data_max_global = todas_datas.max().date()
-            intervalo = st.date_input("Período (Data Inicial)", value=(data_min_global, data_max_global),
-                                      min_value=date(2010, 1, 1), max_value=data_max_global, key="dash_datas")
-            if isinstance(intervalo, (list, tuple)) and len(intervalo) == 2:
-                data_inicio_filtro, data_fim_filtro = intervalo
-                if "Data Inicial" in df.columns and pd.api.types.is_datetime64_any_dtype(df["Data Inicial"]):
-                    df_datas = df["Data Inicial"].dt.date
-                    df = df[(df_datas >= data_inicio_filtro) & (df_datas <= data_fim_filtro)]
+            
+            # Escolha do tipo de filtro
+            tipo_filtro_data = st.radio(
+                "Tipo de período",
+                ["📅 Período rápido", "📆 Intervalo personalizado"],
+                horizontal=True,
+                key="dash_tipo_periodo"
+            )
+            
+            if tipo_filtro_data == "📅 Período rápido":
+                # Gerar opções dinâmicas baseadas nos dados e na data atual
+                opcoes = gerar_opcoes_rapidas(df)  # função já existente no teu código
+                if opcoes:
+                    nomes_opcoes = list(opcoes.keys())
+                    # Adicionar opção "Selecionar período"
+                    opcao_selecionada = st.selectbox(
+                        "Escolha o período",
+                        nomes_opcoes,
+                        index=0,
+                        key="dash_periodo_rapido"
+                    )
+                    data_inicio_filtro, data_fim_filtro = opcoes[opcao_selecionada]
+                    st.caption(f"📅 {data_inicio_filtro.strftime('%d/%m/%Y')} – {data_fim_filtro.strftime('%d/%m/%Y')}")
+                else:
+                    st.warning("Não foi possível gerar períodos rápidos. Use intervalo personalizado.")
+                    data_inicio_filtro = data_min_global
+                    data_fim_filtro = data_max_global
+            else:
+                # Intervalo personalizado (igual ao antigo)
+                intervalo = st.date_input(
+                    "Intervalo de datas",
+                    value=(data_min_global, data_max_global),
+                    min_value=date(2010, 1, 1),
+                    max_value=data_max_global,
+                    key="dash_datas"
+                )
+                if isinstance(intervalo, (list, tuple)) and len(intervalo) == 2:
+                    data_inicio_filtro, data_fim_filtro = intervalo
+                else:
+                    data_inicio_filtro = data_min_global
+                    data_fim_filtro = data_max_global
+            
+            # Aplicar o filtro de datas (se a coluna existir)
+            if "Data Inicial" in df.columns and pd.api.types.is_datetime64_any_dtype(df["Data Inicial"]):
+                df_datas = df["Data Inicial"].dt.date
+                df = df[(df_datas >= data_inicio_filtro) & (df_datas <= data_fim_filtro)]
         else:
-            st.date_input("Período (Data Inicial)", value=(date(2010,1,1), date(2010,1,1)),
-                          min_value=date(2010,1,1), max_value=date(2030,12,31), key="dash_datas_vazio", disabled=True)
-        st.markdown("---")
+            st.info("Sem datas disponíveis para filtrar.")
+        # ---------------------------------------------------------
+
         if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
             for key in ["dash_status", "dash_tipo", "dash_centro", "dash_formador", "dash_datas"]:
                 if key in st.session_state:
@@ -724,7 +850,7 @@ def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: i
         apt = safe_sum(df_mes, "Aptos")
         st.metric("Aptos", fmt_num(apt), delta=f"Taxa: {taxa(apt, ins)}%")
     with cols[3]:
-        # st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
+        st.metric("Inaptos / Desist.", f"{fmt_num(safe_sum(df_mes,'Inaptos'))} / {fmt_num(safe_sum(df_mes,'Desistentes'))}")  # COMENTADO
         pass
     with cols[4]:
         media_s = safe_mean(df_mes, "Taxa de satisfação Final")
@@ -732,7 +858,7 @@ def painel_detalhe_mes_melhorado(df_filtrado: pd.DataFrame, ano: int, mes_num: i
     st.markdown("---")
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
-        "Inscritos", "Aptos", # "Inaptos", "Desistentes",   # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes",   # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
     ] if c in df_mes.columns]
