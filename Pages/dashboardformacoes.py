@@ -405,7 +405,7 @@ def grafico_funil(df: pd.DataFrame):
         st.info("Sem dados de inscritos.")
         return
 
-    # Percentagens e categorias sem Inaptos, Desistentes e Devedores   # COMENTADO
+    # Percentagens e categorias sem Inaptos, Desistentes e Devedores   
     data = {
         "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes",],  #  "Devedores" removidos   # COMENTADO
         "Valor": [inscritos, aptos, inaptos, desist],           # inaptos, desist, deved removidos                  # COMENTADO
