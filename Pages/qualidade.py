@@ -888,7 +888,7 @@ def mostrar_qualidade():
         st.info("⬆️ Carregue um ficheiro Excel com os dados de incidentes (colunas: Ação, Centro, Descrição, Status, Data_Abertura, Data_Resolução opcional) para visualizar os KPIs 6 e 7.")
 
     # ------------------------------------------------------------
-    # KPI 8 – Taxa de Reclamações (inalterado)
+    # KPI 8 – Taxa de Reclamações (nova estrutura)
     # ------------------------------------------------------------
     st.markdown("---")
     st.subheader("📢 Taxa de Reclamações")
@@ -924,11 +924,68 @@ def mostrar_qualidade():
                 st.error("⚠️ Ficheiro de exemplo não encontrado: assets/reclamacoes.xlsx")
         if recl_file is not None:
             try:
-                df_recl = pd.read_excel(recl_file)
-                df_recl.columns = df_recl.columns.str.strip()
-                st.session_state.reclamacoes_df = df_recl.copy()
-                st.session_state.reclamacoes_filename = recl_file.name
-                st.rerun()
+                # Lê o Excel usando a segunda linha como cabeçalho
+                df_recl = pd.read_excel(recl_file, header=1)
+                # Normaliza nomes das colunas (minúsculas, sem espaços)
+                df_recl.columns = df_recl.columns.str.strip().str.lower()
+
+                # Colunas obrigatórias
+                required = ['data', 'centro', 'devolução', 'curso', 'motivo']
+                missing = [c for c in required if c not in df_recl.columns]
+                if missing:
+                    st.error(f"Colunas obrigatórias em falta: {missing}")
+                    st.info(f"Colunas encontradas: {list(df_recl.columns)}")
+                    df_recl = None
+                else:
+                    # Renomeia 'curso' e 'centro' para nomes internos
+                    df_recl.rename(columns={
+                        'curso': 'Ação',
+                        'centro': 'Centro'
+                    }, inplace=True)
+                    
+                    # A coluna 'data' será mantida como string (sem conversão)
+                    df_recl['data'] = df_recl['data'].astype(str)
+                    
+                    # ---- NOVA LÓGICA: derivar Status e Valor Devolvido a partir de 'devolução' e 'valor' ----
+                    # Normalizar a coluna 'devolução' (minúsculas, sem espaços)
+                    df_recl['devolucao_norm'] = df_recl['devolução'].astype(str).str.strip().str.lower()
+                    
+                    # Definir condição de aceitação: "sim", "s", "yes", "true", "1" são considerados verdadeiros
+                    cond_aceite = df_recl['devolucao_norm'].isin(['sim', 's', 'yes', 'true', '1'])
+                    
+                    # Status: "Aceite" se cond_aceite verdadeiro, caso contrário "Não Aceite"
+                    df_recl['Status'] = df_recl['devolucao_norm'].apply(lambda x: 'Aceite' if x in ['sim','s','yes','true','1'] else 'Não Aceite')
+                    
+                    # Valor Devolvido: se cond_aceite, pegar no valor da coluna 'valor' (se existir e for numérico); senão 0
+                    if 'valor' in df_recl.columns:
+                        # Limpar e converter valor
+                        df_recl['valor_clean'] = (
+                            df_recl['valor']
+                            .astype(str)
+                            .str.replace('€', '', regex=False)
+                            .str.replace(',', '.', regex=False)
+                            .str.strip()
+                        )
+                        df_recl['valor_clean'] = pd.to_numeric(df_recl['valor_clean'], errors='coerce').fillna(0)
+                    else:
+                        df_recl['valor_clean'] = 0
+                        st.info("Nota: coluna 'valor' não encontrada. Serão atribuídos 0 a todos os valores devolvidos.")
+                    
+                    # Atribuir Valor Devolvido conforme aceitação
+                    df_recl['Valor Devolvido'] = 0.0
+                    df_recl.loc[cond_aceite, 'Valor Devolvido'] = df_recl.loc[cond_aceite, 'valor_clean']
+                    
+                    # Remover colunas auxiliares
+                    df_recl.drop(columns=['devolucao_norm', 'valor_clean'], inplace=True, errors='ignore')
+                    
+                    # Opcional: se existir coluna 'valor' original, renomear para 'Valor_Reclamado' (apenas para referência)
+                    if 'valor' in df_recl.columns:
+                        df_recl.rename(columns={'valor': 'Valor_Reclamado'}, inplace=True)
+                    # ------------------------------------------------------------
+                    
+                    st.session_state.reclamacoes_df = df_recl.copy()
+                    st.session_state.reclamacoes_filename = recl_file.name
+                    st.rerun()
             except Exception as e:
                 st.error(f"Erro ao processar reclamações: {e}")
                 df_recl = None
@@ -936,114 +993,43 @@ def mostrar_qualidade():
             df_recl = None
 
     if df_recl is not None and has_cursos:
+        # Aplicar filtro de centro se existir
         if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro and 'Centro' in df_recl.columns:
             df_recl = df_recl[df_recl['Centro'].isin(st.session_state.filtro_centro)]
 
-        if 'Valor Devolvido' in df_recl.columns:
-            df_recl['Valor Devolvido'] = (
-                df_recl['Valor Devolvido']
-                .astype(str)
-                .str.replace('€', '', regex=False)
-                .str.replace(',', '.', regex=False)
-                .str.strip()
-            )
-            df_recl['Valor Devolvido'] = pd.to_numeric(df_recl['Valor Devolvido'], errors='coerce').fillna(0)
-        else:
-            df_recl['Valor Devolvido'] = 0
+        total_reclamacoes = len(df_recl)
+        total_cursos_realizados = df_cursos['Ação'].nunique() if 'Ação' in df_cursos.columns else 0
+        taxa_reclamacoes_curso = (total_reclamacoes / total_cursos_realizados * 100) if total_cursos_realizados > 0 else 0
 
-        if 'Ação' not in df_recl.columns:
-            if 'Curso' in df_recl.columns:
-                df_recl.rename(columns={'Curso': 'Ação'}, inplace=True)
-            else:
-                st.error("O ficheiro de reclamações deve conter uma coluna 'Ação' (ou 'Curso') para identificar a formação.")
-                df_recl = None
+        total_devolvido = df_recl['Valor Devolvido'].sum()
+        meta_reclamacao = st.session_state.obj_reclamacao_curso
+        delta_recl = taxa_reclamacoes_curso - meta_reclamacao
+        delta_color = "▲" if delta_recl > 0 else "▼"
 
-        if df_recl is not None:
-            total_reclamacoes = len(df_recl)
-            if 'Ação' in df_cursos.columns:
-                total_cursos_realizados = df_cursos['Ação'].nunique()
-            else:
-                total_cursos_realizados = 0
-                st.warning("O ficheiro de cursos não contém a coluna 'Ação' para contar os cursos realizados.")
+        col_recl1, col_recl2, col_recl3 = st.columns(3)
+        with col_recl1:
+            st.metric("📊 Taxa de Reclamações por Curso", f"{taxa_reclamacoes_curso:.1f}%",
+                      delta=f"{delta_color} {abs(delta_recl):.1f}%",
+                      help=f"Objetivo: ≤ {meta_reclamacao}% | {total_reclamacoes} reclamações em {total_cursos_realizados} cursos")
+        with col_recl2:
+            st.metric("💰 Total Devolvido", f"{total_devolvido:,.2f} €".replace(',', ' '))
+        with col_recl3:
+            st.metric("📋 Nº Reclamações", total_reclamacoes)
 
-            if total_cursos_realizados > 0:
-                taxa_reclamacoes_curso = (total_reclamacoes / total_cursos_realizados) * 100
-            else:
-                taxa_reclamacoes_curso = 0
-
-            if 'Status' in df_recl.columns:
-                aceites = (df_recl['Status'].astype(str).str.lower() == 'aceite').sum()
-                taxa_aceites = (aceites / total_reclamacoes * 100) if total_reclamacoes > 0 else 0
-            else:
-                taxa_aceites = None
-
-            total_devolvido = df_recl['Valor Devolvido'].sum()
-
-            col_recl1, col_recl2, col_recl3 = st.columns(3)
-            with col_recl1:
-                meta_reclamacao = st.session_state.obj_reclamacao_curso
-                delta_recl = taxa_reclamacoes_curso - meta_reclamacao
-                delta_color = "▲" if delta_recl > 0 else "▼"
-                st.metric(
-                    label="📊 Taxa de Reclamações por Curso",
-                    value=f"{taxa_reclamacoes_curso:.1f}%",
-                    delta=f"{delta_color} {abs(delta_recl):.1f}%",
-                    help=f"Objetivo: ≤ {meta_reclamacao}%  |  {total_reclamacoes} reclamações em {total_cursos_realizados} cursos"
-                )
-            with col_recl2:
-                if taxa_aceites is not None:
-                    st.metric(label="✅ Reclamações Aceites", value=f"{taxa_aceites:.1f}%")
-                else:
-                    st.metric(label="✅ Reclamações Aceites", value="N/D")
-            with col_recl3:
-                st.metric(label="💰 Total Devolvido", value=f"{total_devolvido:,.2f} €".replace(',', ' '))
-
-            if 'Ação' in df_recl.columns:
-                recl_por_curso = df_recl.groupby('Ação').size().reset_index(name='Reclamações')
-                with st.expander("📋 Reclamações por Curso (detalhe)"):
-                    st.dataframe(recl_por_curso, use_container_width=True)
-
-            with st.expander("📋 Lista completa de Reclamações", expanded=False):
-                df_lista = df_recl.copy()
-                cols_disponiveis = df_lista.columns.tolist()
-                st.markdown("**🔍 Filtrar reclamações:**")
-                col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-                if 'Ação' in cols_disponiveis:
-                    with col_f1:
-                        acao_filter = st.multiselect("Ação", options=sorted(df_lista['Ação'].dropna().unique()), key="recl_acao")
-                else:
-                    acao_filter = []
-                if 'Centro' in cols_disponiveis:
-                    with col_f2:
-                        centro_filter = st.multiselect("Centro", options=sorted(df_lista['Centro'].dropna().unique()), key="recl_centro")
-                else:
-                    centro_filter = []
-                if 'Status' in cols_disponiveis:
-                    with col_f3:
-                        status_filter = st.multiselect("Status", options=sorted(df_lista['Status'].dropna().unique()), key="recl_status")
-                else:
-                    status_filter = []
-                with col_f4:
-                    texto_busca = st.text_input("🔍 Buscar texto", placeholder="Palavra-chave", key="recl_busca")
-                df_filtrado = df_lista.copy()
-                if acao_filter:
-                    df_filtrado = df_filtrado[df_filtrado['Ação'].isin(acao_filter)]
-                if centro_filter:
-                    df_filtrado = df_filtrado[df_filtrado['Centro'].isin(centro_filter)]
-                if status_filter:
-                    df_filtrado = df_filtrado[df_filtrado['Status'].isin(status_filter)]
-                if texto_busca:
-                    mask = pd.Series([False] * len(df_filtrado))
-                    for col in df_filtrado.select_dtypes(include=['object']).columns:
-                        mask |= df_filtrado[col].astype(str).str.contains(texto_busca, case=False, na=False)
-                    df_filtrado = df_filtrado[mask]
-                st.dataframe(df_filtrado, use_container_width=True)
-                st.caption(f"📌 Mostrando {len(df_filtrado)} de {len(df_lista)} reclamações.")
+        # Lista detalhada (sem conversão de data)
+        with st.expander("📋 Lista completa de Reclamações", expanded=False):
+            df_lista = df_recl.copy()
+            # A coluna 'data' é exibida como "Mês"
+            df_show = df_lista[['data', 'Centro', 'Ação', 'motivo', 'Valor Devolvido', 'Status']].copy()
+            df_show.rename(columns={'data': 'Mês'}, inplace=True)
+            st.dataframe(df_show, use_container_width=True)
+            st.caption(f"📌 Mostrando {len(df_show)} reclamações.")
     else:
         if not has_cursos:
-            st.warning("Carregue o ficheiro de Cursos (com a coluna 'Ação') para calcular a taxa de reclamações por curso.")
+            st.warning("Carregue o ficheiro de Cursos (com a coluna 'Ação') para calcular a taxa de reclamações.")
         else:
-            st.info("⬆️ Carregue um ficheiro Excel com os dados de reclamações para visualizar os KPIs.")
+            st.info("⬆️ Carregue um ficheiro Excel com as colunas: data, centro, devolução, curso, motivo (e opcional valor).")
+
 
     # ------------------------------------------------------------
     # KPI 9 – Ações de Melhoria Implementadas e Recorrência (inalterado)
