@@ -737,7 +737,7 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
                 mask_mes = inicio_no_mes | fim_no_mes
             elif tipo_filtro_mes == "Apenas Início no mês":
                 mask_mes = inicio_no_mes
-            else:  # Apenas Fim no mês
+            else:  
                 mask_mes = fim_no_mes
 
             # Aplicar o filtro (se o utilizador quiser ativar/desativar, pode usar um checkbox)
