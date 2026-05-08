@@ -18,7 +18,7 @@ def preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
     colunas_num = [
-        "Inscritos", "Aptos", "Inaptos", "Desistentes", #"Devedores",  # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes","Devedores" #"Devedores",  # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
@@ -106,41 +106,26 @@ def painel_detalhe_aptos(df: pd.DataFrame):
     st.markdown("### ✅ Ações ordenadas por Aptos")
     st.dataframe(df_todas, use_container_width=True, hide_index=True)
 
-# def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):  # COMENTADO — envolve Inaptos, Desistentes, Devedores
-#     if "Ação" not in df.columns:
-#         return
-#     cols = ["Ação", "Centro"]
-#     if "Inaptos" in df.columns:
-#         cols.append("Inaptos")
-#     if "Desistentes" in df.columns:
-#         cols.append("Desistentes")
-#     if "Devedores" in df.columns:
-#         cols.append("Devedores")
-#     df_filt = df[cols].copy()
-#     mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0) | (df_filt.get("Devedores", 0) > 0)
-#     df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes", "Devedores"], ascending=False)
-#     if df_filt.empty:
-#         st.info("Nenhuma ação com inaptos, desistentes ou devedores.")
-#         return
-#     st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
-#     st.dataframe(df_filt, use_container_width=True, hide_index=True)
-
 def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):  # COMENTADO — envolve Inaptos, Desistentes, Devedores
-        if "Ação" not in df.columns:
-            return
-        cols = ["Ação", "Centro"]
-        if "Inaptos" in df.columns:
-            cols.append("Inaptos")
-        if "Desistentes" in df.columns:
-            cols.append("Desistentes")
-        df_filt = df[cols].copy()
-        mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0)
-        df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes"], ascending=False)
-        if df_filt.empty:
-            st.info("Nenhuma ação com inaptos, desistentes")
-            return
-        st.markdown("### ⚠️ Ações com Inaptos / Desistentes")
-        st.dataframe(df_filt, use_container_width=True, hide_index=True)
+     if "Ação" not in df.columns:
+         return
+     cols = ["Ação", "Centro"]
+     if "Inaptos" in df.columns:
+         cols.append("Inaptos")
+     if "Desistentes" in df.columns:
+         cols.append("Desistentes")
+     if "Devedores" in df.columns:
+         cols.append("Devedores")
+     df_filt = df[cols].copy()
+     mask = (df_filt.get("Inaptos", 0) > 0) | (df_filt.get("Desistentes", 0) > 0) | (df_filt.get("Devedores", 0) > 0)
+     df_filt = df_filt[mask].sort_values(["Inaptos", "Desistentes", "Devedores"], ascending=False)
+     if df_filt.empty:
+         st.info("Nenhuma ação com inaptos, desistentes ou devedores.")
+         return
+     st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
+     st.dataframe(df_filt, use_container_width=True, hide_index=True)
+
+
 
 def painel_detalhe_satisfacao(df: pd.DataFrame):
     col_sat = "Taxa de satisfação Final"
@@ -199,7 +184,7 @@ def secao_kpis(df: pd.DataFrame):
     total_aptos     = safe_sum(df, "Aptos")
     total_inaptos   = safe_sum(df, "Inaptos")       # COMENTADO
     total_desist    = safe_sum(df, "Desistentes")   # COMENTADO
-    # total_deved     = safe_sum(df, "Devedores")     # COMENTADO
+    total_deved     = safe_sum(df, "Devedores")     # COMENTADO
     t_aprovacao     = taxa(total_aptos, total_inscritos)
     media_sat       = safe_mean(df, "Taxa de satisfação Final")
     media_form      = safe_mean(df, "Avaliação formador")
@@ -222,7 +207,7 @@ def secao_kpis(df: pd.DataFrame):
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
-        if st.button(f"🎓 Ações\n\n{fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
+        if st.button(f"🎓Ações: {fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
             st.session_state.mostrar_inaptos_desist = False   # COMENTADO
@@ -231,7 +216,7 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_acoes = not st.session_state.mostrar_acoes
             st.rerun()
     with col2:
-        if st.button(f"👥 Inscritos\n\n{fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
+        if st.button(f"👥Inscritos: {fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_aptos = False
             st.session_state.mostrar_inaptos_desist = False   # COMENTADO
@@ -240,7 +225,7 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_inscritos = not st.session_state.mostrar_inscritos
             st.rerun()
     with col3:
-        if st.button(f"✅ Aptos\n\n{fmt_num(total_aptos)}\nTaxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
+        if st.button(f"✅Aptos: {fmt_num(total_aptos)}\n\n 🛃Taxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_inaptos_desist = False   # COMENTADO
@@ -248,48 +233,38 @@ def secao_kpis(df: pd.DataFrame):
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_aptos = not st.session_state.mostrar_aptos
             st.rerun()
-    # with col4:   # COMENTADO — botão Inaptos / Desistentes / Devedores
-    #     if st.button(f"⚠️ Inaptos / Desist.\n\n{fmt_num(total_inaptos)} / {fmt_num(total_desist)}\nDevedores: {fmt_num(total_deved)}",
-    #                  key="btn_inaptos", use_container_width=True):
-    #         st.session_state.mostrar_acoes = False
-    #         st.session_state.mostrar_inscritos = False
-    #         st.session_state.mostrar_aptos = False
-    #         st.session_state.mostrar_satisfacao = False
-    #         st.session_state.mostrar_valor = False
-    #         st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
-    #         st.rerun()
-
     with col4:   # COMENTADO — botão Inaptos / Desistentes / Devedores
-        if st.button(f"⚠️ \nInaptos: {fmt_num(total_inaptos)}\nDesistentes: {fmt_num(total_desist)}",
-                     key="btn_inaptos", use_container_width=True):
+         if st.button(f"⚠️Desistentes: {fmt_num(total_desist)}\n\n 🙁Inaptos: {fmt_num(total_inaptos)}\n\n 🙎🏼‍♂️Devedores: {fmt_num(total_deved)}",
+                      key="btn_inaptos", use_container_width=True):
+             st.session_state.mostrar_acoes = False
+             st.session_state.mostrar_inscritos = False
+             st.session_state.mostrar_aptos = False
+             st.session_state.mostrar_satisfacao = False
+             st.session_state.mostrar_valor = False
+             st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
+             st.rerun()
+    
+    with col5:
+        if st.button(f"⭐Satisfação Final: \n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
+                     use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_satisfacao = False
+            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
             st.session_state.mostrar_valor = False
-            st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
+            st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
             st.rerun()
-
-#    with col5:
-#        if st.button(f"⭐ Satisfação Final\n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
-#                     use_container_width=True):
-#            st.session_state.mostrar_acoes = False
-#            st.session_state.mostrar_inscritos = False
-#            st.session_state.mostrar_aptos = False
-#            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
-#            st.session_state.mostrar_valor = False
-#            st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
-#            st.rerun()
-#    with col6:
-#        if st.button(f"💶 Valor Recebido\n\n{fmt_euro(valor_recebido)}\nCobrança: {t_cobranca}%", key="btn_valor",
-#                     use_container_width=True):
-#            st.session_state.mostrar_acoes = False
-#            st.session_state.mostrar_inscritos = False
-#            st.session_state.mostrar_aptos = False
-#            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
-#            st.session_state.mostrar_satisfacao = False
-#            st.session_state.mostrar_valor = not st.session_state.mostrar_valor
-#            st.rerun()
+    
+    with col6:
+        if st.button(f"💶Valor Recebido: {fmt_euro(valor_recebido)}\n\n 💸Valor A Receber: {fmt_euro(valor_receber)}", key="btn_valor",
+                     use_container_width=True):
+            st.session_state.mostrar_acoes = False
+            st.session_state.mostrar_inscritos = False
+            st.session_state.mostrar_aptos = False
+            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_satisfacao = False
+            st.session_state.mostrar_valor = not st.session_state.mostrar_valor
+            st.rerun()
 
     if st.session_state.mostrar_acoes:
         with st.expander("📌 Detalhe: Ações por Centro", expanded=True):
@@ -399,7 +374,7 @@ def grafico_funil(df: pd.DataFrame):
     aptos = safe_sum(df, "Aptos")
     inaptos = safe_sum(df, "Inaptos")       # COMENTADO
     desist  = safe_sum(df, "Desistentes")   # COMENTADO
-    # deved   = safe_sum(df, "Devedores")     # COMENTADO
+    deved   = safe_sum(df, "Devedores")     # COMENTADO
 
     if inscritos == 0:
         st.info("Sem dados de inscritos.")
@@ -407,8 +382,8 @@ def grafico_funil(df: pd.DataFrame):
 
     # Percentagens e categorias sem Inaptos, Desistentes e Devedores   
     data = {
-        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes",],  #  "Devedores" removidos   # COMENTADO
-        "Valor": [inscritos, aptos, inaptos, desist],           # inaptos, desist, deved removidos                  # COMENTADO
+        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes","Devedores"],  #  "Devedores" removidos   # COMENTADO
+        "Valor": [inscritos, aptos, inaptos, desist,deved],           # inaptos, desist, deved removidos                  # COMENTADO
         "Percentagem": [100.0, (aptos/inscritos)*100, (inaptos/inscritos)*100, (desist/inscritos)*100]    }
     df_plot = pd.DataFrame(data)
 
@@ -527,7 +502,7 @@ def painel_detalhe_mes_generico(df_filtrado: pd.DataFrame, rotulo: str, ano: int
     st.markdown("<div style='margin:10px 0'></div>", unsafe_allow_html=True)
     cols_mostrar = [c for c in [
         "Ação", "Centro", "Status", "Formador", "Data Inicial", "Data Final",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes",   # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes","Devedores",   # COMENTADO
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
     ] if c in df_mes.columns]
@@ -590,7 +565,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
         return
     ordem_canonica = [
         "Status", "Ação", "Data Inicial", "Data Final", "Centro",
-        "Inscritos", "Aptos", "Inaptos", "Desistentes",# "Devedores",   # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores",   # COMENTADO
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
         "Taxa de Satisfação M04", "Taxa de Satisfação M05", "Taxa de Satisfação M06",
         "Taxa de Satisfação M07", "Taxa de Satisfação M08", "Taxa de Satisfação M09",
@@ -617,7 +592,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
     column_config = {}
     for col in df_exibir.columns:
-        if col in ["Inscritos", "Aptos","Inaptos", "Desistentes"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
+        if col in ["Inscritos", "Aptos","Inaptos", "Desistentes", "Devedores"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
             valores = df_exibir[col].dropna()
             if not valores.empty and pd.api.types.is_numeric_dtype(valores):
                 max_val = valores.max()
@@ -727,12 +702,58 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             st.info("Sem datas disponíveis para filtrar.")
         # ---------------------------------------------------------
 
-        if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
-            for key in ["dash_status", "dash_tipo", "dash_centro", "dash_formador", "dash_datas"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
-        st.caption(f"🗂 {len(df)} ações filtradas")
+        # ----- NOVO FILTRO: Ações com data de início ou fim num mês específico -----
+        st.markdown("### 📅 Filtro por Mês (Início ou Fim)")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            anos_disponiveis = sorted(df["Data Inicial"].dt.year.dropna().unique()) if "Data Inicial" in df.columns else []
+            if anos_disponiveis:
+                ano_sel = st.selectbox("Ano", anos_disponiveis, index=len(anos_disponiveis)-1, key="filtro_ano")
+            else:
+                ano_sel = datetime.today().year
+                st.info("Sem datas disponíveis para filtrar por mês.")
+        with col2:
+            meses = list(range(1, 13))
+            nomes_meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+            mes_sel = st.selectbox("Mês", meses, format_func=lambda x: nomes_meses[x-1], index=datetime.today().month-1, key="filtro_mes")
+        with col3:
+            tipo_filtro_mes = st.selectbox(
+                "Condição",
+                ["Início OU Fim no mês", "Apenas Início no mês", "Apenas Fim no mês"],
+                index=0,
+                key="filtro_tipo_mes"
+            )
+
+        if "Data Inicial" in df.columns and "Data Final" in df.columns:
+            primeiro_dia = datetime(ano_sel, mes_sel, 1).date()
+            ultimo_dia = (datetime(ano_sel, mes_sel, 1) + pd.DateOffset(months=1) - pd.Timedelta(days=1)).date()
+
+            # Criar máscaras
+            inicio_no_mes = df["Data Inicial"].dt.date.between(primeiro_dia, ultimo_dia)
+            fim_no_mes = df["Data Final"].dt.date.between(primeiro_dia, ultimo_dia)
+
+            if tipo_filtro_mes == "Início OU Fim no mês":
+                mask_mes = inicio_no_mes | fim_no_mes
+            elif tipo_filtro_mes == "Apenas Início no mês":
+                mask_mes = inicio_no_mes
+            else:  # Apenas Fim no mês
+                mask_mes = fim_no_mes
+
+            # Aplicar o filtro (se o utilizador quiser ativar/desativar, pode usar um checkbox)
+            ativar = st.checkbox("✅ Ativar este filtro", value=False, key="ativar_filtro_mes")
+            if ativar and mask_mes.any():
+                df = df[mask_mes]
+                st.caption(f"📌 Ações com {'início ou fim' if tipo_filtro_mes=='Início OU Fim no mês' else ('início' if tipo_filtro_mes=='Apenas Início no mês' else 'fim')} em {nomes_meses[mes_sel-1]} de {ano_sel}: {mask_mes.sum()}")
+            elif ativar and not mask_mes.any():
+                st.warning(f"Nenhuma ação encontrada no período selecionado.")
+
+            if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
+                for key in ["dash_status", "dash_tipo", "dash_centro", "dash_formador", "dash_datas",
+                            "filtro_ano", "filtro_mes", "filtro_tipo_mes", "ativar_filtro_mes"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
     return df
 
 # ── Funções de Timeline melhoradas ────────────────────────────────────────────
