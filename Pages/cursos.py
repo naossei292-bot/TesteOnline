@@ -33,9 +33,6 @@ CALC_FORMANDOS = {"Valor_curso_final", "Total_a_pagar", "Devedor"}
 _ASSIN_CURSOS     = {"Centro", "Data Inicial", "Data Final", "Formador"}
 _ASSIN_FORMANDOS  = {"Nome", "No_formando", "Valor_curso", "Total_ja_pago","Total_a_pagar"}
 _ASSIN_QUEST      = {"Shortname", "Módulo", "Respondente", "Tipo", "Valor Médio"}
-
-# Assinatura do formato combinado: tem colunas de formando E de agregação de ação
-# na mesma linha (ex: Valor_curso + Aptos/Inaptos/Desistentes juntos)
 _ASSIN_COMBINADO  = {"Ação", "Valor_curso", "Aptos"}
 
 # ═══════════════════════════════════════════════════════════════
@@ -50,11 +47,11 @@ ALIASES_FORMANDOS: dict[str, list[str]] = {
     "Data_final":     ["Data final", "DataFinal", "Data_Fim", "Data fim",
                        "Data de fim", "Fim"],
     "Estado":         ["Situação", "Situacao", "Estado formando", "Estado_formando",
-                       "Situação formando", "Situacao formando", "Status"],
-    "Nome":       ["Nome", "Nome de formando", "Nome formando", "Nome_formando",
+                       "Situação formando", "Situacao formando", "Status",
+                       "Estado_aluno", "Estado aluno"],  # ← JÁ TEM, mas verifique
+    "Nome":           ["Nome", "Nome de formando", "Nome formando", "Nome_formando",
                        "Nome do formando", "Nome completo", "Designação", "Designacao"],
-    "No_formando":    ["No_Formando", "Formando", "No_formando",
-                       "Nº Formando",],
+    "No_formando":    ["No_Formando", "Formando", "No_formando", "Nº Formando"],
     "Valor_curso":    ["Valor curso", "ValorCurso", "Valor", "Preco", "Preço",
                        "Custo", "Valor do curso", "Valor formação"],
     "Desconto":       ["Desc", "Desconto aplicado", "Discount"],
@@ -66,20 +63,17 @@ ALIASES_FORMANDOS: dict[str, list[str]] = {
 }
 
 ALIASES_CURSOS: dict[str, list[str]] = {
-    "Ação":                   ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao",
-                                "Id"],
+    "Ação":                   ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao", "Id"],
     "Data Inicial":           ["Data_Inicial", "DataInicial", "Data inicio", "Data de início",
                                 "Data_inici", "Data_Inici"],
     "Data Final":             ["Data_Final", "DataFinal", "Data fim", "Data de fim",
                                 "Data_fim", "Data_Fim"],
     "Centro":                 ["Local"],
     "Status":                 ["Estado"],
-    "Inscritos":              ["Total inscritos", "Num inscritos", "Nº inscritos",
-                                "Total"],
+    "Inscritos":              ["Total inscritos", "Num inscritos", "Nº inscritos", "Total"],
     "Aptos":                  ["Total aptos", "Certificados", "Aprovados"],
     "Inaptos":                ["Total inaptos", "Reprovados", "Não aptos"],
-    "Desistentes":            ["Total desistentes", "Desistiu", "Desistencias",
-                                "Desistente"],
+    "Desistentes":            ["Total desistentes", "Desistiu", "Desistencias", "Desistente"],
     "Avaliação formador":     ["Avaliacao formador", "Aval formador", "Nota formador"],
     "Taxa de satisfação Final": ["Taxa satisfacao final", "Satisfacao final",
                                   "Taxa final", "Satisfação final"],
@@ -163,25 +157,56 @@ def converter_numericos_cursos(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # ═══════════════════════════════════════════════════════════════
+# FUNÇÃO AUXILIAR: CATEGORIZAR ESTADO DO FORMANDO
+# ═══════════════════════════════════════════════════════════════
+def _categorizar_estado(estado) -> str | None:
+    """
+    Converte o valor da coluna Estado/Estado_aluno numa categoria:
+    'apto', 'inapto', 'desistente' ou None.
+    """
+    if pd.isna(estado):
+        return None
+    e = str(estado).strip()
+    
+    if e == "Apto":
+        return "apto"
+    if e == "Inapto":
+        return "inapto"
+    if e == "Desistente":
+        return "desistente"
+    
+    # Fallback para maiúsculas
+    e_upper = e.upper()
+    if e_upper == "APTO":
+        return "apto"
+    if e_upper == "INAPTO":
+        return "inapto"
+    if e_upper == "DESISTENTE":
+        return "desistente"
+    
+    return None
+
+# ═══════════════════════════════════════════════════════════════
 # LÓGICA DE CÁLCULO
 # ═══════════════════════════════════════════════════════════════
 
 def calcular_formandos(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    for col in ["Valor_curso", "Desconto", "Total_ja_pago","Total_a_pagar"]:
+    for col in ["Valor_curso", "Desconto", "Total_ja_pago", "Total_a_pagar"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     df["Valor_curso_final"] = df.get("Valor_curso", 0) - df.get("Desconto", 0)
-  
-    # Agora Devedor = True apenas se Total_a_pagar > 0 (e não >=0.1)
     df["Devedor"] = df["Total_a_pagar"] > 0.1
     return df
 
-def _status_finalizado(status: str) -> bool:
-    """Retorna True se o status da ação for 'Finalizada' ou 'Fechada' (case-insensitive)."""
-    return str(status).strip().upper() in ["FINALIZADA", "FECHADA"]
+def _status_finalizado(status) -> bool:
+    """Devolve True se o status da ação indicar que está concluída."""
+    if pd.isna(status):
+        return False
+    s = str(status).upper().strip()
+    return any(p in s for p in ["CONCLU", "FINALIZ", "TERMIN", "ENCERR", "FECHAD"])
 
 def recalcular_cursos(df_cursos: pd.DataFrame, df_formandos: pd.DataFrame) -> pd.DataFrame:
     if df_cursos is None or df_cursos.empty:
@@ -196,13 +221,13 @@ def recalcular_cursos(df_cursos: pd.DataFrame, df_formandos: pd.DataFrame) -> pd
     df_f = calcular_formandos(df_formandos.copy())
     df_f["Ação"] = df_f["Ação"].astype(str).str.strip()
 
-    # ── Injetar o status da ação em cada formando ──────────────────────────
+    # Injetar o status da ação em cada formando
     if "Status" in df_cursos.columns:
         status_map = (
             df_cursos[["Ação", "Status"]]
             .copy()
             .assign(Ação=lambda d: d["Ação"].astype(str).str.strip())
-            .rename(columns={"Status": "_status_acao"})   # nome único, sem ambiguidade
+            .rename(columns={"Status": "_status_acao"})
         )
         df_f = df_f.merge(status_map, on="Ação", how="left")
         df_f["_finalizada"] = df_f["_status_acao"].apply(_status_finalizado)
@@ -210,34 +235,62 @@ def recalcular_cursos(df_cursos: pd.DataFrame, df_formandos: pd.DataFrame) -> pd
     else:
         df_f["_finalizada"] = False
 
-
-    # Devedor = deve dinheiro E a ação está finalizada
     df_f["_devedor_final"] = df_f["Devedor"] & df_f["_finalizada"]
+
+    # ── CORRIGIDO: Contar Aptos/Inaptos/Desistentes a partir do Estado ──────
+    if "Estado" in df_f.columns:
+        df_f["_cat_estado"] = df_f["Estado"].apply(_categorizar_estado)
+        df_f["_apto"]       = (df_f["_cat_estado"] == "apto").astype(int)
+        df_f["_inapto"]     = (df_f["_cat_estado"] == "inapto").astype(int)
+        df_f["_desistente"] = (df_f["_cat_estado"] == "desistente").astype(int)
+    else:
+        df_f["_apto"] = df_f["_inapto"] = df_f["_desistente"] = 0
 
     agg = df_f.groupby("Ação", as_index=False).agg(
         _dev=("_devedor_final", lambda x: x.eq(True).sum()),
-        # ► clip(lower=0) garante que valores negativos contam como zero
         _rec=("Total_a_pagar", lambda x: x.clip(lower=0).sum()),
         _pago=("Total_ja_pago", "sum"),
+        _aptos=("_apto", "sum"),
+        _inaptos=("_inapto", "sum"),
+        _desistentes=("_desistente", "sum"),
+        _inscritos=("Ação", "count"),
     )
 
     agg["Ação"] = agg["Ação"].astype(str).str.strip()
-    cols_fixas = [c for c in df_cursos.columns if c not in CALC_CURSOS]
+
+    # Remover das colunas fixas também Aptos/Inaptos/Desistentes/Inscritos
+    # para que sejam sempre recalculadas a partir dos formandos
+    cols_recalc = CALC_CURSOS | {"Aptos", "Inaptos", "Desistentes", "Inscritos"}
+    cols_fixas = [c for c in df_cursos.columns if c not in cols_recalc]
+
     df_res = df_cursos[cols_fixas].copy()
     df_res["_key"] = df_res["Ação"].astype(str).str.strip()
     agg["_key"] = agg["Ação"].astype(str).str.strip()
-    df_res = df_res.merge(agg[["_key", "_dev", "_rec", "_pago"]], on="_key", how="left")
+
+    df_res = df_res.merge(
+        agg[["_key", "_dev", "_rec", "_pago", "_aptos", "_inaptos", "_desistentes", "_inscritos"]],
+        on="_key", how="left"
+    )
+
     df_res["Devedor"]               = df_res["_dev"].fillna(0).astype(int)
     df_res["Valor total a receber"] = df_res["_rec"].fillna(0)
     df_res["Valor Total Recebido"]  = df_res["_pago"].fillna(0)
-    df_res.drop(columns=["_key", "_dev", "_rec", "_pago"], inplace=True, errors="ignore")
+    df_res["Aptos"]                 = df_res["_aptos"].fillna(0).astype(int)
+    df_res["Inaptos"]               = df_res["_inaptos"].fillna(0).astype(int)
+    df_res["Desistentes"]           = df_res["_desistentes"].fillna(0).astype(int)
+    df_res["Inscritos"]             = df_res["_inscritos"].fillna(0).astype(int)
+
+    df_res.drop(
+        columns=["_key", "_dev", "_rec", "_pago", "_aptos", "_inaptos", "_desistentes", "_inscritos"],
+        inplace=True, errors="ignore"
+    )
     return df_res
+
 # ═══════════════════════════════════════════════════════════════
 # PROCESSAMENTO DE QUESTIONÁRIOS
 # ═══════════════════════════════════════════════════════════════
 
 def _escala_para_pct(valor: float) -> float:
-    """Converte escala 1-4 para percentagem 0-100%."""
     return round((valor / 4.0) * 100, 1)
 
 def processar_questionarios(df_q: pd.DataFrame, df_cursos: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
@@ -344,83 +397,44 @@ def detectar_questionario(df: pd.DataFrame) -> bool:
 # ═══════════════════════════════════════════════════════════════
 
 def detectar_combinado(df: pd.DataFrame) -> bool:
-    """
-    Deteta ficheiro de formandos que também contém
-    informação suficiente para gerar ações.
-    """
-
     cols_norm = {_normalizar(c) for c in df.columns}
-
-    obrigatorias = [
-        "acao",
-        "datainicial",
-        "datafinal",
-        "nome",
-        "valorcurso",
-        "totaljapago",
-    ]
-
+    obrigatorias = ["acao", "datainicial", "datafinal", "nome", "valorcurso", "totaljapago", "estadoaluno"]
     encontrados = sum(1 for c in obrigatorias if c in cols_norm)
-
     return encontrados >= 5
 
 def obter_centro_por_sheet(sheet_name: str) -> str:
     if not sheet_name:
         return None
     nome = sheet_name.upper()
-    # Mapeamento dos códigos que vemos na imagem: ALV, AMA, BRG, COI, FAR, FUN, GAI, LIS, POR, SJM, VIS
     mapa = {
-        "ALV": "Alverca",
-        "AMA": "Amadora",
-        "BRG": "Braga",
-        "COI": "Coimbra",
-        "FAR": "Faro",
-        "FUN": "Funchal",
-        "GAI": "Gaia",
-        "LIS": "Lisboa",
-        "POR": "Porto",
-        "SJM": "São João da Madeira",
-        "VIS": "Viseu",
+        "ALV": "Alverca", "AMA": "Amadora", "BRG": "Braga",
+        "COI": "Coimbra", "FAR": "Faro", "FUN": "Funchal",
+        "GAI": "Gaia", "LIS": "Lisboa", "POR": "Porto",
+        "SJM": "São João da Madeira", "VIS": "Viseu",
     }
     for prefixo, centro in mapa.items():
         if nome.startswith(prefixo):
             return centro
-    # Se não encontrar, devolve o próprio nome da folha
     return sheet_name
 
 def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """
-    Processa um ficheiro combinado (uma linha por formando com dados de ação).
+    # Debug temporário
+    st.write("=== DEBUG ===")
+    st.write(f"Colunas: {df.columns.tolist()}")
+    if "Estado" in df:
+        st.write(f"Valores de Estado: {df['Estado'].unique()}")
+        st.write(f"Contagem: {df['Estado'].value_counts()}")
+    st.write("=============")
 
-    Estrutura esperada do ficheiro de entrada:
-        Status | Ação | Data_inicial | Data_final | Nome | Formando |
-        Valor_curso | Desconto | Valor_curso_final | Total_ja_pago |
-        Total_a_pagar | Inaptos | Aptos | Desistentes
-
-    Nota de mapeamento:
-        - Coluna "Nome"     → campo Nome    (nome do formando)
-        - Coluna "Formando" → campo No_formando (número/ID do formando)
-        - Coluna "Status"   → campo Estado (formandos) e Status (ações)
-
-    Devolve:
-        df_cursos   — tabela de Ações agregada por Ação
-        df_formandos — tabela de Formandos linha a linha
-        log          — dicionário de mapeamentos aplicados
-    """
-    
     df = df.copy()
     df.columns = df.columns.astype(str).str.strip()
     log = {}
 
     centro_detectado = obter_centro_por_sheet(sheet_name)
-
     if centro_detectado:
         df["Centro"] = centro_detectado
 
-    # ── Passo 1: Renomear as colunas ambíguas do formato combinado ──────────
-    # "Nome" → "Formando" (nome do formando na BD)
-    # "Formando" → "No_formando" (nº do formando na BD)
-    # Feito de uma só vez para evitar colisões
+    # ── Passo 1: Renomear colunas ambíguas ──────────────────────────────────
     rename_inicial = {}
     for col in df.columns:
         n = _normalizar(col)
@@ -432,20 +446,16 @@ def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataF
             log["Formando"] = col
 
     df = df.rename(columns=rename_inicial)
-    # Resolver nomes temporários
-    df = df.rename(columns={
-        "__nome_formando__": "Nome",
-        "__no_formando__":   "No_formando",
-    })
+    df = df.rename(columns={"__nome_formando__": "Nome", "__no_formando__": "No_formando"})
 
-    # ── Passo 2: Aplicar aliases gerais (datas, ação, estado, valores) ──────
-    # Estado: "Status" no ficheiro combinado → "Estado" nos formandos
+    # ── Passo 2: Aplicar aliases gerais ─────────────────────────────────────
     ALIASES_COMB_EXTRA: dict[str, list[str]] = {
         "Ação":          ["Acao", "Acção", "Cod acao", "Código ação", "Cod_acao"],
         "Data_inicial":  ["Data inicial", "DataInicial", "Data_Inicio", "Data inicio",
                           "Data de início", "Inicio"],
         "Data_final":    ["Data final", "DataFinal", "Data_Fim", "Data fim", "Fim"],
-        "Estado":        ["Status", "Situação", "Situacao", "Estado formando"],
+        "Estado":        ["Status", "Situação", "Situacao", "Estado formando",
+                          "Estado_aluno", "Estado aluno", "Estado"],
         "Valor_curso":   ["Valor curso", "ValorCurso", "Valor", "Valor do curso"],
         "Desconto":      ["Desc", "Desconto aplicado", "Discount"],
         "Total_ja_pago": ["Total ja pago", "Total pago", "Valor pago", "Já pago", "Ja pago"],
@@ -456,13 +466,47 @@ def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataF
     log.update({k: v for k, v in log_aliases.items() if k not in log})
     df = mesclar_colunas_duplicadas(df)
 
-    # ── Passo 3: Normalizar colunas numéricas de contagem ───────────────────
+    # ── NOVO: Garantir que a coluna Estado existe e tem os valores corretos ──
+    # Se ainda não existe uma coluna "Estado", procurar por alternativas
+    if "Estado" not in df.columns:
+        # Procurar qualquer coluna que contenha "estado" ou "situacao" no nome
+        for col in df.columns:
+            col_norm = _normalizar(col)
+            if any(term in col_norm for term in ["estado", "situacao", "status"]):
+                df["Estado"] = df[col]
+                log[f"Estado (criado de {col})"] = col
+                break
+    
+    # ── Passo 3: Normalizar valores da coluna Estado ────────────────────────
+    # Garantir que os valores estão em minúsculas e sem espaços para facilitar
+    if "Estado" in df.columns:
+        df["Estado"] = df["Estado"].astype(str).str.lower().str.strip()
+        # Mapear variações comuns
+        estado_map = {
+            "apto": "apto", "aprovado": "apto", "certificado": "apto", "aprov": "apto",
+            "inapto": "inapto", "reprovado": "inapto", "nao apto": "inapto", "não apto": "inapto", "reprov": "inapto",
+            "desistente": "desistente", "desistiu": "desistente", "abandono": "desistente", "cancelado": "desistente"
+        }
+        df["Estado"] = df["Estado"].map(estado_map).fillna(df["Estado"])
+
+    # ── Passo 4: Normalizar colunas numéricas de contagem ───────────────────
     for col in ["Aptos", "Inaptos", "Desistentes"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+    # ── CORRIGIDO: Contar Aptos/Inaptos/Desistentes a partir de Estado ──────
+    # Isto sobrepõe-se a qualquer coluna numérica Aptos/Inaptos/Desistentes existente
+    if "Estado" in df.columns:
+        df["_cat_estado"] = df["Estado"].apply(_categorizar_estado)
+        df["Aptos"] = (df["_cat_estado"] == "apto").astype(int)
+        df["Inaptos"] = (df["_cat_estado"] == "inapto").astype(int)
+        df["Desistentes"] = (df["_cat_estado"] == "desistente").astype(int)
+        
+        # Adicionar ao log para debug
+        log["INFO"] = f"Estado processado: {df['_cat_estado'].value_counts().to_dict()}"
+
     # ════════════════════════════════════════════════════════
-    # TABELA DE FORMANDOS  (uma linha por formando, tal qual)
+    # TABELA DE FORMANDOS
     # ════════════════════════════════════════════════════════
     for col in COLUNAS_FORMANDOS:
         if col not in df.columns:
@@ -473,51 +517,49 @@ def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataF
     df_formandos = calcular_formandos(df_formandos)
 
     # ════════════════════════════════════════════════════════
-    # TABELA DE AÇÕES  (agregada por Ação)
+    # TABELA DE AÇÕES (agregada por Ação)
     # ════════════════════════════════════════════════════════
     if "Ação" not in df.columns:
         df_cursos = pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS)
-        df_cursos.insert(0, "Apagar", False) if "Apagar" not in df_cursos.columns else None
+        if "Apagar" not in df_cursos.columns:
+            df_cursos.insert(0, "Apagar", False)
         return df_cursos, df_formandos, log
 
-    # Construir dicionário de agregação dinâmico
     agg_dict: dict = {}
-
-    # Colunas que tomam o primeiro valor por ação (metadados)
-    # "Estado" no df já foi renomeado de "Status" — para a tabela de ações
-    # precisamos do valor original "Status"; guardamo-lo antes do rename se existir
     for col, agg_fn in [
-        ("Data_inicial",  "first"),
-        ("Data_final",    "first"),
-        ("Estado",        "first"),   # será mapeado para "Status" na tabela de ações
-        ("Centro",        "first"),
-        ("Formador",      "first"),
+        ("Data_inicial", "first"),
+        ("Data_final",   "first"),
+        ("Estado",       "first"),
+        ("Centro",       "first"),
+        ("Formador",     "first"),
     ]:
         if col in df.columns:
             agg_dict[col] = agg_fn
 
-    # Inscritos = número de formandos
-    agg_dict["Nome"] = "count"
+    # Contagens por categoria
+    for col in ["Aptos", "Inaptos", "Desistentes"]:
+        if col in df.columns:
+            agg_dict[col] = "sum"
+
+    # Inscritos = número de linhas por ação
+    inscritos_s = df.groupby("Ação").size().reset_index(name="Inscritos")
 
     df_agg = (
         df.groupby("Ação", as_index=False).agg(agg_dict)
-        
         if agg_dict
         else df[["Ação"]].drop_duplicates().reset_index(drop=True)
     )
-    df_agg = df_agg.rename(columns={"Nome": "Inscritos"})
-    # Inscritos = número de linhas (formandos) por ação
-    inscritos_s = df.groupby("Ação").size().reset_index(name="Inscritos")
+
     df_agg = df_agg.merge(inscritos_s, on="Ação", how="left")
 
-    # Renomear colunas de data e estado para o esquema da tabela de ações
+    # Renomear para o esquema da tabela de ações
     df_agg = df_agg.rename(columns={
         "Data_inicial": "Data Inicial",
         "Data_final":   "Data Final",
-        "Estado":       "Status",     # "Estado" (formandos) volta a ser "Status" (ações)
+        "Estado":       "Status",
     })
 
-    # Garantir todas as colunas e ordenar
+    # Garantir todas as colunas
     for col in COLUNAS_CURSOS:
         if col not in df_agg.columns:
             df_agg[col] = None
@@ -533,10 +575,6 @@ def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataF
 # ═══════════════════════════════════════════════════════════════
 
 def ler_ficheiro(f):
-    """
-    Retorna uma lista de (df, sheet_name) para todas as folhas do Excel.
-    Para CSV, retorna uma lista com um único elemento.
-    """
     nome = f.name.lower()
     resultados = []
 
@@ -550,7 +588,6 @@ def ler_ficheiro(f):
         resultados.append((df, nome))
         return resultados
 
-    # Excel: iterar por todas as folhas
     xls = pd.ExcelFile(f)
     for sheet_name in xls.sheet_names:
         df = pd.read_excel(xls, sheet_name=sheet_name, header=0)
@@ -560,97 +597,202 @@ def ler_ficheiro(f):
         resultados.append((df, sheet_name))
     return resultados
 
+def processar_ficheiro_estado_aluno(df_raw, sheet_name):
+    """Função SIMPLES e DIRETA para processar ficheiros com Estado_aluno"""
+    
+    df = df_raw.copy()
+    
+    st.write("=== PROCESSAMENTO DIRETO ===")
+    st.write(f"Colunas encontradas: {df.columns.tolist()}")
+    
+    # Verificar se tem Estado_aluno
+    if "Estado_aluno" not in df.columns:
+        st.error("Coluna 'Estado_aluno' não encontrada!")
+        return pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS), pd.DataFrame(columns=["Apagar"] + COLUNAS_FORMANDOS)
+    
+    # Ver valores únicos de Estado_aluno
+    st.write(f"Valores em Estado_aluno: {df['Estado_aluno'].unique()}")
+    st.write(f"Contagem: {df['Estado_aluno'].value_counts().to_dict()}")
+    
+    # Criar dicionário para guardar resultados por ação
+    resultados = {}
+    
+    for idx, row in df.iterrows():
+        acao = row["Ação"]
+        estado = row["Estado_aluno"]
+        
+        if acao not in resultados:
+            resultados[acao] = {
+                "Status": row.get("Status", None),
+                "Ação": acao,
+                "Centro": obter_centro_por_sheet(sheet_name),
+                "Data Inicial": row.get("Data_inicial", None),
+                "Data Final": row.get("Data_final", None),
+                "Aptos": 0,
+                "Inaptos": 0,
+                "Desistentes": 0,
+                "Inscritos": 0,
+                "Devedor": 0,
+                "Valor total a receber": 0,
+                "Valor Total Recebido": 0
+            }
+        
+        # Contar por estado
+        if estado == "Apto":
+            resultados[acao]["Aptos"] += 1
+        elif estado == "Inapto":
+            resultados[acao]["Inaptos"] += 1
+        elif estado == "Desistente":
+            resultados[acao]["Desistentes"] += 1
+        
+        resultados[acao]["Inscritos"] += 1
+        
+        # Somar valores financeiros
+        total_a_pagar = pd.to_numeric(row.get("Total_a_pagar", 0), errors="coerce")
+        if pd.notna(total_a_pagar) and total_a_pagar > 0:
+            resultados[acao]["Valor total a receber"] += total_a_pagar
+            resultados[acao]["Devedor"] = 1
+        
+        total_ja_pago = pd.to_numeric(row.get("Total_ja_pago", 0), errors="coerce")
+        if pd.notna(total_ja_pago):
+            resultados[acao]["Valor Total Recebido"] += total_ja_pago
+    
+    # Converter para DataFrame
+    df_cursos = pd.DataFrame(list(resultados.values()))
+    
+    # Garantir todas as colunas
+    for col in COLUNAS_CURSOS:
+        if col not in df_cursos.columns:
+            df_cursos[col] = None
+    
+    df_cursos = df_cursos[COLUNAS_CURSOS].copy()
+    df_cursos.insert(0, "Apagar", False)
+    
+    # Criar tabela de formandos
+    df_formandos = df.copy()
+    df_formandos = df_formandos.rename(columns={"Estado_aluno": "Estado"})
+    for col in COLUNAS_FORMANDOS:
+        if col not in df_formandos.columns:
+            df_formandos[col] = None
+    df_formandos = df_formandos[COLUNAS_FORMANDOS].copy()
+    df_formandos.insert(0, "Apagar", False)
+    
+    st.write(f"✅ Processadas {len(df_cursos)} ações")
+    st.dataframe(df_cursos[["Ação", "Aptos", "Inaptos", "Desistentes", "Inscritos"]].head(10))
+    
+    return df_cursos, df_formandos
+
 def agregar_acoes_de_formandos(df_formandos: pd.DataFrame, sheet_name: str = "") -> pd.DataFrame:
-    """
-    Converte uma tabela de formandos (com Estado) numa tabela de acções agregada.
-    ...
-    """
+    """Versão corrigida - processa ficheiro com Estado_aluno e conta Aptos/Inaptos/Desistentes"""
     if df_formandos.empty or "Ação" not in df_formandos.columns:
         return pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS)
 
     df = df_formandos.copy()
-
-    # Mapeamento de estado -> categoria
-    def mapear_estado(estado):
+    
+    # Se existir Estado_aluno, renomear para Estado
+    if "Estado_aluno" in df.columns:
+        df = df.rename(columns={"Estado_aluno": "Estado"})
+    
+    # Se não houver coluna Estado, criar com base em Aptos/Inaptos/Desistentes se existirem
+    if "Estado" not in df.columns:
+        if "Aptos" in df.columns and "Inaptos" in df.columns and "Desistentes" in df.columns:
+            df["Estado"] = None
+            df.loc[df["Aptos"] == 1, "Estado"] = "Apto"
+            df.loc[df["Inaptos"] == 1, "Estado"] = "Inapto"
+            df.loc[df["Desistentes"] == 1, "Estado"] = "Desistente"
+        else:
+            # Se não há informação de estado, tudo a zero
+            df_cursos = pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS)
+            df_cursos.insert(0, "Apagar", False)
+            return df_cursos
+    
+    # Converter estado para categoria - VERSÃO SIMPLES E DIRETA
+    def get_categoria(estado):
         if pd.isna(estado):
             return None
-        e = str(estado).upper()
-        if any(p in e for p in ["APTO", "CERTIFICADO", "APROVADO", "SUCESSO", "CERTIF"]):
+        e = str(estado).strip()
+        if e == "Apto":
             return "apto"
-        if any(p in e for p in ["INAPTO", "REPROVADO", "NÃO APTO", "NAO APTO", "REPROV"]):
+        if e == "Inapto":
             return "inapto"
-        if any(p in e for p in ["DESISTENTE", "DESISTIU", "ABANDONO", "CANCELADO", "DESIST"]):
+        if e == "Desistente":
+            return "desistente"
+        # Tentar com maiúsculas
+        e_upper = e.upper()
+        if e_upper == "APTO":
+            return "apto"
+        if e_upper == "INAPTO":
+            return "inapto"
+        if e_upper == "DESISTENTE":
             return "desistente"
         return None
-
-    if "Estado" not in df.columns:
-        df["Estado"] = None
-    df["_cat"] = df["Estado"].apply(mapear_estado)
-
-    # Agrupar por Ação
-    agg_dict = {
-        "Data_inicial": "first",
-        "Data_final":   "first",
-        "Status":       "first",
-    }
-    df_agg = df.groupby("Ação", as_index=False).agg(agg_dict)
-
-    # Contagem de aptos/inaptos/desistentes
-    contagem = df.groupby("Ação")["_cat"].value_counts().unstack(fill_value=0)
-    for cat, col in [("apto", "Aptos"), ("inapto", "Inaptos"), ("desistente", "Desistentes")]:
-        df_agg[col] = contagem.get(cat, 0)
-
-    # Inscritos = número de formandos
-    inscritos = df.groupby("Ação").size().reset_index(name="Inscritos")
-    df_agg = df_agg.merge(inscritos, on="Ação", how="left")
-
-    # Totais financeiros
-    for col in ["Total_a_pagar", "Total_ja_pago"]:
-        if col not in df.columns:
-            df[col] = 0
-    financeiro = df.groupby("Ação").agg(
-        Valor_total_a_receber=("Total_a_pagar", lambda x: x.clip(lower=0).sum()),   # ignora valores negativos
-        Valor_Total_Recebido=("Total_ja_pago", "sum"),
-        Devedor=("Devedor", lambda x: (x > 0.1).sum())
-    ).reset_index()
-    df_agg = df_agg.merge(financeiro, on="Ação", how="left")
-
-    # Renomear datas
-    df_agg = df_agg.rename(columns={
-        "Data_inicial": "Data Inicial",
-        "Data_final":   "Data Final"
-    })
-
-    # Centro a partir do nome da folha
-    centro = obter_centro_por_sheet(sheet_name)
-    df_agg["Centro"] = centro if centro else None
-
-    # ⭐ CORREÇÃO: Só manter devedores se a ação estiver finalizada
-    if "Status" in df_agg.columns:
-        finalizadas = df_agg["Status"].astype(str).str.upper().isin(["FINALIZADA", "FECHADA", "CONCLUÍDA", "FECHADO", "TERMINADA"])
-        df_agg["Devedor"] = df_agg["Devedor"].where(finalizadas, 0).fillna(0).astype(int)
-    else:
-        df_agg["Devedor"] = 0
-
+    
+    df["categoria"] = df["Estado"].apply(get_categoria)
+    
+    # Mostrar debug
+    st.write("=== DEBUG CATEGORIZAÇÃO ===")
+    st.write(f"Valores originais de Estado: {df['Estado'].unique()}")
+    st.write(f"Categorias atribuídas: {df['categoria'].value_counts().to_dict()}")
+    
+    # Contar por ação
+    resultado = []
+    for acao in df["Ação"].unique():
+        df_acao = df[df["Ação"] == acao]
+        
+        aptos = (df_acao["categoria"] == "apto").sum()
+        inaptos = (df_acao["categoria"] == "inapto").sum()
+        desistentes = (df_acao["categoria"] == "desistente").sum()
+        inscritos = len(df_acao)
+        
+        # Dados financeiros
+        total_a_pagar = pd.to_numeric(df_acao.get("Total_a_pagar", 0), errors="coerce").fillna(0).clip(lower=0).sum()
+        total_pago = pd.to_numeric(df_acao.get("Total_ja_pago", 0), errors="coerce").fillna(0).sum()
+        
+        # Status da ação (primeiro valor encontrado)
+        status = df_acao["Status"].iloc[0] if "Status" in df_acao.columns else None
+        
+        # Datas
+        data_inicial = df_acao["Data_inicial"].iloc[0] if "Data_inicial" in df_acao.columns else None
+        data_final = df_acao["Data_final"].iloc[0] if "Data_final" in df_acao.columns else None
+        
+        resultado.append({
+            "Status": status,
+            "Ação": acao,
+            "Centro": obter_centro_por_sheet(sheet_name),
+            "Data Inicial": data_inicial,
+            "Data Final": data_final,
+            "Aptos": int(aptos),
+            "Inaptos": int(inaptos),
+            "Desistentes": int(desistentes),
+            "Inscritos": int(inscritos),
+            "Devedor": int(total_a_pagar > 0),
+            "Valor total a receber": float(total_a_pagar),
+            "Valor Total Recebido": float(total_pago)
+        })
+    
+    df_cursos = pd.DataFrame(resultado)
+    
     # Garantir todas as colunas
     for col in COLUNAS_CURSOS:
-        if col not in df_agg.columns:
-            df_agg[col] = None
-
-    df_agg = df_agg[COLUNAS_CURSOS].copy()
-    df_agg.insert(0, "Apagar", False)
-    return df_agg
+        if col not in df_cursos.columns:
+            df_cursos[col] = None
+    
+    df_cursos = df_cursos[COLUNAS_CURSOS].copy()
+    df_cursos.insert(0, "Apagar", False)
+    
+    return df_cursos
 
 def detectar_tipo_ficheiro(df: pd.DataFrame) -> str:
-    # Questionário tem prioridade máxima
     if detectar_questionario(df):
         return "questionario"
-
-    # Formato combinado
+    
+    # PRIORIDADE MÁXIMA para Estado_aluno
+    if "Estado_aluno" in df.columns:
+        return "formandos_com_estado"
+    
     if detectar_combinado(df):
         return "combinado"
 
-    # Deteção normal de cursos vs formandos
     cols_norm = {_normalizar(c) for c in df.columns}
     score_c = sum(1 for s in _ASSIN_CURSOS if _normalizar(s) in cols_norm)
     score_f = sum(1 for s in _ASSIN_FORMANDOS if _normalizar(s) in cols_norm)
@@ -661,8 +803,14 @@ def detectar_tipo_ficheiro(df: pd.DataFrame) -> str:
     df_m, _ = mapear_colunas(df.copy(), ALIASES_FORMANDOS)
     score_f = max(score_f, len(set(df_m.columns) & _ASSIN_FORMANDOS))
 
-    # Se for fortemente formandos e tiver Estado, pode ser o novo formato com geração de ações
-    if score_f >= 3 and "Estado" in cols_norm:
+    # CORRIGIDO: Verificar se existe alguma coluna que seja um alias de "Estado"
+    # Primeiro, normalizar todos os aliases de "Estado"
+    aliases_estado_norm = [_normalizar(a) for a in ALIASES_FORMANDOS.get("Estado", [])]
+    aliases_estado_norm.append(_normalizar("Estado"))  # adicionar o próprio "Estado"
+    
+    tem_estado = any(col_norm in aliases_estado_norm for col_norm in cols_norm)
+    
+    if score_f >= 3 and tem_estado:
         return "formandos_com_estado"
 
     if score_c == 0 and score_f == 0:
@@ -689,17 +837,10 @@ def preparar_formandos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     df.insert(0, "Apagar", False)
     return calcular_formandos(df), log
 
-    
 
 # ═══════════════════════════════════════════════════════════════
 # FUNÇÃO PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
-def _status_finalizado(status) -> bool:
-    """Devolve True se o status da ação indicar que está concluída."""
-    if pd.isna(status):
-        return False
-    s = str(status).upper().strip()
-    return any(p in s for p in ["CONCLU", "FINALIZ", "TERMIN", "ENCERR", "FECHAD"])
 
 def mostrar_cursos():
     st.header("📚 Análise de Formações")
@@ -727,19 +868,18 @@ def mostrar_cursos():
             "**Questionários**, e mapeia as colunas."
         )
 
-        # Explicação do formato combinado
         with st.expander("ℹ️ Formato de ficheiro combinado (novo)", expanded=False):
             st.markdown(
                 "O formato combinado tem **uma linha por formando** e inclui simultaneamente "
                 "dados do formando e dados da ação. Estrutura esperada:\n\n"
                 "| Status | Ação | Data_inicial | Data_final | Nome | Formando | "
-                "Valor_curso | Desconto | Total_ja_pago | Inaptos | Aptos | Desistentes |\n\n"
+                "Valor_curso | Desconto | Total_ja_pago | Estado_aluno |\n\n"
                 "**Mapeamento automático:**\n"
                 "- Coluna **`Nome`** → Nome do formando\n"
                 "- Coluna **`Formando`** → Número/ID do formando\n"
-                "- Coluna **`Status`** → Estado do formando e estado da ação\n"
-                "- **Inscritos** é calculado automaticamente (contagem de linhas por Ação)\n"
-                "- **Aptos / Inaptos / Desistentes** são somados por Ação"
+                "- Coluna **`Estado_aluno`** → Estado do formando (Apto/Inapto/Desistente)\n"
+                "- **Aptos / Inaptos / Desistentes** são contados automaticamente por Ação\n"
+                "- **Inscritos** é calculado automaticamente (contagem de linhas por Ação)"
             )
 
         col_m1, col_m2 = st.columns(2)
@@ -761,10 +901,10 @@ def mostrar_cursos():
 
             for f in ficheiros:
                 try:
-                    folhas = ler_ficheiro(f)   # lista de (df, sheet_name)
+                    folhas = ler_ficheiro(f)
                     for df_raw, sheet_name in folhas:
                         tipo = detectar_tipo_ficheiro(df_raw)
-                        # ── Questionário ───────────────────────────────────────
+
                         if tipo == "questionario":
                             if not st.session_state.acoes_df.empty and "Ação" in st.session_state.acoes_df.columns:
                                 df_atualizado, log_q = processar_questionarios(df_raw, st.session_state.acoes_df)
@@ -774,19 +914,16 @@ def mostrar_cursos():
                                 linhas_log.extend(log_q)
                             else:
                                 quest_pendentes.append((f.name, df_raw))
-                                linhas_log.append(f"⚠️ **{f.name}** → Questionários detetado mas sem Ações carregadas. Carregue primeiro as Ações.")
+                                linhas_log.append(f"⚠️ **{f.name}** → Questionários detetado mas sem Ações carregadas.")
 
-                        # ── Combinado (novo) ───────────────────────────────────
                         elif tipo == "combinado":
                             df_cursos_novo, df_form_novo, log_map = preparar_combinado(df_raw, sheet_name)
-                            n_acoes    = df_cursos_novo["Ação"].nunique() if "Ação" in df_cursos_novo.columns else 0
+                            n_acoes     = df_cursos_novo["Ação"].nunique() if "Ação" in df_cursos_novo.columns else 0
                             n_formandos = len(df_form_novo)
-
                             novos_cursos.append(df_cursos_novo)
                             novos_formandos.append(df_form_novo)
-
                             linhas_log.append(
-                                f"✅ **{f.name}** → **Combinado** "
+                                f"✅ **{f.name}** (folha '{sheet_name}') → **Combinado** "
                                 f"({n_acoes} ações · {n_formandos} formandos)"
                             )
                             if log_map:
@@ -798,27 +935,19 @@ def mostrar_cursos():
                                 if mapeados:
                                     linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ Colunas remapeadas: {mapeados}")
 
-                        # ── Só Ações ───────────────────────────────────────────
-                        elif tipo == "cursos":
-                            df_pronto, log_map = preparar_cursos(df_raw)
-                            novos_cursos.append(df_pronto)
-                            linhas_log.append(f"✅ **{f.name}** → **Ações** ({len(df_raw)} linhas)")
-                            if log_map:
-                                mapeados = ", ".join(f"`{orig}` → `{dest}`" for dest, orig in log_map.items() if orig != dest)
-                                if mapeados:
-                                    linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ Colunas remapeadas: {mapeados}")
-
-                        # ── Só Formandos ───────────────────────────────────────
                         elif tipo == "formandos_com_estado":
-                            # 1) Preparar formandos normalmente
-                                    df_form_pronto, log_map = preparar_formandos(df_raw)
-                                    novos_formandos.append(df_form_pronto)
-                                    # 2) Gerar acções a partir destes formandos
-                                    df_cursos_agregado = agregar_acoes_de_formandos(df_form_pronto, sheet_name)
-                                    novos_cursos.append(df_cursos_agregado)
-                                    linhas_log.append(f"✅ **{f.name}** (folha '{sheet_name}') → **Formandos c/ Estado** → geradas {len(df_cursos_agregado)} acções")
-                        
-                        # ── Só Formandos ───────────────────────────────────────
+                            df_cursos_novo, df_form_novo = processar_ficheiro_estado_aluno(df_raw, sheet_name)
+                            novos_cursos.append(df_cursos_novo)
+                            novos_formandos.append(df_form_novo)
+                            linhas_log.append(f"✅ **{f.name}** (folha '{sheet_name}') → **Processado diretamente** → {len(df_cursos_novo)} ações com contagem de aptos/inaptos/desistentes")
+
+                        elif tipo == "formandos_com_estado":
+                            df_form_pronto, log_map = preparar_formandos(df_raw)
+                            novos_formandos.append(df_form_pronto)
+                            df_cursos_agregado = agregar_acoes_de_formandos(df_form_pronto, sheet_name)
+                            novos_cursos.append(df_cursos_agregado)
+                            linhas_log.append(f"✅ **{f.name}** (folha '{sheet_name}') → **Formandos c/ Estado** → geradas {len(df_cursos_agregado)} ações")
+
                         elif tipo == "formandos":
                             df_pronto, log_map = preparar_formandos(df_raw)
                             novos_formandos.append(df_pronto)
@@ -826,18 +955,13 @@ def mostrar_cursos():
                             for dest, orig in log_map.items():
                                 if str(orig) != str(dest):
                                     linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;↳ `{orig}` → `{dest}`")
-                            vazias = [c for c in ["Estado", "No_formando", "Formando"] if c not in log_map and c not in df_raw.columns]
-                            if vazias:
-                                linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;⚠️ Colunas não encontradas: `{'`, `'.join(vazias)}`")
-                            linhas_log.append(f"&nbsp;&nbsp;&nbsp;&nbsp;ℹ️ Colunas originais: `{'`, `'.join(df_raw.columns.tolist())}`")
 
                         else:
-                            linhas_log.append(f"⚠️ **{f.name}** → tipo não reconhecido. Colunas: `{'`, `'.join(df_raw.columns.tolist())}`")
+                            linhas_log.append(f"⚠️ **{f.name}** (folha '{sheet_name}') → tipo não reconhecido. Colunas: `{'`, `'.join(df_raw.columns.tolist())}`")
 
                 except Exception as e:
                     linhas_log.append(f"❌ **{f.name}** → erro: `{e}`")
 
-            # ── Consolidar novos dados ─────────────────────────────────────
             if novos_cursos:
                 df_nc = pd.concat(novos_cursos, ignore_index=True)
                 st.session_state.acoes_df = (
@@ -846,7 +970,6 @@ def mostrar_cursos():
                 )
                 st.session_state.editor_key_cursos += 1
 
-                # Aplicar questionários pendentes agora que temos ações
                 for nome_q, df_q in quest_pendentes:
                     df_atualizado, log_q = processar_questionarios(df_q, st.session_state.acoes_df)
                     st.session_state.acoes_df = df_atualizado
@@ -872,7 +995,7 @@ def mostrar_cursos():
             if linhas_log:
                 st.rerun()
 
-    # ── Carregamento de Questionários (secção dedicada) ───────────────────────
+    # ── Carregamento de Questionários ─────────────────────────────────────────
     with st.expander("📊 Importar Questionários de Satisfação", expanded=False):
         st.markdown(
             "Carregue o ficheiro exportado de questionários. O sistema irá preencher automaticamente "
@@ -896,32 +1019,24 @@ def mostrar_cursos():
 
         fich_quest = st.file_uploader(
             "Selecione o ficheiro de questionários (.xlsx ou .csv)",
-            type=None,
-            accept_multiple_files=False,
+            type=None, accept_multiple_files=False,
             key=f"upload_q_{st.session_state.uploader_key_q}"
         )
 
         modo_quest = st.radio(
             "Modo de importação:",
             ["Atualizar (sobrescreve satisfação/formador existentes)", "Manter valores existentes (só preenche vazios)"],
-            horizontal=False,
-            key="modo_quest"
+            horizontal=False, key="modo_quest"
         )
 
         if fich_quest:
             try:
-                df_q_raw = ler_ficheiro(fich_quest)
+                folhas_q = ler_ficheiro(fich_quest)
+                df_q_raw = folhas_q[0][0] if folhas_q else pd.DataFrame()
                 if not detectar_questionario(df_q_raw):
                     st.error(f"❌ O ficheiro não parece ser de questionários. Colunas detetadas: `{'`, `'.join(df_q_raw.columns.tolist())}`")
                 else:
-                    st.success(f"✅ Ficheiro reconhecido como **Questionários** ({len(df_q_raw)} linhas, {df_q_raw['Shortname'].nunique() if 'Shortname' in df_q_raw.columns else '?'} ações).")
-
-                    if "Shortname" in df_q_raw.columns:
-                        sn_set = set(df_q_raw["Shortname"].astype(str).str.strip().unique())
-                        acoes_set = set(st.session_state.acoes_df["Ação"].astype(str).str.strip().unique()) if "Ação" in st.session_state.acoes_df.columns else set()
-                        matches = sn_set & acoes_set
-                        sem_match = sn_set - acoes_set
-                        st.caption(f"🔗 Ações encontradas em ambos os ficheiros: **{len(matches)}** | Apenas no questionário (serão ignoradas): **{len(sem_match)}**")
+                    st.success(f"✅ Ficheiro reconhecido como **Questionários** ({len(df_q_raw)} linhas).")
 
                     if st.button("▶️ Aplicar Questionários às Ações", type="primary", use_container_width=True):
                         df_base = st.session_state.acoes_df.copy()
@@ -948,27 +1063,41 @@ def mostrar_cursos():
 
     st.markdown("---")
     st.subheader("📋 Tabela por Ação")
-    st.caption("**Devedor**, **Valor total a receber** e **Valor Total Recebido** são calculados automaticamente a partir da tabela de Formandos.")
+    st.caption("**Devedor**, **Valor total a receber**, **Valor Total Recebido**, **Aptos**, **Inaptos**, **Desistentes** e **Inscritos** são calculados automaticamente a partir da tabela de Formandos.")
+
     with st.expander("⚙️ Opções da tabela de Ações", expanded=True):
         colunas_vis = st.multiselect("Colunas a visualizar/editar:", options=COLUNAS_CURSOS, default=st.session_state.colunas_vis, key="sel_col_cursos")
         if set(colunas_vis) != set(st.session_state.colunas_vis):
             st.session_state.colunas_vis = colunas_vis
             st.rerun()
+
         df_cv = garantir_colunas(st.session_state.acoes_df.copy(), st.session_state.colunas_vis)
         df_cv = converter_numericos_cursos(df_cv)
+
+        # Colunas calculadas automaticamente (não editáveis)
+        CALC_CURSOS_COMPLETO = CALC_CURSOS | {"Aptos", "Inaptos", "Desistentes", "Inscritos"}
+
         cfg_c = {"Apagar": st.column_config.CheckboxColumn("Apagar", default=False)}
-        for col in CALC_CURSOS:
+        for col in CALC_CURSOS_COMPLETO:
             if col in df_cv.columns:
-                cfg_c[col] = st.column_config.NumberColumn(col, disabled=True, help="Calculado a partir dos Formandos")
-        edited_c = st.data_editor(df_cv, use_container_width=True, num_rows="dynamic", height=400, key=f"ed_c_{st.session_state.editor_key_cursos}", column_config=cfg_c)
+                cfg_c[col] = st.column_config.NumberColumn(
+                    col, disabled=True,
+                    help="Calculado automaticamente a partir dos Formandos"
+                )
+
+        edited_c = st.data_editor(
+            df_cv, use_container_width=True, num_rows="dynamic", height=400,
+            key=f"ed_c_{st.session_state.editor_key_cursos}", column_config=cfg_c
+        )
         if dfs_diferentes(edited_c, df_cv):
             base = st.session_state.acoes_df.copy()
             for col in edited_c.columns:
-                if col not in CALC_CURSOS:
+                if col not in CALC_CURSOS_COMPLETO:
                     base[col] = edited_c[col].values
             st.session_state.acoes_df = recalcular_cursos(converter_numericos_cursos(base), st.session_state.formandos_df)
             st.session_state.editor_key_cursos += 1
             st.rerun()
+
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("🗑️ Limpar todas as ações", use_container_width=True):
@@ -994,6 +1123,7 @@ def mostrar_cursos():
     st.markdown("---")
     st.subheader("👥 Tabela por Formando")
     st.caption("**Valor_curso_final**, **Total_a_pagar** e **Devedor** são calculados automaticamente. Qualquer alteração atualiza os totais da tabela de Ações.")
+
     with st.expander("⚙️ Opções da tabela de Formandos", expanded=True):
         df_fv = garantir_colunas(st.session_state.formandos_df.copy(), COLUNAS_FORMANDOS)
         df_fv = calcular_formandos(df_fv)
@@ -1016,6 +1146,7 @@ def mostrar_cursos():
             st.session_state.acoes_df = recalcular_cursos(st.session_state.acoes_df, st.session_state.formandos_df)
             st.session_state.editor_key_form += 1
             st.rerun()
+
     f1, f2, f3 = st.columns(3)
     with f1:
         if st.button("🗑️ Limpar todos os formandos", use_container_width=True):
@@ -1047,21 +1178,23 @@ def mostrar_cursos():
         df_m["Ação"] = df_m["Ação"].replace({"": None, "None": None, "nan": None})
         df_m = df_m.dropna(subset=["Ação"])
         df_m = df_m[df_m["Ação"].astype(str).str.strip() != ""]
+
     if not df_m.empty:
         st.subheader("📊 Resumo Geral")
         def fmt_eur(v): return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
-        total_acoes = df_m["Ação"].nunique()
+        total_acoes     = df_m["Ação"].nunique()
         total_inscritos = df_m["Inscritos"].sum() if "Inscritos" in df_m.columns else 0
-        total_aptos = df_m["Aptos"].sum() if "Aptos" in df_m.columns else 0
-        taxa_aprov = (total_aptos / total_inscritos * 100) if total_inscritos > 0 else 0
-        media_sat = df_m["Taxa de satisfação Final"].mean() if "Taxa de satisfação Final" in df_m.columns else 0
-        total_a_rec = df_m["Valor total a receber"].sum() if "Valor total a receber" in df_m.columns else 0
-        total_rec = df_m["Valor Total Recebido"].sum() if "Valor Total Recebido" in df_m.columns else 0
+        total_aptos     = df_m["Aptos"].sum() if "Aptos" in df_m.columns else 0
+        taxa_aprov      = (total_aptos / total_inscritos * 100) if total_inscritos > 0 else 0
+        media_sat       = df_m["Taxa de satisfação Final"].mean() if "Taxa de satisfação Final" in df_m.columns else 0
+        total_a_rec     = df_m["Valor total a receber"].sum() if "Valor total a receber" in df_m.columns else 0
+        total_rec       = df_m["Valor Total Recebido"].sum() if "Valor Total Recebido" in df_m.columns else 0
         if "Status" in df_m.columns and "Devedor" in df_m.columns:
             finalizadas = df_m["Status"].astype(str).str.upper().isin(["FINALIZADA", "FECHADA", "CONCLUÍDA"])
             total_dev = df_m.loc[finalizadas, "Devedor"].sum()
         else:
             total_dev = df_m["Devedor"].sum() if "Devedor" in df_m.columns else 0
+
         r1c1, r1c2, r1c3, r1c4 = st.columns(4)
         r1c1.metric("Total de Ações", total_acoes)
         r1c2.metric("Total de Inscrições", f"{int(total_inscritos):,}".replace(",", "."))
@@ -1073,6 +1206,7 @@ def mostrar_cursos():
         r2c3.metric("Total de Devedores", int(total_dev))
     else:
         st.info("ℹ️ Nenhum curso com dados válidos. Carregue ficheiros ou adicione dados manualmente.")
+
 
 if __name__ == "__main__":
     mostrar_cursos()

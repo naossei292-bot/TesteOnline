@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def normalizar_colunas_dashboard(df: pd.DataFrame) -> pd.DataFrame:
@@ -18,7 +18,7 @@ def preparar_dados(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True)
     colunas_num = [
-        "Inscritos", "Aptos", "Inaptos", "Desistentes","Devedores" #"Devedores",  # COMENTADO
+        "Inscritos", "Aptos", "Inaptos", "Desistentes","Devedores"
         "Taxa de satisfação Final", "Avaliação formador",
         "Valor total a receber", "Valor Total Recebido",
         "Taxa de Satisfação M01", "Taxa de Satisfação M02", "Taxa de Satisfação M03",
@@ -124,8 +124,6 @@ def painel_detalhe_inaptos_desistentes(df: pd.DataFrame):  # COMENTADO — envol
          return
      st.markdown("### ⚠️ Ações com Inaptos / Desistentes / Devedores")
      st.dataframe(df_filt, use_container_width=True, hide_index=True)
-
-
 
 def painel_detalhe_satisfacao(df: pd.DataFrame):
     col_sat = "Taxa de satisfação Final"
@@ -295,9 +293,9 @@ def grafico_status(df: pd.DataFrame):
         s = str(status).strip().upper()
         if s in ["FINALIZADA", "FECHADA"]:
             return "Finalizada"
-        if s in ["CANCELADA", "CANCELADA"]:  # cobre Cancelada, CANCELADA
+        if s in ["CANCELADA", "CANCELADA"]:
             return "Cancelada"
-        return status  # mantém ABERTA, PREVISTA, etc.
+        return status 
     
     df_chart = df.copy()
     df_chart["Status_Norm"] = df_chart["Status"].apply(normalizar)
@@ -372,18 +370,17 @@ def painel_detalhe_estado(df: pd.DataFrame, estado_norm: str):
 def grafico_funil(df: pd.DataFrame):
     inscritos = safe_sum(df, "Inscritos")
     aptos = safe_sum(df, "Aptos")
-    inaptos = safe_sum(df, "Inaptos")       # COMENTADO
-    desist  = safe_sum(df, "Desistentes")   # COMENTADO
-    deved   = safe_sum(df, "Devedores")     # COMENTADO
+    inaptos = safe_sum(df, "Inaptos")      
+    desist  = safe_sum(df, "Desistentes")   
+    deved   = safe_sum(df, "Devedores")    
 
     if inscritos == 0:
         st.info("Sem dados de inscritos.")
         return
 
-    # Percentagens e categorias sem Inaptos, Desistentes e Devedores   
     data = {
-        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes","Devedores"],  #  "Devedores" removidos   # COMENTADO
-        "Valor": [inscritos, aptos, inaptos, desist,deved],           # inaptos, desist, deved removidos                  # COMENTADO
+        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes","Devedores"],
+        "Valor": [inscritos, aptos, inaptos, desist,deved],
         "Percentagem": [100.0, (aptos/inscritos)*100, (inaptos/inscritos)*100, (desist/inscritos)*100]    }
     df_plot = pd.DataFrame(data)
 
@@ -755,6 +752,178 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
                         del st.session_state[key]
                 st.rerun()
     return df
+'''
+# ── Filtros Opcionais dentro de um Expander ─────────────────────────────────
+def mostrar_filtros_opcionais(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Mostra filtros opcionais dentro de um expander que só aparece quando o botão é clicado.
+    Retorna o DataFrame filtrado.
+    """
+    
+    # Inicializar estado do filtro opcional se não existir
+    if "mostrar_filtros_opcionais" not in st.session_state:
+        st.session_state.mostrar_filtros_opcionais = False
+    
+    # Botão para mostrar/esconder filtros opcionais
+    col_botao1, col_botao2, col_botao3 = st.columns([1, 2, 1])
+    with col_botao2:
+        if st.button("🔧 **Filtros Opcionais**", use_container_width=True, key="btn_filtros_opcionais"):
+            st.session_state.mostrar_filtros_opcionais = not st.session_state.mostrar_filtros_opcionais
+            st.rerun()
+    
+    # Se o botão foi clicado, mostrar os filtros opcionais
+    if st.session_state.mostrar_filtros_opcionais:
+        with st.expander("🔍 **Filtros Avançados - Clique para expandir**", expanded=True):
+            st.markdown("### 🎯 Filtros Detalhados")
+            st.markdown("*Aplique filtros adicionais para refinar ainda mais a análise*")
+            st.markdown("---")
+            
+            df_filtrado = df.copy()
+            
+            # Organizar filtros em 2 colunas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 📊 Filtros Numéricos")
+                
+                # Filtro por número mínimo de inscritos
+                if "Inscritos" in df_filtrado.columns:
+                    min_inscritos = st.number_input(
+                        "📝 Mínimo de Inscritos",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key="filtro_min_inscritos"
+                    )
+                    if min_inscritos > 0:
+                        df_filtrado = df_filtrado[df_filtrado["Inscritos"] >= min_inscritos]
+                
+                # Filtro por número mínimo de aptos
+                if "Aptos" in df_filtrado.columns:
+                    min_aptos = st.number_input(
+                        "✅ Mínimo de Aptos",
+                        min_value=0,
+                        value=0,
+                        step=1,
+                        key="filtro_min_aptos"
+                    )
+                    if min_aptos > 0:
+                        df_filtrado = df_filtrado[df_filtrado["Aptos"] >= min_aptos]
+                
+                # Filtro por taxa de satisfação mínima
+                if "Taxa de satisfação Final" in df_filtrado.columns:
+                    min_satisfacao = st.slider(
+                        "⭐ Satisfação Mínima (0-5)",
+                        min_value=0.0,
+                        max_value=5.0,
+                        value=0.0,
+                        step=0.1,
+                        key="filtro_min_satisfacao"
+                    )
+                    if min_satisfacao > 0:
+                        df_filtrado = df_filtrado[df_filtrado["Taxa de satisfação Final"] >= min_satisfacao]
+            
+            with col2:
+                st.markdown("#### 💰 Filtros Financeiros")
+                
+                # Filtro por valor mínimo recebido
+                if "Valor Total Recebido" in df_filtrado.columns:
+                    min_valor_recebido = st.number_input(
+                        "💶 Valor Mínimo Recebido (€)",
+                        min_value=0,
+                        value=0,
+                        step=1000,
+                        key="filtro_min_valor_recebido"
+                    )
+                    if min_valor_recebido > 0:
+                        df_filtrado = df_filtrado[df_filtrado["Valor Total Recebido"] >= min_valor_recebido]
+                
+                # Filtro por valor mínimo a receber
+                if "Valor total a receber" in df_filtrado.columns:
+                    min_valor_receber = st.number_input(
+                        "💰 Valor Mínimo a Receber (€)",
+                        min_value=0,
+                        value=0,
+                        step=1000,
+                        key="filtro_min_valor_receber"
+                    )
+                    if min_valor_receber > 0:
+                        df_filtrado = df_filtrado[df_filtrado["Valor total a receber"] >= min_valor_receber]
+                
+                # Filtro por taxa de cobrança mínima
+                if "Valor Total Recebido" in df_filtrado.columns and "Valor total a receber" in df_filtrado.columns:
+                    df_temp = df_filtrado.copy()
+                    df_temp["Taxa_Cobranca"] = (df_temp["Valor Total Recebido"] / df_temp["Valor total a receber"] * 100).fillna(0)
+                    min_taxa = st.slider(
+                        "📈 Taxa de Cobrança Mínima (%)",
+                        min_value=0,
+                        max_value=100,
+                        value=0,
+                        step=5,
+                        key="filtro_min_taxa"
+                    )
+                    if min_taxa > 0:
+                        df_filtrado = df_filtrado[df_temp["Taxa_Cobranca"] >= min_taxa]
+            
+            st.markdown("---")
+            
+            # Terceira linha: Filtros de texto/pesquisa
+            st.markdown("#### 🔎 Filtros de Pesquisa")
+            
+            col3, col4 = st.columns(2)
+            
+            with col3:
+                # Pesquisa por ação
+                if "Ação" in df_filtrado.columns:
+                    pesquisa_acao = st.text_input(
+                        "🔍 Pesquisar Ação (nome contém)",
+                        placeholder="Digite parte do nome da ação...",
+                        key="filtro_pesquisa_acao"
+                    )
+                    if pesquisa_acao:
+                        df_filtrado = df_filtrado[df_filtrado["Ação"].astype(str).str.contains(pesquisa_acao, case=False, na=False)]
+            
+            with col4:
+                # Pesquisa por formador
+                if "Formador" in df_filtrado.columns:
+                    pesquisa_formador = st.text_input(
+                        "👨‍🏫 Pesquisar Formador",
+                        placeholder="Digite parte do nome do formador...",
+                        key="filtro_pesquisa_formador"
+                    )
+                    if pesquisa_formador:
+                        df_filtrado = df_filtrado[df_filtrado["Formador"].astype(str).str.contains(pesquisa_formador, case=False, na=False)]
+            
+            st.markdown("---")
+            
+            # Botões de ação para os filtros opcionais
+            col_acoes1, col_acoes2, col_acoes3 = st.columns(3)
+            
+            with col_acoes2:
+                # Botão para limpar apenas os filtros opcionais
+                if st.button("🗑️ Limpar Filtros Opcionais", use_container_width=True, key="limpar_filtros_opcionais"):
+                    # Limpar todas as keys dos filtros opcionais
+                    filtros_opcionais_keys = [
+                        "filtro_min_inscritos", "filtro_min_aptos", "filtro_min_satisfacao",
+                        "filtro_min_valor_recebido", "filtro_min_valor_receber", "filtro_min_taxa",
+                        "filtro_pesquisa_acao", "filtro_pesquisa_formador"
+                    ]
+                    for key in filtros_opcionais_keys:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.rerun()
+            
+            # Mostrar resumo dos filtros aplicados
+            if len(df_filtrado) < len(df):
+                st.success(f"✅ Filtros opcionais aplicados: {len(df_filtrado)} ações restantes (de {len(df)} originais)")
+            else:
+                st.info("ℹ️ Nenhum filtro opcional aplicado")
+            
+            return df_filtrado
+    
+    # Se os filtros opcionais não estiverem ativos, retorna o DataFrame original
+    return df
+'''
 
 # ── Funções de Timeline melhoradas ────────────────────────────────────────────
 def gerar_opcoes_rapidas(df: pd.DataFrame):
@@ -901,6 +1070,7 @@ def mostrar_dashboard():
 
     df = preparar_dados(df_raw)
     df = aplicar_filtros_dashboard(df)
+    #df = mostrar_filtros_opcionais(df)
     if df.empty:
         st.warning("Nenhuma ação corresponde aos filtros seleccionados.")
         return
