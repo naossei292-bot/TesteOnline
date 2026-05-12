@@ -94,7 +94,6 @@ def _tutorial_admin():
     
     st.markdown("---")
     
-    # Dicas rápidas
     with st.expander("🎯 **Dicas rápidas para Administrador**", expanded=False):
         st.markdown("""
         - ✅ **Gerir permissões**: Podes adicionar/remover acessos de outros utilizadores
