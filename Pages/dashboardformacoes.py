@@ -180,9 +180,9 @@ def secao_kpis(df: pd.DataFrame):
     total_acoes     = df["Ação"].nunique() if "Ação" in df.columns else 0
     total_inscritos = safe_sum(df, "Inscritos")
     total_aptos     = safe_sum(df, "Aptos")
-    total_inaptos   = safe_sum(df, "Inaptos")       # COMENTADO
-    total_desist    = safe_sum(df, "Desistentes")   # COMENTADO
-    total_deved     = safe_sum(df, "Devedores")     # COMENTADO
+    total_inaptos   = safe_sum(df, "Inaptos")       
+    total_desist    = safe_sum(df, "Desistentes")   
+    total_deved     = safe_sum(df, "Devedores")    
     t_aprovacao     = taxa(total_aptos, total_inscritos)
     media_sat       = safe_mean(df, "Taxa de satisfação Final")
     media_form      = safe_mean(df, "Avaliação formador")
@@ -190,76 +190,126 @@ def secao_kpis(df: pd.DataFrame):
     valor_recebido  = safe_sum(df, "Valor Total Recebido")
     t_cobranca      = taxa(valor_recebido, valor_receber)
 
+    # Contagem por status
+    if "Status" in df.columns:
+        # Normalizar status para contagem
+        def normalizar_status(status):
+            s = str(status).upper().strip()
+            if s in ["FINALIZADA", "FECHADA", "CONCLUÍDA", "CONCLUIDA"]:
+                return "Finalizada"
+            elif s in ["CANCELADA", "CANCELADO"]:
+                return "Cancelada"
+            elif s in ["PREVISTA", "PREVISTO", "PREVISAO", "PREVISÃO"]:
+                return "Prevista"
+            else:
+                return "Em Aberto"
+        
+        df_status = df.copy()
+        df_status["Status_Norm"] = df_status["Status"].apply(normalizar_status)
+        status_counts = df_status["Status_Norm"].value_counts()
+        
+        total_finalizado = status_counts.get("Finalizada", 0)
+        total_cancelado = status_counts.get("Cancelada", 0)
+        total_em_aberto = status_counts.get("Em Aberto", 0)
+        total_previsto = status_counts.get("Prevista", 0)
+    else:
+        total_finalizado = total_cancelado = total_em_aberto = total_previsto = 0
+
     if "mostrar_acoes" not in st.session_state:
         st.session_state.mostrar_acoes = False
     if "mostrar_inscritos" not in st.session_state:
         st.session_state.mostrar_inscritos = False
     if "mostrar_aptos" not in st.session_state:
         st.session_state.mostrar_aptos = False
-    if "mostrar_inaptos_desist" not in st.session_state:   # COMENTADO
-        st.session_state.mostrar_inaptos_desist = False    # COMENTADO
+    if "mostrar_inaptos_desist" not in st.session_state:  
+        st.session_state.mostrar_inaptos_desist = False   
     if "mostrar_satisfacao" not in st.session_state:
         st.session_state.mostrar_satisfacao = False
     if "mostrar_valor" not in st.session_state:
         st.session_state.mostrar_valor = False
 
+    # Botões de Status
+    col_status1, col_status2, col_status3, col_status4 = st.columns(4)
+    with col_status1:
+        if st.button(f"✅ **Finalizadas**\n\n{fmt_num(total_finalizado)}", key="btn_finalizado", use_container_width=True):
+            # Aplicar filtro de status Finalizado
+            st.session_state.filtro_status = "Finalizada"
+            st.rerun()
+    with col_status2:
+        if st.button(f"❌ **Canceladas**\n\n{fmt_num(total_cancelado)}", key="btn_cancelado", use_container_width=True):
+            st.session_state.filtro_status = "Cancelada"
+            st.rerun()
+    with col_status3:
+        if st.button(f"🔄 **Em Aberto**\n\n{fmt_num(total_em_aberto)}", key="btn_aberto", use_container_width=True):
+            st.session_state.filtro_status = "Em Aberto"
+            st.rerun()
+    with col_status4:
+        if st.button(f"📅 **Previstas**\n\n{fmt_num(total_previsto)}", key="btn_previsto", use_container_width=True):
+            st.session_state.filtro_status = "Prevista"
+            st.rerun()
+    
+    # Botão para limpar filtro de status
+    with col_status4:
+        if st.button(f"🗑️ **Limpar Filtro**", key="btn_limpar_status", use_container_width=True):
+            if "filtro_status" in st.session_state:
+                del st.session_state.filtro_status
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Botões originais (Ações, Inscritos, etc.) em 6 colunas
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
-        if st.button(f"🎓Ações: {fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
+        if st.button(f"🎓 **Ações**: {fmt_num(total_acoes)}", key="btn_acoes", use_container_width=True):
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_acoes = not st.session_state.mostrar_acoes
             st.rerun()
     with col2:
-        if st.button(f"👥Inscritos: {fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
+        if st.button(f"👥 **Inscritos**: {fmt_num(total_inscritos)}", key="btn_inscritos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_inscritos = not st.session_state.mostrar_inscritos
             st.rerun()
     with col3:
-        if st.button(f"✅Aptos: {fmt_num(total_aptos)}\n\n 🛃Taxa: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
+        if st.button(f"✅ **Aptos**: {fmt_num(total_aptos)}\n\n🛃 **Taxa**: {t_aprovacao}%", key="btn_aptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
-            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_aptos = not st.session_state.mostrar_aptos
             st.rerun()
-    with col4:   # COMENTADO — botão Inaptos / Desistentes / Devedores
-         if st.button(f"⚠️Desistentes: {fmt_num(total_desist)}\n\n 🙁Inaptos: {fmt_num(total_inaptos)}\n\n 🙎🏼‍♂️Devedores: {fmt_num(total_deved)}",
-                      key="btn_inaptos", use_container_width=True):
-             st.session_state.mostrar_acoes = False
-             st.session_state.mostrar_inscritos = False
-             st.session_state.mostrar_aptos = False
-             st.session_state.mostrar_satisfacao = False
-             st.session_state.mostrar_valor = False
-             st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
-             st.rerun()
-    
-    with col5:
-        if st.button(f"⭐Satisfação Final: \n\n{media_sat:.2f}" if media_sat else "—", key="btn_satisfacao",
-                     use_container_width=True):
+    with col4:
+        if st.button(f"⚠️ **Desistentes**: {fmt_num(total_desist)}\n\n🙁 **Inaptos**: {fmt_num(total_inaptos)}\n\n🙎🏼‍♂️ **Devedores**: {fmt_num(total_deved)}", key="btn_inaptos", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_satisfacao = False
+            st.session_state.mostrar_valor = False
+            st.session_state.mostrar_inaptos_desist = not st.session_state.mostrar_inaptos_desist
+            st.rerun()
+    with col5:
+        if st.button(f"⭐ **Satisfação Final**:\n\n{media_sat:.2f}" if media_sat else "⭐ **Satisfação**: —", key="btn_satisfacao", use_container_width=True):
+            st.session_state.mostrar_acoes = False
+            st.session_state.mostrar_inscritos = False
+            st.session_state.mostrar_aptos = False
+            st.session_state.mostrar_inaptos_desist = False
             st.session_state.mostrar_valor = False
             st.session_state.mostrar_satisfacao = not st.session_state.mostrar_satisfacao
             st.rerun()
-    
     with col6:
-        if st.button(f"💶Valor Recebido: {fmt_euro(valor_recebido)}\n\n 💸Valor A Receber: {fmt_euro(valor_receber)}", key="btn_valor",
-                     use_container_width=True):
+        if st.button(f"💶 **Recebido**: {fmt_euro(valor_recebido)}\n\n💸 **A Receber**: {fmt_euro(valor_receber)}", key="btn_valor", use_container_width=True):
             st.session_state.mostrar_acoes = False
             st.session_state.mostrar_inscritos = False
             st.session_state.mostrar_aptos = False
-            st.session_state.mostrar_inaptos_desist = False   # COMENTADO
+            st.session_state.mostrar_inaptos_desist = False
             st.session_state.mostrar_satisfacao = False
             st.session_state.mostrar_valor = not st.session_state.mostrar_valor
             st.rerun()
@@ -624,6 +674,12 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
         st.markdown("## 🔍 Filtros")
         st.markdown("---")
         if "Status" in df.columns:
+            # Converter todos os status para maiúsculas para consistência
+            df["Status"] = df["Status"].astype(str).str.upper().str.strip()
+            
+            # Mapear "FECHADA" para "FINALIZADA"
+            df["Status"] = df["Status"].replace({"FECHADA": "FINALIZADA", "CONCLUÍDA": "FINALIZADA"})
+            
             valores_status = sorted(df["Status"].dropna().unique().tolist())
             sel_status = st.multiselect("Estado da Ação", options=valores_status, default=valores_status, key="dash_status")
             if sel_status:
@@ -1087,7 +1143,38 @@ def mostrar_dashboard():
 
     df = preparar_dados(df_raw)
     df = aplicar_filtros_dashboard(df)
-    #df = mostrar_filtros_opcionais(df)
+    
+    # ============================================================
+    # FILTRO DE STATUS (colocar AQUI, depois dos filtros normais)
+    # ============================================================
+    filtro_status = st.session_state.get("filtro_status", None)
+    if filtro_status:
+        def normalizar_status_filtro(status):
+            s = str(status).upper().strip()
+            if s in ["FINALIZADA", "FECHADA", "CONCLUÍDA", "CONCLUIDA", "FINALIZADO"]:
+                return "Finalizada"
+            elif s in ["CANCELADA", "CANCELADO", "CANCELADA"]:
+                return "Cancelada"
+            elif s in ["PREVISTA", "PREVISTO", "PREVISAO", "PREVISÃO"]:
+                return "Prevista"
+            else:
+                return "Em Aberto"
+        
+        df["_status_norm"] = df["Status"].apply(normalizar_status_filtro)
+        df_filtrada = df[df["_status_norm"] == filtro_status].copy()
+        
+        if "Apagar" in df_filtrada.columns:
+            df_filtrada = df_filtrada.drop(columns=["_status_norm"])
+        
+        if not df_filtrada.empty:
+            st.info(f"📌 A mostrar apenas ações com status: **{filtro_status}** ({len(df_filtrada)} ações)")
+            df = df_filtrada
+        else:
+            st.warning(f"Nenhuma ação encontrada com status: {filtro_status}")
+            # Limpar o filtro se não houver resultados
+            del st.session_state.filtro_status
+    # ============================================================
+    
     if df.empty:
         st.warning("Nenhuma ação corresponde aos filtros seleccionados.")
         return

@@ -48,7 +48,7 @@ ALIASES_FORMANDOS: dict[str, list[str]] = {
                        "Data de fim", "Fim"],
     "Estado":         ["Situação", "Situacao", "Estado formando", "Estado_formando",
                        "Situação formando", "Situacao formando", "Status",
-                       "Estado_aluno", "Estado aluno"],  # ← JÁ TEM, mas verifique
+                       "Estado_aluno", "Estado aluno"], 
     "Nome":           ["Nome", "Nome de formando", "Nome formando", "Nome_formando",
                        "Nome do formando", "Nome completo", "Designação", "Designacao"],
     "No_formando":    ["No_Formando", "Formando", "No_formando", "Nº Formando"],
@@ -601,19 +601,23 @@ def processar_ficheiro_estado_aluno(df_raw, sheet_name):
     """Função SIMPLES e DIRETA para processar ficheiros com Estado_aluno"""
     
     df = df_raw.copy()
-    
-    st.write("=== PROCESSAMENTO DIRETO ===")
-    st.write(f"Colunas encontradas: {df.columns.tolist()}")
-    
-    # Verificar se tem Estado_aluno
-    if "Estado_aluno" not in df.columns:
-        st.error("Coluna 'Estado_aluno' não encontrada!")
-        return pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS), pd.DataFrame(columns=["Apagar"] + COLUNAS_FORMANDOS)
-    
-    # Ver valores únicos de Estado_aluno
-    st.write(f"Valores em Estado_aluno: {df['Estado_aluno'].unique()}")
-    st.write(f"Contagem: {df['Estado_aluno'].value_counts().to_dict()}")
-    
+    '''
+        st.write("=== PROCESSAMENTO DIRETO ===")
+        st.write(f"Colunas encontradas: {df.columns.tolist()}")
+
+        if "Formando" in df.columns:
+            df = df.rename(columns={"Formando": "No_formando"})
+            st.write("✅ Coluna 'Formando' renomeada para 'No_formando'")
+        
+        # Verificar se tem Estado_aluno
+        if "Estado_aluno" not in df.columns:
+            st.error("Coluna 'Estado_aluno' não encontrada!")
+            return pd.DataFrame(columns=["Apagar"] + COLUNAS_CURSOS), pd.DataFrame(columns=["Apagar"] + COLUNAS_FORMANDOS)
+        
+        # Ver valores únicos de Estado_aluno
+        st.write(f"Valores em Estado_aluno: {df['Estado_aluno'].unique()}")
+        st.write(f"Contagem: {df['Estado_aluno'].value_counts().to_dict()}")
+    '''
     # Criar dicionário para guardar resultados por ação
     resultados = {}
     
@@ -671,6 +675,9 @@ def processar_ficheiro_estado_aluno(df_raw, sheet_name):
     # Criar tabela de formandos
     df_formandos = df.copy()
     df_formandos = df_formandos.rename(columns={"Estado_aluno": "Estado"})
+    # Garantir que No_formando existe
+    if "No_formando" not in df_formandos.columns:
+        df_formandos["No_formando"] = None
     for col in COLUNAS_FORMANDOS:
         if col not in df_formandos.columns:
             df_formandos[col] = None
@@ -679,6 +686,10 @@ def processar_ficheiro_estado_aluno(df_raw, sheet_name):
     
     st.write(f"✅ Processadas {len(df_cursos)} ações")
     st.dataframe(df_cursos[["Ação", "Aptos", "Inaptos", "Desistentes", "Inscritos"]].head(10))
+
+    if not df_formandos.empty:
+        st.write("Exemplo dos primeiros formandos:")
+        st.dataframe(df_formandos[["Ação", "Nome", "No_formando", "Estado"]].head(10))
     
     return df_cursos, df_formandos
 
@@ -837,7 +848,6 @@ def preparar_formandos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     df.insert(0, "Apagar", False)
     return calcular_formandos(df), log
 
-
 # ═══════════════════════════════════════════════════════════════
 # FUNÇÃO PRINCIPAL
 # ═══════════════════════════════════════════════════════════════
@@ -940,13 +950,6 @@ def mostrar_cursos():
                             novos_cursos.append(df_cursos_novo)
                             novos_formandos.append(df_form_novo)
                             linhas_log.append(f"✅ **{f.name}** (folha '{sheet_name}') → **Processado diretamente** → {len(df_cursos_novo)} ações com contagem de aptos/inaptos/desistentes")
-
-                        elif tipo == "formandos_com_estado":
-                            df_form_pronto, log_map = preparar_formandos(df_raw)
-                            novos_formandos.append(df_form_pronto)
-                            df_cursos_agregado = agregar_acoes_de_formandos(df_form_pronto, sheet_name)
-                            novos_cursos.append(df_cursos_agregado)
-                            linhas_log.append(f"✅ **{f.name}** (folha '{sheet_name}') → **Formandos c/ Estado** → geradas {len(df_cursos_agregado)} ações")
 
                         elif tipo == "formandos":
                             df_pronto, log_map = preparar_formandos(df_raw)
