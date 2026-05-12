@@ -378,10 +378,17 @@ def grafico_funil(df: pd.DataFrame):
         st.info("Sem dados de inscritos.")
         return
 
+    # Calcular todas as percentagens
+    pct_aptos = (aptos / inscritos * 100) if inscritos > 0 else 0
+    pct_inaptos = (inaptos / inscritos * 100) if inscritos > 0 else 0
+    pct_desist = (desist / inscritos * 100) if inscritos > 0 else 0
+    pct_deved = (deved / inscritos * 100) if inscritos > 0 else 0
+
     data = {
-        "Categoria": ["Inscritos", "Aptos","Inaptos", "Desistentes","Devedores"],
-        "Valor": [inscritos, aptos, inaptos, desist,deved],
-        "Percentagem": [100.0, (aptos/inscritos)*100, (inaptos/inscritos)*100, (desist/inscritos)*100]    }
+        "Categoria": ["Inscritos", "Aptos", "Inaptos", "Desistentes", "Devedores"],
+        "Valor": [inscritos, aptos, inaptos, desist, deved],
+        "Percentagem": [100.0, pct_aptos, pct_inaptos, pct_desist, pct_deved]
+    }
     df_plot = pd.DataFrame(data)
 
     fig = go.Figure(go.Bar(
@@ -546,13 +553,23 @@ def grafico_receita(df: pd.DataFrame):
     if agg.empty:
         return
     fig = go.Figure()
+    
+    # Barra "A Receber"
     fig.add_trace(go.Bar(x=agg["Receber"], y=agg["Centro"], orientation="h", name="A Receber",
-                         opacity=.5, text=agg["Receber"].apply(fmt_euro), textposition="outside"))
+                         marker_color="#ff2c2c",
+                         text=agg["Receber"].apply(fmt_euro), textposition="outside"))
+    
+    # Barra "Recebido"
     fig.add_trace(go.Bar(x=agg["Recebido"], y=agg["Centro"], orientation="h", name="Recebido",
-                         opacity=.85, text=agg["Recebido"].apply(fmt_euro), textposition="outside"))
+                         marker_color="#008000", 
+                         text=agg["Recebido"].apply(fmt_euro), textposition="outside"))
+    
     fig.update_layout(title=dict(text="Receita: Esperada vs Recebida por Centro", font_size=14),
-                      barmode="overlay", height=max(230, len(agg) * 40), xaxis=dict(showgrid=False, visible=False),
-                      yaxis=dict(showgrid=False), legend=dict(orientation="h", y=1.12))
+                      barmode="group",  # <--- MUDAR DE "overlay" PARA "group"
+                      height=max(230, len(agg) * 40), 
+                      xaxis=dict(showgrid=False, title="Valor (€)"),
+                      yaxis=dict(showgrid=False),
+                      legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig, use_container_width=True)
 
 # ── Tabela Geral de Ações ─────────────────────────────────────────────────────
@@ -717,7 +734,7 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
         with col3:
             tipo_filtro_mes = st.selectbox(
                 "Condição",
-                ["Início OU Fim no mês", "Apenas Início no mês", "Apenas Fim no mês"],
+                ["Terminou Início OU Fim no mês", "Terminou Início no mês", "Terminou Fim no mês"],
                 index=0,
                 key="filtro_tipo_mes"
             )
@@ -730,9 +747,9 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             inicio_no_mes = df["Data Inicial"].dt.date.between(primeiro_dia, ultimo_dia)
             fim_no_mes = df["Data Final"].dt.date.between(primeiro_dia, ultimo_dia)
 
-            if tipo_filtro_mes == "Início OU Fim no mês":
+            if tipo_filtro_mes == "Terminou Início OU Fim no mês":
                 mask_mes = inicio_no_mes | fim_no_mes
-            elif tipo_filtro_mes == "Apenas Início no mês":
+            elif tipo_filtro_mes == "Terminou Início no mês":
                 mask_mes = inicio_no_mes
             else:  
                 mask_mes = fim_no_mes
@@ -741,7 +758,7 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             ativar = st.checkbox("✅ Ativar este filtro", value=False, key="ativar_filtro_mes")
             if ativar and mask_mes.any():
                 df = df[mask_mes]
-                st.caption(f"📌 Ações com {'início ou fim' if tipo_filtro_mes=='Início OU Fim no mês' else ('início' if tipo_filtro_mes=='Apenas Início no mês' else 'fim')} em {nomes_meses[mes_sel-1]} de {ano_sel}: {mask_mes.sum()}")
+                st.caption(f"📌 Ações com {'início ou fim' if tipo_filtro_mes=='Terminou Início OU Fim no mês' else ('início' if tipo_filtro_mes=='Terminou Início no mês' else 'fim')} em {nomes_meses[mes_sel-1]} de {ano_sel}: {mask_mes.sum()}")
             elif ativar and not mask_mes.any():
                 st.warning(f"Nenhuma ação encontrada no período selecionado.")
 
