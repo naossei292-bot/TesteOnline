@@ -73,7 +73,7 @@ def normalizar_status_para_grafico(df: pd.DataFrame) -> pd.Series:
         "finalizada": "Finalizada",
         "fechada": "Finalizada",
         "cancelada": "Cancelada",
-        "CANCELADA": "Cancelada"   # se já existir exactamente assim
+        "CANCELADA": "Cancelada"  
     }
     # Aplica mapeamento (convertemos para minúsculas para comparação)
     status_norm = status_norm.apply(
