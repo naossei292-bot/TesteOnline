@@ -670,6 +670,8 @@ def tabela_geral_acoes(df: pd.DataFrame):
 
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
     with st.sidebar:
         st.markdown("## 🔍 Filtros")
         st.markdown("---")
@@ -772,231 +774,67 @@ def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
             st.info("Sem datas disponíveis para filtrar.")
         # ---------------------------------------------------------
 
-        # ----- NOVO FILTRO: Ações com data de início ou fim num mês específico -----
-        st.markdown("### 📅 Filtro por Mês (Início ou Fim)")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            anos_disponiveis = sorted(df["Data Inicial"].dt.year.dropna().unique()) if "Data Inicial" in df.columns else []
-            if anos_disponiveis:
-                ano_sel = st.selectbox("Ano", anos_disponiveis, index=len(anos_disponiveis)-1, key="filtro_ano")
-            else:
-                ano_sel = datetime.today().year
-                st.info("Sem datas disponíveis para filtrar por mês.")
-        with col2:
-            meses = list(range(1, 13))
-            nomes_meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-                        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-            mes_sel = st.selectbox("Mês", meses, format_func=lambda x: nomes_meses[x-1], index=datetime.today().month-1, key="filtro_mes")
-        with col3:
-            tipo_filtro_mes = st.selectbox(
-                "Condição",
-                ["Terminou Início OU Fim no mês", "Terminou Início no mês", "Terminou Fim no mês"],
-                index=0,
-                key="filtro_tipo_mes"
-            )
+        # ----- FILTRO POR INTERVALO DE MESES (com checkbox de ativação) -----
+        st.markdown("### 📅 Filtro por Período de Meses")
 
-        if "Data Inicial" in df.columns and "Data Final" in df.columns:
-            primeiro_dia = datetime(ano_sel, mes_sel, 1).date()
-            ultimo_dia = (datetime(ano_sel, mes_sel, 1) + pd.DateOffset(months=1) - pd.Timedelta(days=1)).date()
+        # Checkbox para ativar/desativar o filtro
+        ativar_filtro_mes = st.checkbox("🔍 Ativar filtro por mês", value=False, key="ativar_filtro_mes")
 
-            # Criar máscaras
-            inicio_no_mes = df["Data Inicial"].dt.date.between(primeiro_dia, ultimo_dia)
-            fim_no_mes = df["Data Final"].dt.date.between(primeiro_dia, ultimo_dia)
-
-            if tipo_filtro_mes == "Terminou Início OU Fim no mês":
-                mask_mes = inicio_no_mes | fim_no_mes
-            elif tipo_filtro_mes == "Terminou Início no mês":
-                mask_mes = inicio_no_mes
-            else:  
-                mask_mes = fim_no_mes
-
-            # Aplicar o filtro (se o utilizador quiser ativar/desativar, pode usar um checkbox)
-            ativar = st.checkbox("✅ Ativar este filtro", value=False, key="ativar_filtro_mes")
-            if ativar and mask_mes.any():
-                df = df[mask_mes]
-                st.caption(f"📌 Ações com {'início ou fim' if tipo_filtro_mes=='Terminou Início OU Fim no mês' else ('início' if tipo_filtro_mes=='Terminou Início no mês' else 'fim')} em {nomes_meses[mes_sel-1]} de {ano_sel}: {mask_mes.sum()}")
-            elif ativar and not mask_mes.any():
-                st.warning(f"Nenhuma ação encontrada no período selecionado.")
-
-            if st.button("🗑️ Limpar todos os filtros", use_container_width=True):
-                for key in ["dash_status", "dash_tipo", "dash_centro", "dash_formador", "dash_datas",
-                            "filtro_ano", "filtro_mes", "filtro_tipo_mes", "ativar_filtro_mes"]:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.rerun()
-    return df
-'''
-# ── Filtros Opcionais dentro de um Expander ─────────────────────────────────
-def mostrar_filtros_opcionais(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Mostra filtros opcionais dentro de um expander que só aparece quando o botão é clicado.
-    Retorna o DataFrame filtrado.
-    """
-    
-    # Inicializar estado do filtro opcional se não existir
-    if "mostrar_filtros_opcionais" not in st.session_state:
-        st.session_state.mostrar_filtros_opcionais = False
-    
-    # Botão para mostrar/esconder filtros opcionais
-    col_botao1, col_botao2, col_botao3 = st.columns([1, 2, 1])
-    with col_botao2:
-        if st.button("🔧 **Filtros Opcionais**", use_container_width=True, key="btn_filtros_opcionais"):
-            st.session_state.mostrar_filtros_opcionais = not st.session_state.mostrar_filtros_opcionais
-            st.rerun()
-    
-    # Se o botão foi clicado, mostrar os filtros opcionais
-    if st.session_state.mostrar_filtros_opcionais:
-        with st.expander("🔍 **Filtros Avançados - Clique para expandir**", expanded=True):
-            st.markdown("### 🎯 Filtros Detalhados")
-            st.markdown("*Aplique filtros adicionais para refinar ainda mais a análise*")
-            st.markdown("---")
-            
-            df_filtrado = df.copy()
-            
-            # Organizar filtros em 2 colunas
-            col1, col2 = st.columns(2)
+        if ativar_filtro_mes:
+            col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.markdown("#### 📊 Filtros Numéricos")
-                
-                # Filtro por número mínimo de inscritos
-                if "Inscritos" in df_filtrado.columns:
-                    min_inscritos = st.number_input(
-                        "📝 Mínimo de Inscritos",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key="filtro_min_inscritos"
-                    )
-                    if min_inscritos > 0:
-                        df_filtrado = df_filtrado[df_filtrado["Inscritos"] >= min_inscritos]
-                
-                # Filtro por número mínimo de aptos
-                if "Aptos" in df_filtrado.columns:
-                    min_aptos = st.number_input(
-                        "✅ Mínimo de Aptos",
-                        min_value=0,
-                        value=0,
-                        step=1,
-                        key="filtro_min_aptos"
-                    )
-                    if min_aptos > 0:
-                        df_filtrado = df_filtrado[df_filtrado["Aptos"] >= min_aptos]
-                
-                # Filtro por taxa de satisfação mínima
-                if "Taxa de satisfação Final" in df_filtrado.columns:
-                    min_satisfacao = st.slider(
-                        "⭐ Satisfação Mínima (0-5)",
-                        min_value=0.0,
-                        max_value=5.0,
-                        value=0.0,
-                        step=0.1,
-                        key="filtro_min_satisfacao"
-                    )
-                    if min_satisfacao > 0:
-                        df_filtrado = df_filtrado[df_filtrado["Taxa de satisfação Final"] >= min_satisfacao]
+                # Lista de anos disponíveis (baseada na Data Inicial)
+                if "Data Inicial" in df.columns:
+                    anos_disponiveis = sorted(df["Data Inicial"].dt.year.dropna().unique())
+                    if anos_disponiveis:
+                        ano_sel = st.selectbox("Ano", anos_disponiveis, index=len(anos_disponiveis)-1, key="filtro_ano")
+                    else:
+                        ano_sel = datetime.today().year
+                        st.info("Sem datas disponíveis.")
+                else:
+                    ano_sel = datetime.today().year
+                    st.warning("Coluna 'Data Inicial' não encontrada.")
             
             with col2:
-                st.markdown("#### 💰 Filtros Financeiros")
-                
-                # Filtro por valor mínimo recebido
-                if "Valor Total Recebido" in df_filtrado.columns:
-                    min_valor_recebido = st.number_input(
-                        "💶 Valor Mínimo Recebido (€)",
-                        min_value=0,
-                        value=0,
-                        step=1000,
-                        key="filtro_min_valor_recebido"
-                    )
-                    if min_valor_recebido > 0:
-                        df_filtrado = df_filtrado[df_filtrado["Valor Total Recebido"] >= min_valor_recebido]
-                
-                # Filtro por valor mínimo a receber
-                if "Valor total a receber" in df_filtrado.columns:
-                    min_valor_receber = st.number_input(
-                        "💰 Valor Mínimo a Receber (€)",
-                        min_value=0,
-                        value=0,
-                        step=1000,
-                        key="filtro_min_valor_receber"
-                    )
-                    if min_valor_receber > 0:
-                        df_filtrado = df_filtrado[df_filtrado["Valor total a receber"] >= min_valor_receber]
-                
-                # Filtro por taxa de cobrança mínima
-                if "Valor Total Recebido" in df_filtrado.columns and "Valor total a receber" in df_filtrado.columns:
-                    df_temp = df_filtrado.copy()
-                    df_temp["Taxa_Cobranca"] = (df_temp["Valor Total Recebido"] / df_temp["Valor total a receber"] * 100).fillna(0)
-                    min_taxa = st.slider(
-                        "📈 Taxa de Cobrança Mínima (%)",
-                        min_value=0,
-                        max_value=100,
-                        value=0,
-                        step=5,
-                        key="filtro_min_taxa"
-                    )
-                    if min_taxa > 0:
-                        df_filtrado = df_filtrado[df_temp["Taxa_Cobranca"] >= min_taxa]
-            
-            st.markdown("---")
-            
-            # Terceira linha: Filtros de texto/pesquisa
-            st.markdown("#### 🔎 Filtros de Pesquisa")
-            
-            col3, col4 = st.columns(2)
+                nomes_meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+                mes_inicio = st.selectbox("Mês inicial", range(1,13), format_func=lambda x: nomes_meses[x-1],
+                                        index=0, key="mes_inicio")
             
             with col3:
-                # Pesquisa por ação
-                if "Ação" in df_filtrado.columns:
-                    pesquisa_acao = st.text_input(
-                        "🔍 Pesquisar Ação (nome contém)",
-                        placeholder="Digite parte do nome da ação...",
-                        key="filtro_pesquisa_acao"
-                    )
-                    if pesquisa_acao:
-                        df_filtrado = df_filtrado[df_filtrado["Ação"].astype(str).str.contains(pesquisa_acao, case=False, na=False)]
+                mes_fim = st.selectbox("Mês final", range(1,13), format_func=lambda x: nomes_meses[x-1],
+                                    index=11, key="mes_fim")
             
-            with col4:
-                # Pesquisa por formador
-                if "Formador" in df_filtrado.columns:
-                    pesquisa_formador = st.text_input(
-                        "👨‍🏫 Pesquisar Formador",
-                        placeholder="Digite parte do nome do formador...",
-                        key="filtro_pesquisa_formador"
-                    )
-                    if pesquisa_formador:
-                        df_filtrado = df_filtrado[df_filtrado["Formador"].astype(str).str.contains(pesquisa_formador, case=False, na=False)]
+            # Garantir que o intervalo faz sentido (mês inicial ≤ mês final)
+            if mes_inicio > mes_fim:
+                st.warning("Mês inicial não pode ser maior que o mês final. A troca será feita automaticamente.")
+                mes_inicio, mes_fim = mes_fim, mes_inicio  # troca
             
-            st.markdown("---")
+            # --- APLICAÇÃO DO FILTRO AO DATAFRAME PRINCIPAL ---
+            # Supomos que o dataframe que mostras na página se chama `df`
+            # Vamos criar uma máscara booleana e depois usar df_filtered para exibição
             
-            # Botões de ação para os filtros opcionais
-            col_acoes1, col_acoes2, col_acoes3 = st.columns(3)
+            # Função para verificar se a data pertence ao ano e ao intervalo de meses
+            def data_no_intervalo(data_col, ano, mes_ini, mes_fim):
+                if data_col is None or pd.isna(data_col):
+                    return False
+                return (data_col.year == ano) and (mes_ini <= data_col.month <= mes_fim)
             
-            with col_acoes2:
-                # Botão para limpar apenas os filtros opcionais
-                if st.button("🗑️ Limpar Filtros Opcionais", use_container_width=True, key="limpar_filtros_opcionais"):
-                    # Limpar todas as keys dos filtros opcionais
-                    filtros_opcionais_keys = [
-                        "filtro_min_inscritos", "filtro_min_aptos", "filtro_min_satisfacao",
-                        "filtro_min_valor_recebido", "filtro_min_valor_receber", "filtro_min_taxa",
-                        "filtro_pesquisa_acao", "filtro_pesquisa_formador"
-                    ]
-                    for key in filtros_opcionais_keys:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    st.rerun()
+            # Aplica a condição: Data Inicial OU Data Final dentro do intervalo (no ano escolhido)
+            mask = df.apply(
+                lambda row: data_no_intervalo(row.get("Data Inicial"), ano_sel, mes_inicio, mes_fim) or
+                            data_no_intervalo(row.get("Data Final"), ano_sel, mes_inicio, mes_fim),
+                axis=1
+            )
             
-            # Mostrar resumo dos filtros aplicados
-            if len(df_filtrado) < len(df):
-                st.success(f"✅ Filtros opcionais aplicados: {len(df_filtrado)} ações restantes (de {len(df)} originais)")
-            else:
-                st.info("ℹ️ Nenhum filtro opcional aplicado")
-            
-            return df_filtrado
-    
-    # Se os filtros opcionais não estiverem ativos, retorna o DataFrame original
-    return df
-'''
+            # DataFrame filtrado (este será o mostrado na página)
+            df_filtrado = df[mask].copy()
+        else:
+            # Se o filtro não estiver ativo, mostrar todos os dados
+            df_filtrado = df.copy()
+
+    return df_filtrado
 
 # ── Funções de Timeline melhoradas ────────────────────────────────────────────
 def gerar_opcoes_rapidas(df: pd.DataFrame):
