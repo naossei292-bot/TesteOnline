@@ -878,6 +878,27 @@ def mostrar_cursos():
             "**Questionários**, e mapeia as colunas."
         )
 
+        # ADICIONAR ESTA SEÇÃO - Download do modelo
+        with st.expander("📥 Precisa de um modelo?", expanded=False):
+            from pathlib import Path
+            
+            assets_path = Path("assets")
+            modelo_path = assets_path / "Modelo_Cursos.xlsx"
+            
+            if modelo_path.exists():
+                with open(modelo_path, "rb") as f:
+                    st.download_button(
+                        label="📊 Baixar Modelo_Cursos.xlsx",
+                        data=f,
+                        file_name="Modelo_Cursos.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        help="Download do modelo com a estrutura correta de colunas"
+                    )
+                st.caption("ℹ️ Preencha este modelo com os seus dados e faça upload")
+            else:
+                st.error(f"❌ Modelo não encontrado em: {modelo_path}")
+
         with st.expander("ℹ️ Formato de ficheiro combinado (novo)", expanded=False):
             st.markdown(
                 "O formato combinado tem **uma linha por formando** e inclui simultaneamente "
