@@ -89,6 +89,8 @@ PERMISSOES = {
     ],
     "gestor_qualidade": [
         "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "📋 Questionários",
+        #Gestora de Qualidade precisa de acesso aos questionários para gerir a qualidade
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
