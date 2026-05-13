@@ -1,4 +1,5 @@
 import streamlit as st
+import io
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -656,7 +657,7 @@ def tabela_geral_acoes(df: pd.DataFrame):
             df_exibir[col] = df_exibir[col].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
     column_config = {}
     for col in df_exibir.columns:
-        if col in ["Inscritos", "Aptos","Inaptos", "Desistentes", "Devedores"]:  # "Inaptos", "Desistentes", "Devedores" removidos   # COMENTADO
+        if col in ["Inscritos", "Aptos","Inaptos", "Desistentes", "Devedores"]: 
             valores = df_exibir[col].dropna()
             if not valores.empty and pd.api.types.is_numeric_dtype(valores):
                 max_val = valores.max()
@@ -667,6 +668,25 @@ def tabela_geral_acoes(df: pd.DataFrame):
         elif "Avaliação" in col:
             column_config[col] = st.column_config.NumberColumn(col, format="%.2f")
     st.dataframe(df_exibir, use_container_width=True, hide_index=True, column_config=column_config, height=min(600, 35 + len(df_exibir) * 35))
+    # -----------------------------------------------------------------
+    st.markdown("---")  # separador visual (opcional)
+    
+    # Prepara os dados crus (sem formatação) para Excel
+    df_export = df[colunas_selecionadas].copy()
+    
+    # Converte para bytes em memória
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_export.to_excel(writer, index=False, sheet_name='Ações')
+    dados_excel = output.getvalue()
+    
+    st.download_button(
+        label="📥 Descarregar tabela em Excel",
+        data=dados_excel,
+        file_name="tabela_acoes.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="download_excel_tabela_geral"  # chave única para evitar conflitos
+    )
 
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
