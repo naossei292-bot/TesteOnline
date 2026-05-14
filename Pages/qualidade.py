@@ -32,6 +32,60 @@ def aplicar_filtros(df):
 def mostrar_qualidade():
     st.header("🎯 Scorecard de Qualidade Pedagógica")
 
+    # ------------------------------------------------------------
+    # NOVO: Área de upload da Projeção 2026 (fora do expander)
+    # ------------------------------------------------------------
+    st.markdown("---")
+    st.subheader("📁 Upload da Projeção 2026 (LD + VSP)")
+
+    col_upload, col_download = st.columns([3, 1])
+
+    with col_upload:
+        uploaded_file = st.file_uploader(
+            "Carregue o ficheiro 'Modelo_Previsões_Anuais.xlsx' para calcular o cumprimento do plano",
+            type=["xlsx", "xls"],
+            key="upload_projecao_plano_global"
+        )
+
+    with col_download:
+        # Botão de download do modelo
+        try:
+            with open("assets/Modelo_Previsões_Anuais.xlsx", "rb") as f:
+                modelo_conteudo = f.read()
+            st.download_button(
+                label="📥 Baixar Modelo",
+                data=modelo_conteudo,
+                file_name="Modelo_Previsões_Anuais.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="download_modelo_previsoes"
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Modelo não encontrado: assets/Modelo_Previsões_Anuais.xlsx")
+        except Exception as e:
+            st.error(f"Erro ao carregar modelo: {e}")
+
+    # Processar o ficheiro se foi carregado
+    if uploaded_file is not None:
+        try:
+            df_ld = pd.read_excel(uploaded_file, sheet_name="LD")
+            df_vsp = pd.read_excel(uploaded_file, sheet_name="VSP")
+            
+            # Guardar no session_state
+            st.session_state.df_projecao_ld = df_ld
+            st.session_state.df_projecao_vsp = df_vsp
+            st.session_state.projecao_uploaded = True
+            
+            st.success("✅ Ficheiro carregado com sucesso! (Folhas: LD e VSP)")
+            
+        except Exception as e:
+            st.error(f"Erro ao carregar o ficheiro: {e}")
+            st.session_state.projecao_uploaded = False
+
+    # Se o ficheiro já foi carregado anteriormente, mostrar indicador
+    elif st.session_state.get("projecao_uploaded", False):
+        st.success("✅ Ficheiro já carregado. Use o botão 'Ver detalhes' abaixo para ver os resultados.")
+
     # ----- Dados dos Cursos (NOVA ESTRUTURA: usa st.session_state.acoes_df) -----
     df_cursos_raw = st.session_state.get("acoes_df", None)   # <--- ALTERADO
     if df_cursos_raw is not None and not df_cursos_raw.empty:
@@ -313,6 +367,7 @@ def mostrar_qualidade():
                 <div class="kpi-meta">⚠️ Coluna "Status" sem 'Prevista'/'Finalizado'</div>
             </div>
             """, unsafe_allow_html=True)
+
         if st.button("🔍 Ver detalhes", key="btn_plano", use_container_width=True):
             set_detalhe('plano')
 
@@ -339,140 +394,291 @@ def mostrar_qualidade():
             set_detalhe('avf')
 
     # ---------- ÁREAS DE DETALHE (mantidas inalteradas, mas com referência ao novo df_cursos) ----------
-    if st.session_state.detalhe_ativo == 'sat':
-        with st.expander("📊 Detalhe da Satisfação dos Formandos", expanded=True):
-            st.markdown("**Dados que compõem este indicador:**")
-            if has_quest and "Média" in df_quest.columns:
-                df_sat = df_quest[['Ação', 'Centro', 'Categoria', 'Média', 'Respondente']].copy()
-                df_sat['Média'] = pd.to_numeric(df_sat['Média'], errors='coerce')
-                meta_sat = st.session_state.obj_satisfacao
-                def highlight_by_goal(val, meta):
-                    if pd.notna(val):
-                        if val < meta:
-                            return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
-                        else:
-                            return 'background-color: #d4edda; border-left: 4px solid #28a745;'
-                    return ''
-                styled_sat = df_sat.style.map(lambda x: highlight_by_goal(x, meta_sat), subset=['Média'])
-                st.markdown("**Filtros:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    centros = st.multiselect("Centro", options=sorted(df_sat['Centro'].unique()), key="sat_centro")
-                with col_f2:
-                    categorias = st.multiselect("Categoria", options=sorted(df_sat['Categoria'].unique()), key="sat_cat")
-                df_filt = df_sat.copy()
-                if centros:
-                    df_filt = df_filt[df_filt['Centro'].isin(centros)]
-                if categorias:
-                    df_filt = df_filt[df_filt['Categoria'].isin(categorias)]
-                styled_filt = df_filt.style.map(lambda x: highlight_by_goal(x, meta_sat), subset=['Média'])
-                st.dataframe(styled_filt, use_container_width=True)
-                st.caption(f"Média global: {df_filt['Média'].mean():.2f} | Total de respostas: {len(df_filt)}")
-            else:
-                st.info("Dados de satisfação disponíveis apenas nos cursos (coluna 'Taxa de satisfação Final')")
-                if has_cursos and "Taxa de satisfação Final" in df_cursos.columns:
-                    df_sat_cursos = df_cursos[['Ação', 'Centro', 'Taxa de satisfação Final']].dropna()
-                    df_sat_cursos['Taxa de satisfação Final'] = pd.to_numeric(df_sat_cursos['Taxa de satisfação Final'], errors='coerce')
-                    meta_sat = st.session_state.obj_satisfacao
-                    def highlight_by_goal_sat(val):
-                        if pd.notna(val):
-                            if val < meta_sat:
-                                return 'background-color: #fce8ea; border-left: 4px solid #dc3545;'
-                            else:
-                                return 'background-color: #d4edda; border-left: 4px solid #28a745;'
-                        return ''
-                    styled_cursos = df_sat_cursos.style.map(highlight_by_goal_sat, subset=['Taxa de satisfação Final'])
-                    st.dataframe(styled_cursos, use_container_width=True)
-
-    if st.session_state.detalhe_ativo == 'conc':
-        with st.expander("📊 Detalhe da Taxa de Conclusão", expanded=True):
-            if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Inscritos', 'Aptos', 'Inaptos']):
-                df_conc = df_cursos[['Ação', 'Centro', 'Inscritos', 'Aptos', 'Inaptos']].copy()
-                df_conc['Concluíram'] = df_conc['Aptos'] + df_conc['Inaptos']
-                df_conc['Taxa_Conclusão_%'] = (df_conc['Concluíram'] / df_conc['Inscritos'] * 100).round(1)
-                meta_conc = st.session_state.obj_conclusao
-                def highlight_row(row):
-                    if pd.notna(row['Taxa_Conclusão_%']):
-                        if row['Taxa_Conclusão_%'] < meta_conc:
-                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
-                        else:
-                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)
-                    return [''] * len(row)
-                styled_conc = df_conc.style.apply(highlight_row, axis=1)
-                st.dataframe(styled_conc, use_container_width=True)
-                st.markdown("**Filtros:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    centros = st.multiselect("Centro", options=sorted(df_conc['Centro'].unique()), key="conc_centro")
-                with col_f2:
-                    acoes = st.multiselect("Ação", options=sorted(df_conc['Ação'].unique()), key="conc_acao")
-                df_filt = df_conc.copy()
-                if centros:
-                    df_filt = df_filt[df_filt['Centro'].isin(centros)]
-                if acoes:
-                    df_filt = df_filt[df_filt['Ação'].isin(acoes)]
-                styled_filt = df_filt.style.apply(highlight_row, axis=1)
-                st.dataframe(styled_filt, use_container_width=True)
-                st.caption(f"Taxa global: {taxa_conclusao:.1f}% | Total cursos: {len(df_filt)}")
-            else:
-                st.warning("Dados insuficientes para calcular conclusão por curso.")
-
-    if st.session_state.detalhe_ativo == 'aprov':
-        with st.expander("📊 Detalhe da Taxa de Aprovação", expanded=True):
-            if has_cursos and all(c in df_cursos.columns for c in ['Ação', 'Centro', 'Aptos', 'Inaptos']):
-                df_aprov = df_cursos[['Ação', 'Centro', 'Aptos', 'Inaptos']].copy()
-                df_aprov['Avaliados'] = df_aprov['Aptos'] + df_aprov['Inaptos']
-                df_aprov['Taxa_Aprovação_%'] = (df_aprov['Aptos'] / df_aprov['Avaliados'] * 100).round(1)
-                meta_aprov = st.session_state.obj_aprovacao
-                def highlight_row(row):
-                    if pd.notna(row['Taxa_Aprovação_%']):
-                        if row['Taxa_Aprovação_%'] < meta_aprov:
-                            return ['background-color: #fce8ea; border-left: 4px solid #dc3545;'] * len(row)
-                        else:
-                            return ['background-color: #d4edda; border-left: 4px solid #28a745;'] * len(row)
-                    return [''] * len(row)
-                styled_aprov = df_aprov.style.apply(highlight_row, axis=1)
-                st.dataframe(styled_aprov, use_container_width=True)
-                st.markdown("**Filtros:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    centros = st.multiselect("Centro", options=sorted(df_aprov['Centro'].unique()), key="aprov_centro")
-                with col_f2:
-                    acoes = st.multiselect("Ação", options=sorted(df_aprov['Ação'].unique()), key="aprov_acao")
-                df_filt = df_aprov.copy()
-                if centros:
-                    df_filt = df_filt[df_filt['Centro'].isin(centros)]
-                if acoes:
-                    df_filt = df_filt[df_filt['Ação'].isin(acoes)]
-                styled_filt = df_filt.style.apply(highlight_row, axis=1)
-                st.dataframe(styled_filt, use_container_width=True)
-                st.caption(f"Taxa global: {taxa_aprovacao:.1f}% | Total cursos com avaliação: {len(df_filt)}")
-            else:
-                st.warning("Dados insuficientes para calcular aprovação por curso.")
-
     if st.session_state.detalhe_ativo == 'plano':
         with st.expander("📊 Detalhe do Cumprimento do Plano", expanded=True):
-            if has_cursos and "Status" in df_cursos.columns:
-                df_plano = df_cursos[['Ação', 'Centro', 'Status']].copy()
-                st.dataframe(df_plano, use_container_width=True)
-                st.markdown("**Filtros:**")
-                col_f1, col_f2 = st.columns(2)
-                with col_f1:
-                    centros = st.multiselect("Centro", options=sorted(df_plano['Centro'].unique()), key="plano_centro")
-                with col_f2:
-                    status_opts = st.multiselect("Status", options=sorted(df_plano['Status'].unique()), key="plano_status")
-                df_filt = df_plano.copy()
-                if centros:
-                    df_filt = df_filt[df_filt['Centro'].isin(centros)]
-                if status_opts:
-                    df_filt = df_filt[df_filt['Status'].isin(status_opts)]
-                st.dataframe(df_filt, use_container_width=True)
-                finalizadas = (df_filt['Status'].str.lower() == 'finalizado').sum()
-                previstas = (df_filt['Status'].str.lower() == 'prevista').sum()
-                taxa_local = (finalizadas / previstas * 100) if previstas > 0 else 0
-                st.caption(f"Taxa de cumprimento: {taxa_local:.1f}% | Finalizadas: {finalizadas} | Previstas: {previstas}")
+            
+            # --- INICIALIZAR VARIÁVEIS NO INÍCIO ---
+            planos_previstos_total = 0
+            planos_finalizados = 0
+            cumprimento_calculado = 0
+            df_combinado = None
+            dados_carregados = False
+            mes_selecionado = "Todos os meses"
+            planos_previstos_fallback = 0
+            planos_finalizados_fallback = 0
+            cumprimento_calculado_fallback = 0
+            
+            # Estado para guardar os dataframes
+            if 'df_projecao_ld' not in st.session_state:
+                st.session_state.df_projecao_ld = None
+            if 'df_projecao_vsp' not in st.session_state:
+                st.session_state.df_projecao_vsp = None
+            
+            # ---- PROCESSAMENTO DO FICHEIRO ----
+            if uploaded_file is not None:
+                try:
+                    # Ler as duas folhas
+                    df_ld = pd.read_excel(uploaded_file, sheet_name="LD")
+                    df_vsp = pd.read_excel(uploaded_file, sheet_name="VSP")
+                    
+                    st.session_state.df_projecao_ld = df_ld
+                    st.session_state.df_projecao_vsp = df_vsp
+                    
+                    st.success("✅ Ficheiro carregado com sucesso! (Folhas: LD e VSP)")
+                    dados_carregados = True
+                    
+                except Exception as e:
+                    st.error(f"Erro ao carregar o ficheiro: {e}")
+                    st.session_state.df_projecao_ld = None
+                    st.session_state.df_projecao_vsp = None
+                    dados_carregados = False
+            
+            # --- SÓ EXECUTAR O PROCESSAMENTO SE OS DADOS EXISTIREM ---
+            if dados_carregados and st.session_state.df_projecao_ld is not None and st.session_state.df_projecao_vsp is not None:
+                df_ld = st.session_state.df_projecao_ld
+                df_vsp = st.session_state.df_projecao_vsp
+                
+                try:
+                    # ---- PROCESSAR FOLHA LD ----
+                    df_ld.columns = df_ld.columns.str.strip()
+                    coluna_acoes_ld = 'Total Número Ações Formação Curso'
+                    
+                    if coluna_acoes_ld not in df_ld.columns:
+                        for col in df_ld.columns:
+                            if 'total' in col.lower() and 'ações' in col.lower():
+                                coluna_acoes_ld = col
+                                break
+                    
+                    df_ld['Centro'] = df_ld['Centro'].fillna('').astype(str).str.strip()
+                    df_ld['Código curso'] = df_ld['Código curso'].fillna('').astype(str).str.strip()
+                    df_ld[coluna_acoes_ld] = pd.to_numeric(df_ld[coluna_acoes_ld], errors='coerce').fillna(0)
+                    
+                    # ---- PROCESSAR FOLHA VSP ----
+                    df_vsp.columns = df_vsp.columns.str.strip()
+                    
+                    coluna_acoes_vsp = None
+                    for col in df_vsp.columns:
+                        if 'número de ações' in col.lower() or 'acoes' in col.lower():
+                            coluna_acoes_vsp = col
+                            break
+                    
+                    if coluna_acoes_vsp is None:
+                        for col in df_vsp.columns:
+                            if 'ações' in col.lower():
+                                coluna_acoes_vsp = col
+                                break
+                    
+                    df_vsp['Centro'] = df_vsp['Centro'].fillna('').astype(str).str.strip()
+                    
+                    codigo_col_vsp = None
+                    for col in df_vsp.columns:
+                        if 'código' in col.lower() or 'codigo' in col.lower():
+                            codigo_col_vsp = col
+                            break
+                    
+                    if codigo_col_vsp:
+                        df_vsp['Código curso'] = df_vsp[codigo_col_vsp].fillna('').astype(str).str.strip()
+                    else:
+                        df_vsp['Código curso'] = 'DESCONHECIDO'
+                    
+                    if coluna_acoes_vsp:
+                        df_vsp[coluna_acoes_vsp] = pd.to_numeric(df_vsp[coluna_acoes_vsp], errors='coerce').fillna(0)
+                    else:
+                        df_vsp['Nº Ações VSP'] = 0
+                        coluna_acoes_vsp = 'Nº Ações VSP'
+                    
+                    # ---- COMBINAR AS DUAS FOLHAS ----
+                    df_ld_prep = df_ld[['Centro', 'Código curso', coluna_acoes_ld]].copy()
+                    df_ld_prep.columns = ['Centro', 'Código curso', 'Nº Ações LD']
+                    
+                    df_vsp_prep = df_vsp[['Centro', 'Código curso', coluna_acoes_vsp]].copy()
+                    df_vsp_prep.columns = ['Centro', 'Código curso', 'Nº Ações VSP']
+                    
+                    df_combinado = pd.merge(df_ld_prep, df_vsp_prep, on=['Centro', 'Código curso'], how='outer')
+                    df_combinado['Nº Ações LD'] = df_combinado['Nº Ações LD'].fillna(0)
+                    df_combinado['Nº Ações VSP'] = df_combinado['Nº Ações VSP'].fillna(0)
+                    df_combinado['Nº Ações Previstas'] = df_combinado['Nº Ações LD'] + df_combinado['Nº Ações VSP']
+                    
+                    # Calcular total de ações previstas
+                    planos_previstos_total = df_combinado['Nº Ações Previstas'].sum()
+                    
+                    # ---- CALCULAR AÇÕES FINALIZADAS ----
+                    if has_cursos and "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
+                        df_cursos['Status'] = df_cursos['Status'].astype(str).str.strip().str.lower()
+                        df_cursos['Código curso'] = df_cursos['Ação'].astype(str).str.split('/').str[0]
+                        
+                        # --- FILTRO DE MÊS ---
+                        meses_nomes = {
+                            1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
+                            5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
+                            9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+                        }
+                        
+                        coluna_data = None
+                        if 'Data Inicial' in df_cursos.columns:
+                            coluna_data = 'Data Inicial'
+                        elif 'Data Final' in df_cursos.columns:
+                            coluna_data = 'Data Final'
+                        
+                        meses_disponiveis = []
+                        if coluna_data:
+                            df_cursos[coluna_data] = pd.to_datetime(df_cursos[coluna_data], errors='coerce')
+                            df_cursos['Mês_Num'] = df_cursos[coluna_data].dt.month
+                            df_cursos['Mês_Nome'] = df_cursos['Mês_Num'].map(meses_nomes)
+                            meses_disponiveis = sorted(df_cursos['Mês_Nome'].dropna().unique().tolist())
+                        
+                        st.markdown("---")
+                        st.subheader("📅 Filtrar por Mês")
+                        
+                        opcoes_meses = ['Todos os meses'] + meses_disponiveis if meses_disponiveis else ['Todos os meses']
+                        
+                        mes_selecionado = st.selectbox(
+                            "Selecione o mês para filtrar as ações finalizadas:",
+                            options=opcoes_meses,
+                            index=0,
+                            key="filtro_mes_plano"
+                        )
+                        
+                        # --- APLICAR FILTRO DE MÊS ---
+                        if mes_selecionado == 'Todos os meses' or not meses_disponiveis:
+                            df_cursos_filtrado = df_cursos
+                            st.info("📅 A mostrar todas as ações finalizadas (sem filtro de mês)")
+                        else:
+                            df_cursos_filtrado = df_cursos[df_cursos['Mês_Nome'] == mes_selecionado]
+                            st.info(f"📅 A mostrar ações finalizadas apenas em **{mes_selecionado}**")
+                        
+                        # --- CONTAR FINALIZADAS POR CURSO (COM FILTRO APLICADO) ---
+                        finalizadas_por_curso = df_cursos_filtrado[
+                            df_cursos_filtrado['Status'].str.contains('finaliz|conclu', regex=True)
+                        ].groupby('Código curso').size().reset_index(name='Nº Finalizadas')
+                        
+                        # --- MERGE COM O DATAFRAME COMBINADO ---
+                        df_combinado = df_combinado.merge(finalizadas_por_curso, on='Código curso', how='left')
+                        df_combinado['Nº Finalizadas'] = df_combinado['Nº Finalizadas'].fillna(0).astype(int)
+                        
+                        # --- RECALCULAR TOTAIS COM BASE NO FILTRO ---
+                        planos_finalizados = df_combinado['Nº Finalizadas'].sum()
+                        df_combinado['% Cumprimento'] = (df_combinado['Nº Finalizadas'] / df_combinado['Nº Ações Previstas'] * 100).round(1)
+                        df_combinado['% Cumprimento'] = df_combinado['% Cumprimento'].fillna(0)
+                        
+                        # --- CALCULAR PERCENTAGEM GLOBAL (COM FILTRO APLICADO) ---
+                        planos_previstos_total = df_combinado['Nº Ações Previstas'].sum()
+                        cumprimento_calculado = (planos_finalizados / planos_previstos_total * 100) if planos_previstos_total > 0 else 0
+                        st.session_state.cumprimento_plano_valor = cumprimento_calculado
+                        
+                    else:
+                        planos_finalizados = 0
+                        cumprimento_calculado = 0
+                    
+                    # ---- RESULTADOS (COM FILTRO APLICADO) ----
+                    st.markdown("---")
+                    st.subheader("📊 Resultados do Cálculo (LD + VSP Combinado)")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📋 Ações Previstas (LD)", f"{df_combinado['Nº Ações LD'].sum():.0f}")
+                    with col2:
+                        st.metric("📋 Ações Previstas (VSP)", f"{df_combinado['Nº Ações VSP'].sum():.0f}")
+                    with col3:
+                        st.metric("📋 Total Previstas", f"{planos_previstos_total:.0f}")
+                    with col4:
+                        st.metric("✅ Ações Finalizadas", f"{planos_finalizados:.0f}")
+                    
+                    col5, col6 = st.columns(2)
+                    with col5:
+                        delta = cumprimento_calculado - st.session_state.obj_plano
+                        delta_color = "🟢" if delta >= 0 else "🔴"
+                        st.metric("📊 Cumprimento do Plano", f"{cumprimento_calculado:.1f}%", 
+                                delta=f"{delta_color} {delta:.1f}%")
+                    with col6:
+                        st.progress(min(cumprimento_calculado / 100, 1.0))
+                    
+                    # ---- TABELA DE DETALHES (JÁ COM FILTRO APLICADO) ----
+                    with st.expander("📋 Ver detalhes da Projeção Combinada", expanded=True):
+                        df_show = df_combinado[['Centro', 'Código curso', 'Nº Ações LD', 'Nº Ações VSP', 'Nº Ações Previstas', 'Nº Finalizadas', '% Cumprimento']].copy()
+                        df_show.columns = ['Centro', 'Código Curso', 'Nº Ações LD', 'Nº Ações VSP', 'Total Previstas', 'Nº Finalizadas', '% Cumprimento']
+                        df_show = df_show.sort_values('% Cumprimento', ascending=False)
+                        
+                        def highlight_cumprimento(val):
+                            if val >= 100:
+                                return 'background-color: #d4edda; color: #155724;'
+                            elif val >= 50:
+                                return 'background-color: #fff3cd; color: #856404;'
+                            else:
+                                return 'background-color: #f8d7da; color: #721c24;'
+                        
+                        styled_df = df_show.style.map(highlight_cumprimento, subset=['% Cumprimento'])
+                        st.dataframe(styled_df, use_container_width=True)
+                        
+                        # Filtros adicionais (Centro e Curso)
+                        col_f1, col_f2 = st.columns(2)
+                        with col_f1:
+                            centros_sel = st.multiselect("Centro", options=sorted(df_show['Centro'].unique()), key="proj_centro")
+                        with col_f2:
+                            cursos_sel = st.multiselect("Curso", options=sorted(df_show['Código Curso'].unique()), key="proj_curso")
+                        
+                        df_filt = df_show.copy()
+                        if centros_sel:
+                            df_filt = df_filt[df_filt['Centro'].isin(centros_sel)]
+                        if cursos_sel:
+                            df_filt = df_filt[df_filt['Código Curso'].isin(cursos_sel)]
+                        
+                        st.dataframe(df_filt, use_container_width=True)
+                        
+                        total_previstos_filt = df_filt['Total Previstas'].sum()
+                        total_finalizadas_filt = df_filt['Nº Finalizadas'].sum()
+                        taxa_filt = (total_finalizadas_filt / total_previstos_filt * 100) if total_previstos_filt > 0 else 0
+                        
+                        st.caption(
+                            f"📊 Total (com filtros): {total_previstos_filt:.0f} previstas, "
+                            f"{total_finalizadas_filt:.0f} finalizadas, "
+                            f"taxa: {taxa_filt:.1f}%"
+                        )
+                    
+                except Exception as e:
+                    st.error(f"Erro ao processar dados: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+            
+            # --- MOSTRAR FALLBACK SE NÃO HOUVER DADOS ---
             else:
-                st.info("Coluna 'Status' não disponível nos cursos.")
+                st.info("⬆️ Carregue o ficheiro 'Modelo_Previsões_Anuais.xlsx' para ver os detalhes.")
+                
+                # Fallback usando apenas a base de dados
+                if has_cursos and "Status" in df_cursos.columns:
+                    df_cursos['Status'] = df_cursos['Status'].astype(str).str.strip().str.lower()
+                    planos_finalizados_fallback = df_cursos['Status'].str.contains('finaliz|conclu', regex=True).sum()
+                    planos_previstos_fallback = (df_cursos['Status'] == 'prevista').sum()
+                    cumprimento_calculado_fallback = (planos_finalizados_fallback / planos_previstos_fallback * 100) if planos_previstos_fallback > 0 else 0
+                    st.info(f"📊 A usar método alternativo: {cumprimento_calculado_fallback:.1f}%")
+                else:
+                    st.info("📊 Sem dados para calcular cumprimento")
+            
+            # --- RESUMO FINAL DO KPI (USANDO AS VARIÁVEIS CORRETAS) ---
+            st.markdown("---")
+            st.subheader("📊 Resumo do KPI - Cumprimento do Plano")
+            
+            # Determinar quais variáveis usar
+            if dados_carregados and df_combinado is not None:
+                # Usar os valores do processamento
+                finalizadas_show = planos_finalizados
+                previstas_show = planos_previstos_total
+                cumprimento_show = cumprimento_calculado
+            else:
+                # Usar os valores do fallback
+                finalizadas_show = planos_finalizados_fallback
+                previstas_show = planos_previstos_fallback
+                cumprimento_show = cumprimento_calculado_fallback
+            
+            col_sum1, col_sum2 = st.columns(2)
+            with col_sum1:
+                st.metric("Ações Finalizadas (Real)", f"{finalizadas_show:.0f}")
+            with col_sum2:
+                st.metric("Ações Previstas (Projeção 2026)", f"{previstas_show:.0f}")
+            
+            # Barra de progresso visual
+            st.progress(min(cumprimento_show / 100, 1.0))
+            st.caption(f"📈 Cumprimento: {cumprimento_show:.1f}% (Meta: {st.session_state.obj_plano:.0f}%)")
 
     if st.session_state.detalhe_ativo == 'avf':
         with st.expander("📊 Detalhe da Avaliação dos Formadores", expanded=True):
