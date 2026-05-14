@@ -20,7 +20,6 @@ def aplicar_filtros(df):
     """Aplica os filtros globais da sidebar (centro, datas, etc.) se existirem."""
     if df is None or df.empty:
         return df
-    # Filtro por centro (se existir no session_state)
     if hasattr(st.session_state, 'filtro_centro') and st.session_state.filtro_centro:
         if 'Centro' in df.columns:
             df = df[df['Centro'].isin(st.session_state.filtro_centro)]
