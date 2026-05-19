@@ -549,7 +549,6 @@ def mostrar_qualidade():
                                 st.warning(f"⚠️ {len(acoes_sem_match)} ações SEM match na projeção:")
                                 st.dataframe(acoes_sem_match[['Ação', 'Código curso', 'Centro']].head(20))
 
-                            # Agrupar apenas por Código curso (sem centro para evitar duplicados)
                             finalizadas_por_centro_curso = (
                                 acoes_com_match
                                 .drop_duplicates(subset=['Ação'])
