@@ -93,7 +93,6 @@ def mostrar_qualidade():
             df_ld = pd.read_excel(uploaded_file, sheet_name="LD")
             df_vsp = pd.read_excel(uploaded_file, sheet_name="VSP")
             
-            # Guardar no session_state
             st.session_state.df_projecao_ld = df_ld
             st.session_state.df_projecao_vsp = df_vsp
             st.session_state.projecao_uploaded = True
