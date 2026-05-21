@@ -243,6 +243,11 @@ def mostrar_qualidade():
         else:
             cumprimento_plano = None
 
+        # ➕ ADICIONAR ESTAS LINHAS A SEGUIR:
+        # Se já existe o cálculo real (LD+VSP), usar esse valor no card
+        if st.session_state.get("cumprimento_plano_calculado") is not None:
+            cumprimento_plano = st.session_state.cumprimento_plano_calculado
+
         # Satisfação dos formandos (média da Taxa de satisfação Final)
         if "Taxa de satisfação Final" in df_cursos.columns:
             media_satisfacao_cursos = df_cursos["Taxa de satisfação Final"].mean()
@@ -414,6 +419,96 @@ def mostrar_qualidade():
         if st.button("🔍 Ver detalhes", key="btn_avf", use_container_width=True):
             set_detalhe('avf')
 
+    # ➕ NOVO: calcular cumprimento do plano em background sempre que o ficheiro está disponível
+    if st.session_state.get("projecao_uploaded") and has_cursos:
+        try:
+            df_ld_bg = st.session_state.get("df_projecao_ld")
+            df_vsp_bg = st.session_state.get("df_projecao_vsp")
+
+            if df_ld_bg is not None and df_vsp_bg is not None:
+                df_ld_bg = df_ld_bg.copy()
+                df_vsp_bg = df_vsp_bg.copy()
+                df_ld_bg.columns = df_ld_bg.columns.str.strip()
+                df_vsp_bg.columns = df_vsp_bg.columns.str.strip()
+
+                coluna_acoes_ld = 'Total Número Ações Formação Curso'
+                if coluna_acoes_ld not in df_ld_bg.columns:
+                    for col in df_ld_bg.columns:
+                        if 'total' in col.lower() and 'ações' in col.lower():
+                            coluna_acoes_ld = col
+                            break
+
+                df_ld_bg['Centro'] = df_ld_bg['Centro'].fillna('').astype(str).str.strip()
+                df_ld_bg['Código curso'] = df_ld_bg['Código curso'].fillna('').astype(str).str.strip()
+                df_ld_bg[coluna_acoes_ld] = pd.to_numeric(df_ld_bg[coluna_acoes_ld], errors='coerce').fillna(0)
+
+                coluna_acoes_vsp = None
+                for col in df_vsp_bg.columns:
+                    if 'número de ações' in col.lower() or 'acoes' in col.lower():
+                        coluna_acoes_vsp = col
+                        break
+                if coluna_acoes_vsp is None:
+                    for col in df_vsp_bg.columns:
+                        if 'ações' in col.lower():
+                            coluna_acoes_vsp = col
+                            break
+
+                df_vsp_bg['Centro'] = df_vsp_bg['Centro'].fillna('').astype(str).str.strip()
+                codigo_col_vsp = None
+                for col in df_vsp_bg.columns:
+                    if 'código' in col.lower() or 'codigo' in col.lower():
+                        codigo_col_vsp = col
+                        break
+                if codigo_col_vsp:
+                    df_vsp_bg['Código curso'] = df_vsp_bg[codigo_col_vsp].fillna('').astype(str).str.strip()
+                else:
+                    df_vsp_bg['Código curso'] = 'DESCONHECIDO'
+
+                if coluna_acoes_vsp:
+                    df_vsp_bg[coluna_acoes_vsp] = pd.to_numeric(df_vsp_bg[coluna_acoes_vsp], errors='coerce').fillna(0)
+                else:
+                    df_vsp_bg['Nº Ações VSP'] = 0
+                    coluna_acoes_vsp = 'Nº Ações VSP'
+
+                df_ld_prep = df_ld_bg[['Centro', 'Código curso', coluna_acoes_ld]].copy()
+                df_ld_prep.columns = ['Centro', 'Código curso', 'Nº Ações LD']
+                df_vsp_prep = df_vsp_bg[['Centro', 'Código curso', coluna_acoes_vsp]].copy()
+                df_vsp_prep.columns = ['Centro', 'Código curso', 'Nº Ações VSP']
+
+                df_comb_bg = pd.merge(df_ld_prep, df_vsp_prep, on=['Centro', 'Código curso'], how='outer')
+                df_comb_bg['Nº Ações Previstas'] = df_comb_bg['Nº Ações LD'].fillna(0) + df_comb_bg['Nº Ações VSP'].fillna(0)
+                total_previstas_bg = df_comb_bg['Nº Ações Previstas'].sum()
+
+                if "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
+                    codigos_bg = set(df_comb_bg['Código curso'].astype(str).str.strip().unique())
+                    df_tmp = df_cursos.copy()
+                    df_tmp['Status'] = df_tmp['Status'].astype(str).str.strip().str.lower()
+                    df_fin = df_tmp[df_tmp['Status'].str.contains('finaliz|conclu', na=False, regex=True)]
+
+                    if not df_fin.empty:
+                        def extrair_cod_bg(s):
+                            s = str(s).strip()
+                            if s in codigos_bg:
+                                return s
+                            for c in sorted(codigos_bg, key=len, reverse=True):
+                                if s.startswith(c):
+                                    return c
+                            return s
+
+                        df_fin = df_fin.copy()
+                        df_fin['Código curso'] = df_fin['Ação'].apply(extrair_cod_bg)
+                        acoes_unicas_bg = df_fin.drop_duplicates(subset=['Ação'])
+                        acoes_com_match_bg = acoes_unicas_bg[acoes_unicas_bg['Código curso'].isin(codigos_bg)]
+                        total_fin_bg = len(acoes_com_match_bg)
+                    else:
+                        total_fin_bg = 0
+
+                    cumpr_bg = (total_fin_bg / total_previstas_bg * 100) if total_previstas_bg > 0 else 0
+                    st.session_state.cumprimento_plano_calculado = cumpr_bg
+                    cumprimento_plano = cumpr_bg
+
+        except Exception:
+            pass
     # ---------- ÁREAS DE DETALHE (mantidas inalteradas, mas com referência ao novo df_cursos) ----------
     if st.session_state.detalhe_ativo == 'plano':
         with st.expander("📊 Detalhe do Cumprimento do Plano", expanded=True):
