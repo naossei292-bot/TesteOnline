@@ -307,7 +307,7 @@ def _tutorial_gestor_questionarios():
     # Funcionalidades principais
     st.markdown("### 🎯 Funcionalidades disponíveis:")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col_download = st.columns(3)
     
     with col1:
         st.markdown("""
@@ -343,6 +343,28 @@ def _tutorial_gestor_questionarios():
         4. Identifica padrões e insights
         """)
     
+    with col_download:
+        # Botão de download do modelo
+        st.markdown("""
+        #### Baixar Modelo Projeção Anual
+                    
+        Este modelo é usado na área da qualidade que só a Gestora de Qualidade tem acesso, mas é a Gestora de Questionários que preenche esse documento.
+        """)
+        try:
+            with open("assets/Modelo_Previsões_Anuais.xlsx", "rb") as f:
+                modelo_conteudo = f.read()
+            st.download_button(
+                label="📥 Baixar Modelo",
+                data=modelo_conteudo,
+                file_name="Modelo_Previsões_Anuais.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="download_modelo_previsoes"
+            )
+        except FileNotFoundError:
+            st.error("⚠️ Modelo não encontrado: assets/Modelo_Previsões_Anuais.xlsx")
+        except Exception as e:
+            st.error(f"Erro ao carregar modelo: {e}")
     st.markdown("---")
     
     # Tutorial detalhado
