@@ -79,7 +79,6 @@ PERMISSOES = {
         "📋 Questionários",
         "🎯 Gestão de Qualidade",
         "📚 Cursos",
-        "⚔️ Comparador Versus",
         "📊 Dashboard - Ações",
         "📊 Dashboard - Questionários"
     ],
@@ -94,7 +93,6 @@ PERMISSOES = {
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
-        "⚔️ Comparador Versus"
     ],
     "gestor_questionarios": [
         "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
@@ -173,10 +171,10 @@ if "📊 Dashboard - Ações" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Ações"
         st.rerun()
 
-if "⚔️ Comparador Versus" in paginas_autorizadas:
-    if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-        st.session_state.pagina = "⚔️ Comparador Versus"
-        st.rerun()
+#if "⚔️ Comparador Versus" in paginas_autorizadas:
+#    if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
+#        st.session_state.pagina = "⚔️ Comparador Versus"
+#        st.rerun()
 
 # Botão de logout (sempre visível)
 st.sidebar.markdown("---")
