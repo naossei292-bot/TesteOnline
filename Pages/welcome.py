@@ -395,7 +395,6 @@ def _tutorial_gestor_questionarios():
         - Gera relatórios personalizados
         """)
     
-    # Dicas
     st.info("""
     💡 **Dicas para melhor gestão:**
     - Mantém os ficheiros organizados por data/período
