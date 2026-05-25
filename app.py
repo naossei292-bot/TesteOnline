@@ -105,7 +105,6 @@ role = st.session_state.get("role", "")
 paginas_autorizadas = PERMISSOES.get(role, [])
 
 # 🔥 CORREÇÃO PARA O STREAMLIT CLOUD 🔥
-# Garante que paginas_autorizadas nunca está vazia
 if not paginas_autorizadas:
     # Se o role não for encontrado ou estiver vazio, define permissões padrão
     if role == "admin":
