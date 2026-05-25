@@ -43,7 +43,7 @@ def verificar_autenticacao():
             st.warning("⚠️ Usando passwords hardcoded (apenas desenvolvimento).")
             passwords_config = {
                 "admin": "admin123",
-                "gestor_BALANÇOS": "balancos123",
+                "gestor_balancos": "balancos123",
                 "gestor_qualidade": "qualidade123",
                 "gestor_questionarios": "questionarios123"
             }
@@ -74,7 +74,7 @@ if not verificar_autenticacao():
 # ============================================
 PERMISSOES = {
     "admin": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
         "📋 Questionários",
         "🎯 Gestão de Qualidade",
@@ -83,19 +83,18 @@ PERMISSOES = {
         "📊 Dashboard - Questionários"
     ],
     "gestor_balancos": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📚 Balanços e Relatórios",
     ],
     "gestor_qualidade": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📋 Questionários",
-        #Gestora de Qualidade precisa de acesso aos questionários para gerir a qualidade
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
     ],
     "gestor_questionarios": [
-        "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
+        "🏠 Página Inicial",
         "📋 Questionários",
         "📊 Dashboard - Questionários"
     ]
@@ -104,6 +103,24 @@ PERMISSOES = {
 # Obtém o role do utilizador logado
 role = st.session_state.get("role", "")
 paginas_autorizadas = PERMISSOES.get(role, [])
+
+# 🔥 CORREÇÃO PARA O STREAMLIT CLOUD 🔥
+# Garante que paginas_autorizadas nunca está vazia
+if not paginas_autorizadas:
+    # Se o role não for encontrado ou estiver vazio, define permissões padrão
+    if role == "admin":
+        paginas_autorizadas = ["🏠 Página Inicial", "📚 Balanços e Relatórios", "📋 Questionários", "🎯 Gestão de Qualidade", "📚 Cursos", "📊 Dashboard - Ações", "📊 Dashboard - Questionários"]
+    elif role == "gestor_balancos":
+        paginas_autorizadas = ["🏠 Página Inicial", "📚 Balanços e Relatórios"]
+    elif role == "gestor_qualidade":
+        paginas_autorizadas = ["🏠 Página Inicial", "📋 Questionários", "📚 Cursos", "🎯 Gestão de Qualidade", "📊 Dashboard - Ações"]
+    elif role == "gestor_questionarios":
+        paginas_autorizadas = ["🏠 Página Inicial", "📋 Questionários", "📊 Dashboard - Questionários"]
+    else:
+        # Fallback para qualquer role desconhecido ou vazio
+        paginas_autorizadas = ["🏠 Página Inicial"]
+        # Opcional: mostrar aviso apenas em desenvolvimento
+        # st.toast(f"⚠️ Role '{role}' a usar permissões padrão", icon="⚠️")
 
 # ============================================
 # INICIALIZAÇÃO DO ESTADO
@@ -115,13 +132,17 @@ if 'quest_df' not in st.session_state:
 if 'filtro_centro' not in st.session_state: 
     st.session_state.filtro_centro = []
 if 'pagina' not in st.session_state:
-    # VERIFICAÇÃO MAIS SEGURA - Evita IndexError
+    # VERIFICAÇÃO DE SEGURANÇA DUPLA - Evita IndexError
     if not paginas_autorizadas:
-        # Se a lista estiver vazia, define uma página padrão
+        # Último recurso: define página inicial manualmente
         st.session_state.pagina = "🏠 Página Inicial"
-        st.warning("⚠️ Utilizador sem páginas autorizadas. Contacte o administrador.")
     else:
-        st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
+        # Define página inicial se disponível, senão usa a primeira página da lista
+        if "🏠 Página Inicial" in paginas_autorizadas:
+            st.session_state.pagina = "🏠 Página Inicial"
+        else:
+            st.session_state.pagina = paginas_autorizadas[0]
+
 # ============================================
 # BARRA LATERAL CONDICIONAL (baseada no role)
 # ============================================
@@ -130,7 +151,7 @@ st.sidebar.title("📁 Gestão de Dados")
 st.sidebar.markdown("---")
 
 # Mostrar informações do utilizador logado
-st.sidebar.info(f"👤 **Utilizador:** {role.replace('_', ' ').title()}", icon="ℹ️")
+st.sidebar.info(f"👤 **Utilizador:** {role.replace('_', ' ').title() if role else 'Utilizador'}", icon="ℹ️")
 
 # --- Página Inicial (sempre visível para todos os roles autenticados) ---
 st.sidebar.markdown("### 🏠 Navegação")
@@ -157,7 +178,6 @@ if "📊 Dashboard - Questionários" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Questionários"
         st.rerun()
 
-
 # --- Cursos (apenas para quem tem permissão) ---
 if "📚 Cursos" in paginas_autorizadas:
     if st.sidebar.button("📚 Cursos", use_container_width=True, key="nav_cursos"):
@@ -175,11 +195,6 @@ if "📊 Dashboard - Ações" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Ações"
         st.rerun()
 
-#if "⚔️ Comparador Versus" in paginas_autorizadas:
-#    if st.sidebar.button("⚔️ Comparador Versus", use_container_width=True, key="nav_comparador"):
-#        st.session_state.pagina = "⚔️ Comparador Versus"
-#        st.rerun()
-
 # Botão de logout (sempre visível)
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
@@ -192,8 +207,13 @@ st.sidebar.markdown("---")
 # ============================================
 
 # Segurança extra: se a página atual não está autorizada, redefine para a página inicial
-if st.session_state.pagina not in paginas_autorizadas and paginas_autorizadas:
-    st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
+if paginas_autorizadas and st.session_state.pagina not in paginas_autorizadas:
+    if "🏠 Página Inicial" in paginas_autorizadas:
+        st.session_state.pagina = "🏠 Página Inicial"
+    elif paginas_autorizadas:
+        st.session_state.pagina = paginas_autorizadas[0]
+    else:
+        st.session_state.pagina = "🏠 Página Inicial"
     st.rerun()
 
 # Navegação condicional
