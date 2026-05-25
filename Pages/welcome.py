@@ -12,7 +12,7 @@ def mostrar_welcome():
     # Mapeamento de roles para nomes amigáveis
     nomes_roles = {
         "admin": "Administrador",
-        "gestor_BALANÇOS": "Gestor de Balanços",
+        "gestor_balancos": "Gestor de Balanços",
         "gestor_qualidade": "Gestor de Qualidade",
         "gestor_questionarios": "Gestor de Questionários"
     }
@@ -30,7 +30,7 @@ def mostrar_welcome():
     # Conteúdo personalizado por role
     if role == "admin":
         _tutorial_admin()
-    elif role == "gestor_BALANCOS":
+    elif role == "gestor_balancos":
         _tutorial_gestor_balancos()
     elif role == "gestor_qualidade":
         _tutorial_gestor_qualidade()

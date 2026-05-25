@@ -82,7 +82,7 @@ PERMISSOES = {
         "📊 Dashboard - Ações",
         "📊 Dashboard - Questionários"
     ],
-    "gestor_BALANÇOS": [
+    "gestor_balancos": [
         "🏠 Página Inicial",  # NOVA PÁGINA INICIAL
         "📚 Balanços e Relatórios",
     ],
@@ -115,9 +115,13 @@ if 'quest_df' not in st.session_state:
 if 'filtro_centro' not in st.session_state: 
     st.session_state.filtro_centro = []
 if 'pagina' not in st.session_state:
-    # Define a página inicial como padrão (se disponível)
-    st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
-
+    # VERIFICAÇÃO MAIS SEGURA - Evita IndexError
+    if not paginas_autorizadas:
+        # Se a lista estiver vazia, define uma página padrão
+        st.session_state.pagina = "🏠 Página Inicial"
+        st.warning("⚠️ Utilizador sem páginas autorizadas. Contacte o administrador.")
+    else:
+        st.session_state.pagina = "🏠 Página Inicial" if "🏠 Página Inicial" in paginas_autorizadas else paginas_autorizadas[0]
 # ============================================
 # BARRA LATERAL CONDICIONAL (baseada no role)
 # ============================================
