@@ -386,7 +386,8 @@ def preencher_parte7(wb: openpyxl.Workbook) -> None:
 def preparar_dados_moodle(ano):
     # ALTERADO: Construir caminhos dinâmicos com o ano
     pasta_dados_ano = SCRIPT_DIR / f"dados/{ano}"
-    caminho_moodle = pasta_dados_ano / f"moodle {ano}.xlsx"
+    caminho_moodle = pasta_dados_ano / f"moodle {ano}.csv"
+    caminho_moodle = pasta_dados_ano / f"moodle {ano}.xlsx" if not caminho_moodle.exists() else caminho_moodle
     caminho_execucao = pasta_dados_ano / "Modelo Execução Fisica.xlsx"
     
     # ALTERADO: Verificar se os ficheiros existem
@@ -399,11 +400,47 @@ def preparar_dados_moodle(ano):
     print(f"   - Moodle: {caminho_moodle}")
     print(f"   - Execução: {caminho_execucao}")
     
-    df_moodle = pd.read_excel(str(caminho_moodle))
+    # Ler ficheiro conforme a extensão
+    if str(caminho_moodle).lower().endswith('.csv'):
+        # Tentar várias codificações e separadores comuns em ficheiros portugueses
+        codificacoes = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+        separadores = [',', ';', '	']
+        df_moodle = None
+
+        for encoding in codificacoes:
+            for sep in separadores:
+                try:
+                    df_moodle = pd.read_csv(str(caminho_moodle), encoding=encoding, sep=sep)
+                    # Verificar se leu colunas razoáveis (mais de 1 coluna)
+                    if len(df_moodle.columns) > 1:
+                        print(f"   ✅ CSV lido com codificação: {encoding}, separador: '{sep}'")
+                        break
+                except (UnicodeDecodeError, pd.errors.ParserError):
+                    continue
+            if df_moodle is not None and len(df_moodle.columns) > 1:
+                break
+
+        if df_moodle is None or len(df_moodle.columns) <= 1:
+            raise Exception(
+                f"Não foi possível ler o CSV. Tente converter para UTF-8 com separador ',' manualmente."
+            )
+    else:
+        df_moodle = pd.read_excel(str(caminho_moodle))
     df_exec = pd.read_excel(str(caminho_execucao))  # ALTERADO: usar caminho dinâmico
 
     df_moodle.columns = df_moodle.columns.str.strip()
     df_exec.columns = df_exec.columns.str.strip()
+
+    # ═══════════════════════════════════════════════════════
+    # NOVO: Derivar campos do 'item' (ex: M00_21b.A01)
+    # ═══════════════════════════════════════════════════════
+    # Extrair módulo: M00_21b.A01 → "21b"
+    df_moodle["modulo"] = df_moodle["item"].astype(str).str.extract(r"M\d+_(\w+)\.")[0]
+    # Extrair código do item: M00_21b.A01 → "A01"
+    df_moodle["codigo_item"] = df_moodle["item"].astype(str).str.extract(r"\.([A-F]\d+(?:\.\d+)*)")[0]
+
+    print(f"   📊 Módulos únicos encontrados: {df_moodle['modulo'].dropna().unique()}")
+    print(f"   📊 Exemplos de códigos: {df_moodle['codigo_item'].dropna().head(10).tolist()}")
 
     colunas = {c.lower(): c for c in df_exec.columns}
     u_id_col = colunas.get("u_id") or colunas.get("u_id ")
@@ -458,7 +495,8 @@ def preparar_dados_moodle(ano):
 
                 # Cabeçalho
                 total_formandos = dados_curso["Total_formandos"].dropna().iloc[0] if not dados_curso["Total_formandos"].dropna().empty else 0
-                respostas = int(round(dados_curso["contador"].mean(), 0)) if not dados_curso.empty else 0
+                # NOVO: 'contador' não existe no novo formato → contar linhas (1 resposta por linha)
+                respostas = len(dados_curso) if not dados_curso.empty else 0
                 percentagem = round(respostas / total_formandos, 2) if total_formandos > 0 else 0
 
                 ws[f"B{linha_base+1}"] = curso
@@ -472,9 +510,10 @@ def preparar_dados_moodle(ano):
                 # Mapa de médias
                 mapa_medias = {}
                 for _, row in dados_curso.iterrows():
-                    codigo = extrair_codigo(row.get("nitem"))
-                    if codigo:
-                        mapa_medias.setdefault(codigo, []).append(row["media"])
+                    # NOVO: Usar 'codigo_item' derivado do 'item' e 'valor_medio'
+                    codigo = row.get("codigo_item")
+                    if codigo and pd.notna(codigo):
+                        mapa_medias.setdefault(codigo, []).append(row["valor_medio"])
 
                 for codigo in mapa_medias:
                     mapa_medias[codigo] = round(mean(mapa_medias[codigo]), 2)
