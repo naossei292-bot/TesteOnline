@@ -397,7 +397,10 @@ def mostrar_relatorios():
     # ======================== ÁREA DE FILTROS (Balanços, Relatórios e Dados) ========================
     st.markdown("---")
     st.subheader("🔍 Filtros rápidos")
+
+    # --- DEFINIR FILTROS PRIMEIRO ---
     col_f1, col_f2, col_f3 = st.columns(3)
+
     with col_f1:
         tipo_filtro = st.multiselect(
             "Tipo de ficheiro",
@@ -431,12 +434,36 @@ def mostrar_relatorios():
     with col_f3:
         pesquisa = st.text_input("Pesquisar por nome", placeholder="digite parte do nome...", key="pesquisa")
 
-    # ======================== CARREGAR FICHEIROS (Balanços e Relatórios) ========================
+    # --- AGORA SIM, CARREGAR E FILTRAR FICHEIROS ---
     balancos_raw = listar_ficheiros(PASTA_BALANCO, extensoes=["*.docx"])
     relatorios_raw = listar_ficheiros(PASTA_RELATORIOS, extensoes=["*.xlsx", "*.xls"])
 
     balancos_filtrados = aplicar_filtros(balancos_raw, tipo_filtro, ano_filtro, pesquisa)
     relatorios_filtrados = aplicar_filtros(relatorios_raw, tipo_filtro, ano_filtro, pesquisa)
+
+    # --- BOTÃO GLOBAL DE DOWNLOAD (DEPOIS DOS FILTROS) ---
+    total_ficheiros = len(balancos_filtrados) + len(relatorios_filtrados)
+
+    if total_ficheiros > 0:
+        if st.button(f"📦 Descarregar TUDO ({total_ficheiros} ficheiros)", type="primary", use_container_width=True, key="download_tudo"):
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                # Adicionar balanços
+                for f in balancos_filtrados:
+                    zipf.write(f["caminho"], arcname=os.path.join("Balanços", f["nome"]))
+                # Adicionar relatórios
+                for f in relatorios_filtrados:
+                    zipf.write(f["caminho"], arcname=os.path.join("Relatórios", f["nome"]))
+            zip_buffer.seek(0)
+            st.download_button(
+                label="✅ Clique para descarregar ZIP",
+                data=zip_buffer,
+                file_name=f"Balancos_Relatorios_{ano_filtro}.zip",
+                key="down_tudo_zip",
+                use_container_width=True
+            )
+    else:
+        st.info("Nenhum balanço ou relatório encontrado para os filtros selecionados.", icon="ℹ️")
 
     # ======================== EXIBIR SECÇÕES COM EXPANSORES ========================
     st.markdown("---")
