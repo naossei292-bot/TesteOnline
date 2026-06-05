@@ -1,13 +1,15 @@
 import pandas as pd
 import re
 from pathlib import Path
-import numpy as np # Adicionado para facilitar a checagem de valores nulos
+import numpy as np
+
+from balancos.Partes.comum import nome_ficheiro_regiao # Adicionado para facilitar a checagem de valores nulos
 
 SCRIPT_DIR = Path(__file__).parent.parent
 
 def calcular_parte4(regiao, ano):
     resultados = {}
-    nome_limpo = re.sub(r'[^a-zA-Z0-9_]', '_', regiao.strip())
+    nome_limpo = nome_ficheiro_regiao(regiao)
     caminho = SCRIPT_DIR / "relatorios" / str(ano) / f"Relatório_{nome_limpo}.xlsx"
 
     if not caminho.exists():

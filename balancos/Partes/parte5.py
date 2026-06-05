@@ -3,11 +3,13 @@ import re
 from pathlib import Path
 import numpy as np
 
+from balancos.Partes.comum import nome_ficheiro_regiao
+
 SCRIPT_DIR = Path(__file__).parent.parent
 
 def calcular_parte5(regiao, ano):
     resultados = {}
-    nome_limpo = re.sub(r'[^a-zA-Z0-9_]', '_', regiao.strip())
+    nome_limpo = nome_ficheiro_regiao(regiao)
     caminho = SCRIPT_DIR / "relatorios" / str(ano) / f"Relatório_{nome_limpo}.xlsx"
 
     if not caminho.exists():

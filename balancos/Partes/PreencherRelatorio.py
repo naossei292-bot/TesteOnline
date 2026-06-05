@@ -5,6 +5,8 @@ from pathlib import Path
 from copy import copy
 from statistics import mean
 
+from balancos.Partes.comum import nome_ficheiro_regiao
+
 # ====================== CONFIGURAÇÕES ======================
 SCRIPT_DIR = Path(__file__).parent.parent
 MODELO = SCRIPT_DIR /"Modelos"/ "Modelo.xlsx"
@@ -554,10 +556,7 @@ def preparar_dados_moodle(ano):
 
         # ====================== GUARDAR FICHEIRO ======================
         nome_base = str(local).strip()
-        nome_limpo = re.sub(r'[^a-zA-Z0-9\s\-]', '', nome_base)
-        nome_limpo = re.sub(r'\s+', '_', nome_limpo)
-        nome_limpo = re.sub(r'_+', '_', nome_limpo)
-        nome_limpo = nome_limpo.strip('_')
+        nome_limpo = nome_ficheiro_regiao(nome_base)
 
         if len(nome_limpo) > 70:
             nome_limpo = nome_limpo[:70]

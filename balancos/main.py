@@ -17,6 +17,20 @@ from .Partes.PreencherRelatorio import preparar_dados_moodle
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent
 
+# Ficheiros que carregar_excel lê, e o papel de cada um.
+FICHEIROS_BASE = {
+    "Modelo Formacao Centros.xlsx": "define as regiões (uma aba por região). Comanda o ciclo — sem ele não há nada para gerar.",
+    "Modelo Execução Fisica.xlsx":  "dados das ações; alimenta a Parte 1, a tabela de ações e a Parte 6.",
+    "Media Notas.xlsx":             "médias de notas; usado na Parte 6.",
+}
+
+def verificar_ficheiros_base(ano):
+    """Devolve (presentes, em_falta) para os ficheiros base do ano."""
+    pasta = SCRIPT_DIR / "dados" / str(ano)
+    presentes, em_falta = [], []
+    for nome in FICHEIROS_BASE:
+        (presentes if (pasta / nome).exists() else em_falta).append(nome)
+    return presentes, em_falta
 
 # -------------------------
 # AUXILIARES
@@ -27,19 +41,44 @@ def limpar_colunas(df):
 
 
 def carregar_excel(ano):
-    """Carrega os ficheiros Excel para o ano especificado"""
-    df = limpar_colunas(pd.read_excel(SCRIPT_DIR / f"dados/{ano}/Modelo Execução Fisica.xlsx"))
-    df_notas = limpar_colunas(pd.read_excel(SCRIPT_DIR / f"dados/{ano}/Media Notas.xlsx"))
-    xls_centros = pd.ExcelFile(SCRIPT_DIR / f"dados/{ano}/Modelo Formacao Centros.xlsx")
+    """Carrega os Excel do ano. Centros e Execução Física são obrigatórios;
+    Media Notas é opcional (parte6 tolera ausência → médias a 0)."""
+    pasta = SCRIPT_DIR / "dados" / str(ano)
+    avisos = []
+
+    f_centros = pasta / "Modelo Formacao Centros.xlsx"
+    f_exec    = pasta / "Modelo Execução Fisica.xlsx"
+    f_notas   = pasta / "Media Notas.xlsx"
+
+    if not f_centros.exists():
+        raise FileNotFoundError(
+            f"Falta '{f_centros.name}' em dados/{ano}. Define as regiões "
+            f"(uma aba por região) — sem ele não há nada para gerar."
+        )
+    if not f_exec.exists():
+        raise FileNotFoundError(
+            f"Falta '{f_exec.name}' em dados/{ano}. É a base das ações — "
+            f"sem ele os balanços sairiam vazios."
+        )
+
+    df = limpar_colunas(pd.read_excel(f_exec))
+    xls_centros = pd.ExcelFile(f_centros)
+
+    if f_notas.exists():
+        df_notas = limpar_colunas(pd.read_excel(f_notas))
+    else:
+        df_notas = pd.DataFrame()   # vazio → parte6 devolve médias a 0
+        avisos.append(
+            f"'{f_notas.name}' não encontrado em dados/{ano}: "
+            f"a Parte 6 (médias de notas) vai a 0."
+        )
 
     df["Deslocal"] = df["Deslocal"].astype(str).str.strip()
-
-    return df, df_notas, xls_centros
-
+    return df, df_notas, xls_centros, avisos
 
 def gerar_balancos(ano):    
     # Carregar dados uma única vez
-    df, df_notas, xls_centros = carregar_excel(ano)
+    df, df_notas, xls_centros, avisos = carregar_excel(ano)
     
     # DEBUG: Mostrar valores reais
     print("🔍 Valores únicos na coluna 'Deslocal':", df['Deslocal'].unique())
@@ -132,6 +171,7 @@ def gerar_balancos(ano):
         
         print(f"\n✅ Criado: {caminho}")
         print(f"{'='*60}\n")
+    return avisos
 
 
 def obter_ano():
