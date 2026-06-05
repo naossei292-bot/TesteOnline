@@ -371,7 +371,7 @@ def mostrar_relatorios():
     with st.expander("🧩 Gerar documentos automaticamente", expanded=False):
         mostrar_gerador_documentos()
         
-    # ======================== LAYOUT PRINCIPAL COM COLUNAS ========================
+    # ======================== LAYOUT PRINCIPAL COM COLUNAS ====================
     col_config, col_upload, col_limpar = st.columns(3)
     
     # Coluna de Configurações
