@@ -178,11 +178,16 @@ def _formatar_data(valor):
         return str(valor).split()[0]
 
 
-def gerar_acoes_bl(df_execucao: pd.DataFrame, caminho_template=None):
+def gerar_acoes_bl(df_execucao: pd.DataFrame, caminho_template=None,
+                   df_lista_cursos: pd.DataFrame = None):
     """
     Lista (ação a ação) as ações '_BL' do Execução Física numa folha única.
-    Colunas: U_id, Datini, Datfim, Codun (sigla antes da '/'), Descun (vazio,
-    para preencher à mão), U_status.
+    Colunas: U_id, Datini, Datfim, Codun (sigla antes da '/'), Descun, U_status,
+    Centro.
+
+    Se df_lista_cursos for fornecido (colunas 'Codun' e 'Descun'), o Descun é
+    preenchido por correspondência direta do Codun (COM o sufixo _BL).
+    Codun sem correspondência → 'NÃO ENCONTRADO'. Sem lista → Descun vazio.
 
     Devolve (bytes_xlsx, avisos).
     """
@@ -206,6 +211,17 @@ def gerar_acoes_bl(df_execucao: pd.DataFrame, caminho_template=None):
     if bl.empty:
         avisos.add("Nenhuma ação '_BL' encontrada no ficheiro.")
 
+    # Mapa Codun → Descun (match direto, COM o _BL). Lista é opcional.
+    mapa_descun = {}
+    if df_lista_cursos is not None:
+        lc = df_lista_cursos.copy()
+        lc.columns = lc.columns.str.strip()
+        if 'Codun' in lc.columns and 'Descun' in lc.columns:
+            lc['Codun'] = lc['Codun'].astype(str).str.strip().str.upper()
+            mapa_descun = dict(zip(lc['Codun'], lc['Descun'].astype(str).str.strip()))
+        else:
+            avisos.add("Lista de Cursos sem colunas 'Codun'/'Descun' — Descun ficará vazio.")
+
     # Trabalhar sobre cópia do template
     with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp:
         tmp_path = tmp.name
@@ -223,8 +239,13 @@ def gerar_acoes_bl(df_execucao: pd.DataFrame, caminho_template=None):
         ws.cell(linha, 5, _formatar_data(r.get('Datini')))
         ws.cell(linha, 6, _formatar_data(r.get('Datfim')))
         ws.cell(linha, 7, codun)
-        ws.cell(linha, 8, "")                   # Descun — preencher à mão
+        if mapa_descun:
+            descun = mapa_descun.get(codun.upper(), "NÃO ENCONTRADO")
+        else:
+            descun = ""                          # sem lista → fica vazio
+        ws.cell(linha, 8, descun)
         ws.cell(linha, 9, r.get('U_status', ''))
+        ws.cell(linha, 10, _normalizar_deslocal(r.get('Deslocal', '')))  # Centro (col J)
         linha += 1
 
     buffer = io.BytesIO()
@@ -232,5 +253,16 @@ def gerar_acoes_bl(df_execucao: pd.DataFrame, caminho_template=None):
     wb.close()
     buffer.seek(0)
 
-    avisos.add(f"{len(bl)} ações '_BL' listadas. Coluna 'Descun' fica vazia para preenchimento manual.")
+    if mapa_descun:
+        nao_encontrados = sorted({
+            uid.split('/')[0] for uid in bl['U_id']
+            if mapa_descun.get(uid.split('/')[0].upper()) is None
+        })
+        if nao_encontrados:
+            avisos.add(f"Codun sem descrição na Lista de Cursos (marcados 'NÃO ENCONTRADO'): {nao_encontrados}")
+        n_ok = sum(1 for uid in bl['U_id']
+                   if mapa_descun.get(uid.split('/')[0].upper()) is not None)
+        avisos.add(f"{len(bl)} ações '_BL' listadas; Descun preenchido em {n_ok}/{len(bl)} pela Lista de Cursos.")
+    else:
+        avisos.add(f"{len(bl)} ações '_BL' listadas. Sem Lista de Cursos — 'Descun' fica vazio.")
     return buffer.getvalue(), sorted(avisos)

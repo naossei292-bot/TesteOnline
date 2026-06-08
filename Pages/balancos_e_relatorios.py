@@ -246,72 +246,11 @@ def mostrar_gerador_documentos():
         key="upload_gerador_exec",
     )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("📊 Gerar Modelo Formação Centros", use_container_width=True,
-                     key="btn_gerar_centros", disabled=(exec_file is None)):
-            try:
-                df_exec = pd.read_excel(exec_file)
-                dados, avisos = gerar_formacao_centros(df_exec)
-
-                for aviso in avisos:
-                    st.warning(f"⚠️ {aviso}")
-
-                st.success("✅ Modelo Formação Centros gerado!")
-                st.download_button(
-                    "📥 Descarregar Modelo Formacao Centros.xlsx",
-                    data=dados,
-                    file_name="Modelo Formacao Centros.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_centros_gerado",
-                    use_container_width=True,
-                )
-            except (FileNotFoundError, ValueError) as e:
-                st.warning(f"⚠️ {e}")
-            except Exception:
-                st.error(f"Erro inesperado:\n\n{traceback.format_exc()}")
-
-    with col2:
-        if st.button("🔗 Gerar Modelo Ações BL", use_container_width=True,
-                     key="btn_gerar_acoesbl", disabled=(exec_file is None)):
-            try:
-                df_exec = pd.read_excel(exec_file)
-                dados, avisos = gerar_acoes_bl(df_exec)
-
-                for aviso in avisos:
-                    st.info(f"ℹ️ {aviso}")
-
-                st.success("✅ Modelo Ações BL gerado!")
-                st.download_button(
-                    "📥 Descarregar Modelo Ações BL.xlsx",
-                    data=dados,
-                    file_name="Modelo Ações BL.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_acoesbl_gerado",
-                    use_container_width=True,
-                )
-            except (FileNotFoundError, ValueError) as e:
-                st.warning(f"⚠️ {e}")
-            except Exception:
-                st.error(f"Erro inesperado:\n\n{traceback.format_exc()}")
-
-def mostrar_gerador_documentos():
-    """Uploader autónomo: recebe o Execução Física, gera os documentos
-    derivados (Centros agora; Ações BL futuramente) e oferece para download.
-    NÃO grava em dados/ — o utilizador saca, verifica e só depois carrega
-    no uploader principal dos balanços."""
-    st.markdown("### 🧩 Gerador de documentos a partir do Execução Física")
-    st.caption(
-        "Carrega o **Modelo Execução Fisica.xlsx** e gera o Formação Centros "
-        "automaticamente. Descarrega, confere, e só depois usa no gerador de balanços."
-    )
-
-    exec_file = st.file_uploader(
-        "Modelo Execução Fisica.xlsx",
+    lista_file = st.file_uploader(
+        "Lista de Cursos (opcional — preenche o Descun)",
         type=["xlsx", "xls"],
         accept_multiple_files=False,
-        key="upload_gerador_exec",
+        key="upload_lista_cursos",
     )
 
     col1, col2 = st.columns(2)
@@ -339,30 +278,30 @@ def mostrar_gerador_documentos():
                 st.warning(f"⚠️ {e}")
             except Exception:
                 st.error(f"Erro inesperado:\n\n{traceback.format_exc()}")
-
     with col2:
-        if st.button("🔗 Gerar Modelo Ações BL", use_container_width=True,
-                     key="btn_gerar_acoesbl", disabled=(exec_file is None)):
-            try:
-                df_exec = pd.read_excel(exec_file)
-                dados, avisos = gerar_acoes_bl(df_exec)
+            if st.button("🔗 Gerar Modelo Ações BL", use_container_width=True,
+                        key="btn_gerar_acoesbl", disabled=(exec_file is None)):
+                try:
+                    df_exec = pd.read_excel(exec_file)
+                    df_lista = pd.read_excel(lista_file) if lista_file is not None else None
+                    dados, avisos = gerar_acoes_bl(df_exec, df_lista_cursos=df_lista)
 
-                for aviso in avisos:
-                    st.info(f"ℹ️ {aviso}")
+                    for aviso in avisos:
+                        st.info(f"ℹ️ {aviso}")
 
-                st.success("✅ Modelo Ações BL gerado!")
-                st.download_button(
-                    "📥 Descarregar Modelo Ações BL.xlsx",
-                    data=dados,
-                    file_name="Modelo Ações BL.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="download_acoesbl_gerado",
-                    use_container_width=True,
-                )
-            except (FileNotFoundError, ValueError) as e:
-                st.warning(f"⚠️ {e}")
-            except Exception:
-                st.error(f"Erro inesperado:\n\n{traceback.format_exc()}")
+                    st.success("✅ Modelo Ações BL gerado!")
+                    st.download_button(
+                        "📥 Descarregar Modelo Ações BL.xlsx",
+                        data=dados,
+                        file_name="Modelo Ações BL.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_acoesbl_gerado",
+                        use_container_width=True,
+                    )
+                except (FileNotFoundError, ValueError) as e:
+                    st.warning(f"⚠️ {e}")
+                except Exception:
+                    st.error(f"Erro inesperado:\n\n{traceback.format_exc()}")
 
 # ========================= FUNÇÃO PRINCIPAL =========================
 def mostrar_relatorios():
@@ -565,14 +504,19 @@ def mostrar_relatorios():
         relatorios_filtrados = aplicar_filtros(relatorios_raw, tipo_filtro, ano_filtro, pesquisa)
         
         total_ficheiros = len(balancos_filtrados) + len(relatorios_filtrados)
+        dados_introduzidos = listar_ficheiros_dados(ano_filtro) if ano_filtro else []
+        total_com_dados = total_ficheiros + len(dados_introduzidos)
+
         if total_ficheiros > 0:
-            if st.button(f"📦 Descarregar TUDO ({total_ficheiros} ficheiros)", type="primary", use_container_width=True, key="download_tudo"):
+            if st.button(f"📦 Descarregar TUDO ({total_com_dados} ficheiros)", type="primary", use_container_width=True, key="download_tudo"):
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
                     for f in balancos_filtrados:
                         zipf.write(f["caminho"], arcname=os.path.join("Balanços", f["nome"]))
                     for f in relatorios_filtrados:
                         zipf.write(f["caminho"], arcname=os.path.join("Relatórios", f["nome"]))
+                    for f in dados_introduzidos:
+                        zipf.write(f["caminho"], arcname=os.path.join("Dados Introduzidos", f["nome"]))
                 zip_buffer.seek(0)
                 st.download_button(
                     label="✅ Clique para descarregar ZIP",
