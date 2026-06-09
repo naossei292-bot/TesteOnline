@@ -522,7 +522,7 @@ def mostrar_qualidade():
         if st.button("🔍 Ver detalhes", key="btn_avf", use_container_width=True):
             set_detalhe('avf')
 
-    # ➕ NOVO: calcular cumprimento do plano em background sempre que o ficheiro está disponível
+    #NOVO: calcular cumprimento do plano em background sempre que o ficheiro está disponível
     if st.session_state.get("projecao_uploaded") and has_cursos:
         try:
             df_ld_bg = st.session_state.get("df_projecao_ld")
