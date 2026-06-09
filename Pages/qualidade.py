@@ -4,11 +4,97 @@ import plotly.express as px
 import plotly.graph_objects as go
 import unicodedata
 import re
-import io
+import unicodedata
+from datetime import datetime
+
 
 # ------------------------------------------------------------
 # Funções auxiliares
 # ------------------------------------------------------------
+def _norm_header(c):
+    """Tira \n e espaços a mais dos cabeçalhos."""
+    return re.sub(r'\s+', ' ', str(c).replace('\n', ' ')).strip()
+ 
+def _base_name(c):
+    """Nome base sem sufixo .1/.2 do pandas, sem acentos, minusculas."""
+    base = re.sub(r'\.\d+$', '', str(c))
+    base = _norm_header(base).lower()
+    return unicodedata.normalize('NFKD', base).encode('ASCII', 'ignore').decode('ASCII')
+ 
+ 
+def carregar_projecao_anual(uploaded_file, ano=None):
+    """Le a projecao do ANO indicado (por defeito o atual) do ficheiro novo (PFE).
+    Devolve (df_ld, df_vsp, info) com colunas: Centro, Codigo curso, Nº Acoes Previstas."""
+    if ano is None:
+        ano = datetime.now().year
+ 
+    xl = pd.ExcelFile(uploaded_file)
+    info = {'ano': ano, 'folhas_disponiveis': xl.sheet_names}
+ 
+    def achar_folha(tipo):
+        for s in xl.sheet_names:
+            sl = s.lower()
+            if str(ano) in sl and tipo.lower() in sl:
+                return s
+        return None
+ 
+    folha_ld = achar_folha('LD')
+    folha_vsp = achar_folha('VSP')
+    info['folha_ld'] = folha_ld
+    info['folha_vsp'] = folha_vsp
+ 
+    def preparar(folha):
+        if folha is None:
+            return pd.DataFrame(columns=['Centro', 'Código curso', 'Nº Ações Previstas']), None
+        df = pd.read_excel(uploaded_file, sheet_name=folha)
+        df.columns = [_norm_header(c) for c in df.columns]
+ 
+        if 'Centro' not in df.columns:
+            for c in df.columns:
+                if _base_name(c) in ('centro', 'centro de formacao'):
+                    df = df.rename(columns={c: 'Centro'})
+                    break
+        if 'Código curso' not in df.columns:
+            for c in df.columns:
+                if 'codigo curso' in _base_name(c):
+                    df = df.rename(columns={c: 'Código curso'})
+                    break
+ 
+        # No VSP ha DUAS colunas com este nome: usar a ULTIMA (bloco "Projecao {ano}")
+        alvo = 'numero de acoes de formacao a desenvolver do curso'
+        candidatas = [c for c in df.columns if _base_name(c) == alvo]
+        col_acoes = candidatas[-1] if candidatas else None
+ 
+        if 'Centro' not in df.columns:
+            df['Centro'] = ''
+        if 'Código curso' not in df.columns:
+            df['Código curso'] = ''
+ 
+        df['Centro'] = df['Centro'].fillna('').astype(str).str.strip()
+        df['Código curso'] = df['Código curso'].fillna('').astype(str).str.strip()
+        df['Nº Ações Previstas'] = pd.to_numeric(df[col_acoes], errors='coerce').fillna(0) if col_acoes else 0
+        df = df[df['Código curso'] != '']
+ 
+        out = df.groupby(['Centro', 'Código curso'], as_index=False)['Nº Ações Previstas'].sum()
+        return out, col_acoes
+ 
+    df_ld, col_ld = preparar(folha_ld)
+    df_vsp, col_vsp = preparar(folha_vsp)
+    info['coluna_usada_ld'] = col_ld
+    info['coluna_usada_vsp'] = col_vsp
+    return df_ld, df_vsp, info
+ 
+ 
+def combinar_projecao(df_ld, df_vsp):
+    """Junta LD + VSP: Centro, Codigo curso, Nº Acoes LD, Nº Acoes VSP, Nº Acoes Previstas."""
+    a = df_ld.rename(columns={'Nº Ações Previstas': 'Nº Ações LD'})
+    b = df_vsp.rename(columns={'Nº Ações Previstas': 'Nº Ações VSP'})
+    comb = pd.merge(a, b, on=['Centro', 'Código curso'], how='outer')
+    comb['Nº Ações LD'] = comb['Nº Ações LD'].fillna(0)
+    comb['Nº Ações VSP'] = comb['Nº Ações VSP'].fillna(0)
+    comb['Nº Ações Previstas'] = comb['Nº Ações LD'] + comb['Nº Ações VSP']
+    return comb
+
 def get_col(df, pattern):
     """Retorna a primeira coluna cujo nome contenha o pattern (case-insensitive)."""
     pattern = pattern.lower()
@@ -89,23 +175,40 @@ def mostrar_qualidade():
 
     # Processar o ficheiro se foi carregado
     if uploaded_file is not None:
-        try:
-            df_ld = pd.read_excel(uploaded_file, sheet_name="LD")
-            df_vsp = pd.read_excel(uploaded_file, sheet_name="VSP")
-            
-            st.session_state.df_projecao_ld = df_ld
-            st.session_state.df_projecao_vsp = df_vsp
-            st.session_state.projecao_uploaded = True
-            
-            st.success("✅ Ficheiro carregado com sucesso! (Folhas: LD e VSP)")
-            
-        except Exception as e:
-            st.error(f"Erro ao carregar o ficheiro: {e}")
-            st.session_state.projecao_uploaded = False
-
-    # Se o ficheiro já foi carregado anteriormente, mostrar indicador
+            try:
+                ano_atual = datetime.now().year
+                df_ld, df_vsp, info_proj = carregar_projecao_anual(uploaded_file, ano=ano_atual)
+    
+                if info_proj['folha_ld'] is None and info_proj['folha_vsp'] is None:
+                    st.error(
+                        f"⚠️ Nao encontrei folhas para o ano {ano_atual}. "
+                        f"Folhas no ficheiro: {info_proj['folhas_disponiveis']}"
+                    )
+                    st.session_state.projecao_uploaded = False
+                else:
+                    st.session_state.df_projecao_ld = df_ld
+                    st.session_state.df_projecao_vsp = df_vsp
+                    st.session_state.info_projecao = info_proj
+                    st.session_state.projecao_uploaded = True
+    
+                    st.success(
+                        f"✅ Projecao {ano_atual} carregada "
+                        f"(LD: '{info_proj['folha_ld']}' | VSP: '{info_proj['folha_vsp']}')"
+                    )
+                    with st.expander("🔎 Verificacao da leitura", expanded=False):
+                        st.write(f"**Ano usado:** {info_proj['ano']}")
+                        st.write(f"**Coluna LD usada:** {info_proj['coluna_usada_ld']}")
+                        st.write(f"**Coluna VSP usada:** {info_proj['coluna_usada_vsp']}")
+                        st.write(f"**Total acoes LD:** {df_ld['Nº Ações Previstas'].sum():.0f}")
+                        st.write(f"**Total acoes VSP:** {df_vsp['Nº Ações Previstas'].sum():.0f}")
+                        st.write(f"**Total GLOBAL previstas:** "
+                                 f"{df_ld['Nº Ações Previstas'].sum() + df_vsp['Nº Ações Previstas'].sum():.0f}")
+            except Exception as e:
+                st.error(f"Erro ao carregar o ficheiro: {e}")
+                st.session_state.projecao_uploaded = False
+    
     elif st.session_state.get("projecao_uploaded", False):
-        st.success("✅ Ficheiro já carregado. Use o botão 'Ver detalhes' abaixo para ver os resultados.")
+        st.success("✅ Ficheiro ja carregado. Use o botao 'Ver detalhes' abaixo para ver os resultados.")
 
     # ----- Dados dos Cursos (NOVA ESTRUTURA: usa st.session_state.acoes_df) -----
     df_cursos_raw = st.session_state.get("acoes_df", None)   # <--- ALTERADO
@@ -426,57 +529,7 @@ def mostrar_qualidade():
             df_vsp_bg = st.session_state.get("df_projecao_vsp")
 
             if df_ld_bg is not None and df_vsp_bg is not None:
-                df_ld_bg = df_ld_bg.copy()
-                df_vsp_bg = df_vsp_bg.copy()
-                df_ld_bg.columns = df_ld_bg.columns.str.strip()
-                df_vsp_bg.columns = df_vsp_bg.columns.str.strip()
-
-                coluna_acoes_ld = 'Total Número Ações Formação Curso'
-                if coluna_acoes_ld not in df_ld_bg.columns:
-                    for col in df_ld_bg.columns:
-                        if 'total' in col.lower() and 'ações' in col.lower():
-                            coluna_acoes_ld = col
-                            break
-
-                df_ld_bg['Centro'] = df_ld_bg['Centro'].fillna('').astype(str).str.strip()
-                df_ld_bg['Código curso'] = df_ld_bg['Código curso'].fillna('').astype(str).str.strip()
-                df_ld_bg[coluna_acoes_ld] = pd.to_numeric(df_ld_bg[coluna_acoes_ld], errors='coerce').fillna(0)
-
-                coluna_acoes_vsp = None
-                for col in df_vsp_bg.columns:
-                    if 'número de ações' in col.lower() or 'acoes' in col.lower():
-                        coluna_acoes_vsp = col
-                        break
-                if coluna_acoes_vsp is None:
-                    for col in df_vsp_bg.columns:
-                        if 'ações' in col.lower():
-                            coluna_acoes_vsp = col
-                            break
-
-                df_vsp_bg['Centro'] = df_vsp_bg['Centro'].fillna('').astype(str).str.strip()
-                codigo_col_vsp = None
-                for col in df_vsp_bg.columns:
-                    if 'código' in col.lower() or 'codigo' in col.lower():
-                        codigo_col_vsp = col
-                        break
-                if codigo_col_vsp:
-                    df_vsp_bg['Código curso'] = df_vsp_bg[codigo_col_vsp].fillna('').astype(str).str.strip()
-                else:
-                    df_vsp_bg['Código curso'] = 'DESCONHECIDO'
-
-                if coluna_acoes_vsp:
-                    df_vsp_bg[coluna_acoes_vsp] = pd.to_numeric(df_vsp_bg[coluna_acoes_vsp], errors='coerce').fillna(0)
-                else:
-                    df_vsp_bg['Nº Ações VSP'] = 0
-                    coluna_acoes_vsp = 'Nº Ações VSP'
-
-                df_ld_prep = df_ld_bg[['Centro', 'Código curso', coluna_acoes_ld]].copy()
-                df_ld_prep.columns = ['Centro', 'Código curso', 'Nº Ações LD']
-                df_vsp_prep = df_vsp_bg[['Centro', 'Código curso', coluna_acoes_vsp]].copy()
-                df_vsp_prep.columns = ['Centro', 'Código curso', 'Nº Ações VSP']
-
-                df_comb_bg = pd.merge(df_ld_prep, df_vsp_prep, on=['Centro', 'Código curso'], how='outer')
-                df_comb_bg['Nº Ações Previstas'] = df_comb_bg['Nº Ações LD'].fillna(0) + df_comb_bg['Nº Ações VSP'].fillna(0)
+                df_comb_bg = combinar_projecao(df_ld_bg, df_vsp_bg)
                 total_previstas_bg = df_comb_bg['Nº Ações Previstas'].sum()
 
                 if "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
@@ -494,7 +547,6 @@ def mostrar_qualidade():
                                 if s.startswith(c):
                                     return c
                             return s
-
                         df_fin = df_fin.copy()
                         df_fin['Código curso'] = df_fin['Ação'].apply(extrair_cod_bg)
                         acoes_unicas_bg = df_fin.drop_duplicates(subset=['Ação'])
@@ -506,86 +558,36 @@ def mostrar_qualidade():
                     cumpr_bg = (total_fin_bg / total_previstas_bg * 100) if total_previstas_bg > 0 else 0
                     st.session_state.cumprimento_plano_calculado = cumpr_bg
                     cumprimento_plano = cumpr_bg
-
         except Exception:
             pass
+
     # ---------- ÁREAS DE DETALHE (mantidas inalteradas, mas com referência ao novo df_cursos) ----------
     if st.session_state.detalhe_ativo == 'plano':
         with st.expander("📊 Detalhe do Cumprimento do Plano", expanded=True):
-
             planos_previstos_total = 0
             planos_finalizados = 0
             cumprimento_calculado = 0
             df_combinado = None
 
-            if uploaded_file is not None:
+            df_ld_det = st.session_state.get("df_projecao_ld")
+            df_vsp_det = st.session_state.get("df_projecao_vsp")
+
+            if df_ld_det is not None and df_vsp_det is not None:
                 try:
-                    df_ld = pd.read_excel(uploaded_file, sheet_name="LD")
-                    df_vsp = pd.read_excel(uploaded_file, sheet_name="VSP")
-                    st.session_state.df_projecao_ld = df_ld
-                    st.session_state.df_projecao_vsp = df_vsp
-                    st.success("✅ Ficheiro carregado com sucesso! (Folhas: LD e VSP)")
+                    info_proj = st.session_state.get("info_projecao", {})
+                    st.success(
+                        f"✅ Projecao {info_proj.get('ano', '')} em uso "
+                        f"(LD: '{info_proj.get('folha_ld')}' | VSP: '{info_proj.get('folha_vsp')}')"
+                    )
 
-                    # ---- PROCESSAR FOLHA LD ----
-                    df_ld.columns = df_ld.columns.str.strip()
-                    coluna_acoes_ld = 'Total Número Ações Formação Curso'
-                    if coluna_acoes_ld not in df_ld.columns:
-                        for col in df_ld.columns:
-                            if 'total' in col.lower() and 'ações' in col.lower():
-                                coluna_acoes_ld = col
-                                break
-                    df_ld['Centro'] = df_ld['Centro'].fillna('').astype(str).str.strip()
-                    df_ld['Código curso'] = df_ld['Código curso'].fillna('').astype(str).str.strip()
-                    df_ld[coluna_acoes_ld] = pd.to_numeric(df_ld[coluna_acoes_ld], errors='coerce').fillna(0)
-
-                    # ---- PROCESSAR FOLHA VSP ----
-                    df_vsp.columns = df_vsp.columns.str.strip()
-                    coluna_acoes_vsp = None
-                    for col in df_vsp.columns:
-                        if 'número de ações' in col.lower() or 'acoes' in col.lower():
-                            coluna_acoes_vsp = col
-                            break
-                    if coluna_acoes_vsp is None:
-                        for col in df_vsp.columns:
-                            if 'ações' in col.lower():
-                                coluna_acoes_vsp = col
-                                break
-                    df_vsp['Centro'] = df_vsp['Centro'].fillna('').astype(str).str.strip()
-                    codigo_col_vsp = None
-                    for col in df_vsp.columns:
-                        if 'código' in col.lower() or 'codigo' in col.lower():
-                            codigo_col_vsp = col
-                            break
-                    if codigo_col_vsp:
-                        df_vsp['Código curso'] = df_vsp[codigo_col_vsp].fillna('').astype(str).str.strip()
-                    else:
-                        df_vsp['Código curso'] = 'DESCONHECIDO'
-                    if coluna_acoes_vsp:
-                        df_vsp[coluna_acoes_vsp] = pd.to_numeric(df_vsp[coluna_acoes_vsp], errors='coerce').fillna(0)
-                    else:
-                        df_vsp['Nº Ações VSP'] = 0
-                        coluna_acoes_vsp = 'Nº Ações VSP'
-
-                    # ---- COMBINAR AS DUAS FOLHAS ----
-                    df_ld_prep = df_ld[['Centro', 'Código curso', coluna_acoes_ld]].copy()
-                    df_ld_prep.columns = ['Centro', 'Código curso', 'Nº Ações LD']
-                    df_vsp_prep = df_vsp[['Centro', 'Código curso', coluna_acoes_vsp]].copy()
-                    df_vsp_prep.columns = ['Centro', 'Código curso', 'Nº Ações VSP']
-
-                    df_combinado = pd.merge(df_ld_prep, df_vsp_prep, on=['Centro', 'Código curso'], how='outer')
-                    df_combinado['Nº Ações LD'] = df_combinado['Nº Ações LD'].fillna(0)
-                    df_combinado['Nº Ações VSP'] = df_combinado['Nº Ações VSP'].fillna(0)
-                    df_combinado['Nº Ações Previstas'] = df_combinado['Nº Ações LD'] + df_combinado['Nº Ações VSP']
+                    df_combinado = combinar_projecao(df_ld_det, df_vsp_det)
                     df_combinado['Centro_Norm'] = df_combinado['Centro'].apply(normalizar_centro)
-
                     planos_previstos_total = df_combinado['Nº Ações Previstas'].sum()
 
-                    # ---- CALCULAR AÇÕES FINALIZADAS ----
+                    # ---- CALCULAR ACOES FINALIZADAS (logica original, intacta) ----
                     if has_cursos and "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
                         df_cursos_temp = df_cursos.copy()
                         df_cursos_temp['Status'] = df_cursos_temp['Status'].astype(str).str.strip().str.lower()
-
-                        # Extrair código do curso fazendo match com os códigos da projeção
                         codigos_combinado = set(df_combinado['Código curso'].astype(str).str.strip().unique())
 
                         def extrair_codigo(acao_str):
@@ -598,34 +600,22 @@ def mostrar_qualidade():
                             return acao_str
 
                         df_cursos_temp['Código curso'] = df_cursos_temp['Ação'].apply(extrair_codigo)
-
-                        # Filtrar apenas finalizadas
                         df_finalizadas = df_cursos_temp[
                             df_cursos_temp['Status'].str.contains('finaliz|conclu', na=False, regex=True)
                         ].copy()
 
                         if not df_finalizadas.empty:
-                            # Uma linha por ação única, com Centro_Norm
                             acoes_unicas = df_finalizadas.drop_duplicates(subset=['Ação'])[['Ação', 'Código curso', 'Centro']].copy()
                             acoes_unicas['Centro_Norm'] = acoes_unicas['Centro'].apply(normalizar_centro)
-
-                            st.write(f"**Total de ações únicas finalizadas:** {len(acoes_unicas)}")
-
-                            # Verificar match com a projeção
+                            st.write(f"**Total de acoes unicas finalizadas:** {len(acoes_unicas)}")
                             codigos_projecao = set(df_combinado['Código curso'].unique())
                             acoes_unicas['Tem_Match'] = acoes_unicas['Código curso'].isin(codigos_projecao)
-
                             acoes_com_match = acoes_unicas[acoes_unicas['Tem_Match']].copy()
                             acoes_sem_match = acoes_unicas[~acoes_unicas['Tem_Match']].copy()
-
                             st.write(f"**COM match:** {len(acoes_com_match)} | **SEM match:** {len(acoes_sem_match)}")
-
                             if not acoes_sem_match.empty:
-                                st.warning(f"⚠️ {len(acoes_sem_match)} ações SEM match na projeção:")
+                                st.warning(f"⚠️ {len(acoes_sem_match)} acoes SEM match na projecao:")
                                 st.dataframe(acoes_sem_match[['Ação', 'Código curso', 'Centro']].head(20))
-
-                            # ---- AGRUPAR POR CENTRO_NORM E CÓDIGO CURSO ----
-                            # drop_duplicates garante 1 linha por ação antes de agrupar
                             finalizadas_por_centro_curso = (
                                 acoes_com_match
                                 .drop_duplicates(subset=['Ação'])
@@ -633,134 +623,112 @@ def mostrar_qualidade():
                                 .size()
                                 .rename(columns={'size': 'Nº Finalizadas'})
                             )
-
-                            st.write(f"**Total após groupby:** {finalizadas_por_centro_curso['Nº Finalizadas'].sum()}")
-
+                            st.write(f"**Total apos groupby:** {finalizadas_por_centro_curso['Nº Finalizadas'].sum()}")
                         else:
                             finalizadas_por_centro_curso = pd.DataFrame(columns=['Centro_Norm', 'Código curso', 'Nº Finalizadas'])
-                            st.warning("⚠️ Nenhuma ação finalizada encontrada!")
+                            st.warning("⚠️ Nenhuma acao finalizada encontrada!")
 
-                        # ---- MERGE: Centro_Norm + Código curso (único, sem duplicados) ----
                         if 'Nº Finalizadas' in df_combinado.columns:
                             df_combinado = df_combinado.drop(columns=['Nº Finalizadas'])
-
                         df_combinado = df_combinado.merge(
-                            finalizadas_por_centro_curso,
-                            on=['Centro_Norm', 'Código curso'],
-                            how='left'
+                            finalizadas_por_centro_curso, on=['Centro_Norm', 'Código curso'], how='left'
                         )
-
                         df_combinado['Nº Finalizadas'] = df_combinado['Nº Finalizadas'].fillna(0).astype(int)
                         df_combinado['% Cumprimento'] = (
                             df_combinado['Nº Finalizadas'] / df_combinado['Nº Ações Previstas'] * 100
                         ).fillna(0).clip(upper=100)
-
-                        # Totais correctos — vêm do groupby, não do df_combinado
                         planos_finalizados = int(finalizadas_por_centro_curso['Nº Finalizadas'].sum())
                         cumprimento_calculado = (planos_finalizados / planos_previstos_total * 100) if planos_previstos_total > 0 else 0
-
-                        # Guardar no session_state para o KPI do topo
                         st.session_state.cumprimento_plano_calculado = cumprimento_calculado
-
                     else:
-                        st.warning("⚠️ Não foi possível calcular ações finalizadas: faltam dados de cursos")
+                        st.warning("⚠️ Nao foi possivel calcular acoes finalizadas: faltam dados de cursos")
 
                     # ---- MOSTRAR RESULTADOS ----
                     st.markdown("---")
-                    st.subheader("📊 Resultados do Cálculo (LD + VSP Combinado)")
-
+                    st.subheader("📊 Resultados do Calculo (LD + VSP Combinado)")
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("📋 Ações Previstas (LD)", f"{df_combinado['Nº Ações LD'].sum():.0f}")
+                        st.metric("📋 Acoes Previstas (LD)", f"{df_combinado['Nº Ações LD'].sum():.0f}")
                     with col2:
-                        st.metric("📋 Ações Previstas (VSP)", f"{df_combinado['Nº Ações VSP'].sum():.0f}")
+                        st.metric("📋 Acoes Previstas (VSP)", f"{df_combinado['Nº Ações VSP'].sum():.0f}")
                     with col3:
                         st.metric("📋 Total Previstas", f"{planos_previstos_total:.0f}")
                     with col4:
-                        st.metric("✅ Ações Finalizadas", f"{planos_finalizados:.0f}")
+                        st.metric("✅ Acoes Finalizadas", f"{planos_finalizados:.0f}")
 
                     col5, col6 = st.columns(2)
                     with col5:
                         delta = cumprimento_calculado - st.session_state.obj_plano
                         delta_color = "🟢" if delta >= 0 else "🔴"
                         st.metric("📊 Cumprimento do Plano", f"{cumprimento_calculado:.1f}%",
-                                delta=f"{delta_color} {delta:.1f}%")
+                                  delta=f"{delta_color} {delta:.1f}%")
                     with col6:
                         st.progress(min(cumprimento_calculado / 100, 1.0))
 
-                    # ---- TABELA DE DETALHES ----
                     if df_combinado is not None and not df_combinado.empty:
-                        with st.expander("📋 Ver detalhes da Projeção Combinada", expanded=True):
-                            colunas_para_mostrar = ['Centro', 'Código curso', 'Nº Ações LD', 'Nº Ações VSP', 'Nº Ações Previstas', 'Nº Finalizadas', '% Cumprimento']
-                            colunas_existentes = [col for col in colunas_para_mostrar if col in df_combinado.columns]
+                        with st.expander("📋 Ver detalhes da Projecao Combinada", expanded=True):
+                            colunas_para_mostrar = ['Centro', 'Código curso', 'Nº Ações LD', 'Nº Ações VSP',
+                                                    'Nº Ações Previstas', 'Nº Finalizadas', '% Cumprimento']
+                            colunas_existentes = [c for c in colunas_para_mostrar if c in df_combinado.columns]
                             df_show = df_combinado[colunas_existentes].copy()
-                            df_show = df_show.sort_values('% Cumprimento', ascending=False)
-
-                            def highlight_cumprimento(val):
-                                if val >= 100:
-                                    return 'background-color: #d4edda; color: #155724;'
-                                elif val >= 50:
-                                    return 'background-color: #fff3cd; color: #856404;'
-                                else:
-                                    return 'background-color: #f8d7da; color: #721c24;'
-
                             if '% Cumprimento' in df_show.columns:
+                                df_show = df_show.sort_values('% Cumprimento', ascending=False)
+
+                                def highlight_cumprimento(val):
+                                    if val >= 100:
+                                        return 'background-color: #d4edda; color: #155724;'
+                                    elif val >= 50:
+                                        return 'background-color: #fff3cd; color: #856404;'
+                                    else:
+                                        return 'background-color: #f8d7da; color: #721c24;'
                                 styled_df = df_show.style.map(highlight_cumprimento, subset=['% Cumprimento'])
                                 st.dataframe(styled_df, use_container_width=True)
                             else:
                                 st.dataframe(df_show, use_container_width=True)
 
-                            # Filtros adicionais
                             col_f1, col_f2 = st.columns(2)
                             with col_f1:
                                 centros_sel = st.multiselect("Centro", options=sorted(df_show['Centro'].unique()), key="proj_centro")
                             with col_f2:
                                 cursos_sel = st.multiselect("Curso", options=sorted(df_show['Código curso'].unique()), key="proj_curso")
-
                             df_filt = df_show.copy()
                             if centros_sel:
                                 df_filt = df_filt[df_filt['Centro'].isin(centros_sel)]
                             if cursos_sel:
                                 df_filt = df_filt[df_filt['Código curso'].isin(cursos_sel)]
-
                             if centros_sel or cursos_sel:
                                 st.dataframe(df_filt, use_container_width=True)
-                                total_previstos_filt = df_filt['Nº Ações Previstas'].sum()
-                                total_finalizadas_filt = df_filt['Nº Finalizadas'].sum()
-                                taxa_filt = (total_finalizadas_filt / total_previstos_filt * 100) if total_previstos_filt > 0 else 0
-                                st.caption(f"📊 Filtrado: {total_previstos_filt:.0f} previstas, {total_finalizadas_filt:.0f} finalizadas, taxa: {taxa_filt:.1f}%")
+                                tp = df_filt['Nº Ações Previstas'].sum()
+                                tf = df_filt['Nº Finalizadas'].sum() if 'Nº Finalizadas' in df_filt.columns else 0
+                                tx = (tf / tp * 100) if tp > 0 else 0
+                                st.caption(f"📊 Filtrado: {tp:.0f} previstas, {tf:.0f} finalizadas, taxa: {tx:.1f}%")
 
                 except Exception as e:
                     st.error(f"Erro ao processar dados: {e}")
                     import traceback
                     st.code(traceback.format_exc())
-
             else:
-                st.info("⬆️ Carregue o ficheiro 'Modelo_Previsões_Anuais.xlsx' para ver os detalhes.")
+                st.info("⬆️ Carregue o ficheiro da projecao do ano atual para ver os detalhes.")
                 if has_cursos and "Status" in df_cursos.columns:
                     status_tmp = df_cursos['Status'].astype(str).str.strip().str.lower()
                     fin_fb = status_tmp.str.contains('finaliz|conclu', regex=True).sum()
                     prev_fb = (status_tmp == 'prevista').sum()
                     cumpr_fb = (fin_fb / prev_fb * 100) if prev_fb > 0 else 0
-                    st.info(f"📊 Método alternativo (sem ficheiro LD/VSP): {cumpr_fb:.1f}%")
+                    st.info(f"📊 Metodo alternativo (sem ficheiro): {cumpr_fb:.1f}%")
 
             # --- RESUMO FINAL ---
             st.markdown("---")
             st.subheader("📊 Resumo do KPI - Cumprimento do Plano")
-
             finalizadas_show = st.session_state.get("planos_finalizados_calculado", planos_finalizados)
             previstas_show = st.session_state.get("planos_previstos_calculado", planos_previstos_total)
             cumprimento_show = st.session_state.get("cumprimento_plano_calculado", cumprimento_calculado)
-
             col_sum1, col_sum2 = st.columns(2)
             with col_sum1:
-                st.metric("Ações Finalizadas (Real)", f"{finalizadas_show:.0f}")
+                st.metric("Acoes Finalizadas (Real)", f"{finalizadas_show:.0f}")
             with col_sum2:
-                st.metric("Ações Previstas (Projeção 2026)", f"{previstas_show:.0f}")
+                st.metric("Acoes Previstas (Projecao)", f"{previstas_show:.0f}")
             st.progress(min(cumprimento_show / 100, 1.0))
             st.caption(f"📈 Cumprimento: {cumprimento_show:.1f}% (Meta: {st.session_state.obj_plano:.0f}%)")
-
-            # Guardar para o resumo
             st.session_state.planos_finalizados_calculado = planos_finalizados
             st.session_state.planos_previstos_calculado = planos_previstos_total
 
