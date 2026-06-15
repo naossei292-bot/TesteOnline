@@ -88,7 +88,6 @@ PERMISSOES = {
     ],
     "gestor_qualidade": [
         "🏠 Página Inicial",
-        "📋 Questionários",
         "📚 Cursos",
         "🎯 Gestão de Qualidade",
         "📊 Dashboard - Ações",
