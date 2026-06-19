@@ -5,7 +5,8 @@ import plotly.graph_objects as go
 import unicodedata
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, date
+from io import BytesIO
 
 
 # ------------------------------------------------------------
@@ -133,6 +134,18 @@ def normalizar_centro(nome):
         if chave in nome:
             return valor
     return nome
+
+ORDEM_MESES = {
+    'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
+    'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9,
+    'outubro': 10, 'novembro': 11, 'dezembro': 12,
+}
+
+def ordenar_meses(valores):
+    return sorted(
+        valores,
+        key=lambda m: (ORDEM_MESES.get(str(m).strip().lower(), 99), str(m).strip().lower())
+    )
 
 # ------------------------------------------------------------
 # Página principal de Qualidade
@@ -686,6 +699,35 @@ def mostrar_qualidade():
                             else:
                                 st.dataframe(df_show, use_container_width=True)
 
+                            # ===== Snapshot para reforecast (1º sem -> 2º sem) =====
+                            data_snapshot = st.date_input(
+                                "Data do retrato (corte do 1º semestre)",
+                                value=date.today(),
+                                key="data_snapshot_reforecast"
+                            )
+
+                            df_export = df_combinado[
+                                ['Centro', 'Código curso', 'Nº Ações Previstas', 'Nº Finalizadas']
+                            ].rename(columns={
+                                'Nº Ações Previstas': 'Previstas',
+                                'Nº Finalizadas': 'Finalizadas',
+                            }).copy()
+                            df_export['Data Retrato'] = data_snapshot.strftime("%Y-%m-%d")
+
+                            buffer = BytesIO()
+                            with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+                                df_export.to_excel(writer, index=False, sheet_name="Snapshot 1Sem")
+                            buffer.seek(0)
+
+                            st.download_button(
+                                label="📥 Exportar snapshot para reforecast",
+                                data=buffer,
+                                file_name=f"reforecast_{data_snapshot.strftime('%Y-%m-%d')}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True,
+                            )
+                            # ========================================================
+
                             col_f1, col_f2 = st.columns(2)
                             with col_f1:
                                 centros_sel = st.multiselect("Centro", options=sorted(df_show['Centro'].unique()), key="proj_centro")
@@ -1173,7 +1215,7 @@ def mostrar_qualidade():
             recl_file = st.file_uploader("Carregar ficheiro de Reclamações (Excel)", type=["xlsx", "xls"], key="reclamacoes_upload")
         with c3:
             try:
-                with open("assets/reclamacoes.xlsx", "rb") as f:
+                with open("assets/reclamações.xlsx", "rb") as f:
                     conteudo_recl = f.read()
                 st.download_button(label="📥 Exemplo Reclamações (Excel)", data=conteudo_recl,
                                 file_name="reclamacoes.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1183,7 +1225,7 @@ def mostrar_qualidade():
         if recl_file is not None:
             try:
                 # Lê o Excel usando a segunda linha como cabeçalho
-                df_recl = pd.read_excel(recl_file, header=1)
+                df_recl = pd.read_excel(recl_file, header=0)
                 # Normaliza nomes das colunas (minúsculas, sem espaços)
                 df_recl.columns = df_recl.columns.str.strip().str.lower()
 
@@ -1268,7 +1310,7 @@ def mostrar_qualidade():
                 centros_sel = st.multiselect("Centro", options=centros_opcoes, default=centros_opcoes, key="filtro_recl_centro")
             
             with col_f2:
-                meses_opcoes = sorted(df_recl['data'].dropna().unique())
+                meses_opcoes = ordenar_meses(df_recl['data'].dropna().unique())
                 meses_sel = st.multiselect("Mês", options=meses_opcoes, default=meses_opcoes, key="filtro_recl_mes")
             
             with col_f3:

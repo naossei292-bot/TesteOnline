@@ -80,7 +80,8 @@ PERMISSOES = {
         "🎯 Gestão de Qualidade",
         "📚 Cursos",
         "📊 Dashboard - Ações",
-        "📊 Dashboard - Questionários"
+        "📊 Dashboard - Questionários",
+        "🔄 Reprojeção 2º Semestre"
     ],
     "gestor_balancos": [
         "🏠 Página Inicial",
@@ -95,7 +96,8 @@ PERMISSOES = {
     "gestor_questionarios": [
         "🏠 Página Inicial",
         "📋 Questionários",
-        "📊 Dashboard - Questionários"
+        "📊 Dashboard - Questionários",
+        "🔄 Reprojeção 2º Semestre"
     ]
 }
 
@@ -107,13 +109,13 @@ paginas_autorizadas = PERMISSOES.get(role, [])
 if not paginas_autorizadas:
     # Se o role não for encontrado ou estiver vazio, define permissões padrão
     if role == "admin":
-        paginas_autorizadas = ["🏠 Página Inicial", "📚 Balanços e Relatórios", "📋 Questionários", "🎯 Gestão de Qualidade", "📚 Cursos", "📊 Dashboard - Ações", "📊 Dashboard - Questionários"]
+        paginas_autorizadas = ["🏠 Página Inicial", "📚 Balanços e Relatórios", "📋 Questionários", "🎯 Gestão de Qualidade", "📚 Cursos", "📊 Dashboard - Ações", "📊 Dashboard - Questionários", "🔄 Reprojeção 2º Semestre"]
     elif role == "gestor_balancos":
         paginas_autorizadas = ["🏠 Página Inicial", "📚 Balanços e Relatórios"]
     elif role == "gestor_qualidade":
         paginas_autorizadas = ["🏠 Página Inicial", "📋 Questionários", "📚 Cursos", "🎯 Gestão de Qualidade", "📊 Dashboard - Ações"]
     elif role == "gestor_questionarios":
-        paginas_autorizadas = ["🏠 Página Inicial", "📋 Questionários", "📊 Dashboard - Questionários"]
+        paginas_autorizadas = ["🏠 Página Inicial", "📋 Questionários", "📊 Dashboard - Questionários", "🔄 Reprojeção 2º Semestre"]
     else:
         # Fallback para qualquer role desconhecido ou vazio
         paginas_autorizadas = ["🏠 Página Inicial"]
@@ -193,6 +195,11 @@ if "📊 Dashboard - Ações" in paginas_autorizadas:
         st.session_state.pagina = "📊 Dashboard - Ações"
         st.rerun()
 
+if "🔄 Reprojeção 2º Semestre" in paginas_autorizadas:
+    if st.sidebar.button("🔄 Reprojeção 2º Semestre", use_container_width=True, key="nav_reforecast"):
+        st.session_state.pagina = "🔄 Reprojeção 2º Semestre"
+        st.rerun()
+
 # Botão de logout (sempre visível)
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Sair", use_container_width=True, key="btn_logout", help="Terminar sessão"):
@@ -246,3 +253,7 @@ elif st.session_state.pagina == "📊 Dashboard - Ações":
 elif st.session_state.pagina == "📊 Dashboard - Questionários":
     from Pages.dashboardquestionarios import mostrar_questionarios_dashboard
     mostrar_questionarios_dashboard()
+
+elif st.session_state.pagina == "🔄 Reprojeção 2º Semestre":
+    from Pages.reforecast import mostrar_reforecast
+    mostrar_reforecast()
