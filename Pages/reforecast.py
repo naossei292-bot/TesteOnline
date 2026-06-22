@@ -238,7 +238,7 @@ def _reforecast_snapshot():
     for chave, s in zip(df['_chave'], sugestao):
         st.session_state.alvo_reforecast.setdefault(chave, int(s))
 
-    # ---- Filtro por Centro ----
+    # ---- Filtro por Centro
     st.markdown("---")
     centros = sorted(df['Centro'].dropna().astype(str).unique())
     sel = st.multiselect(
