@@ -117,23 +117,31 @@ def normalizar_centro(nome):
     if pd.isna(nome):
         return "DESCONHECIDO"
     nome = str(nome).strip().upper()
-    mapeamento = {
-        'GAIA': 'GAIA', 'GALA': 'GAIA', 'VILA NOVA DE GAIA': 'GAIA',
-        'PORTO': 'PORTO',
-        'LISBOA': 'LISBOA',
-        'AMADORA': 'AMADORA',
+    # tirar acentos: "SÃO JOÃO" -> "SAO JOAO"
+    nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('ASCII')
+    # uniformizar pontos e espaços: "S.J.MADEIRA" -> "S J MADEIRA"
+    nome = re.sub(r'\s+', ' ', nome.replace('.', ' ')).strip()
+
+    canonico = {
         'ALVERCA': 'ALVERCA',
+        'AMADORA': 'AMADORA',
         'BRAGA': 'BRAGA',
         'COIMBRA': 'COIMBRA',
         'FARO': 'FARO',
-        'FUNCHAL': 'FUNCHAL', 'MADEIRA': 'FUNCHAL',
-        'S.J.MADEIRA': 'S.J.MADEIRA', 'SAO JOAO DA MADEIRA': 'S.J.MADEIRA',
+        'FUNCHAL': 'FUNCHAL',
+        'GAIA': 'GAIA',
+        'LISBOA': 'LISBOA',
+        'PORTO': 'PORTO',
         'VISEU': 'VISEU',
+        'ONLINE': 'ONLINE',
+        # --- divergências entre projeção e ações ---
+        'LAR': 'LARANJEIRO',
+        'LARANJEIRO': 'LARANJEIRO',
+        'S J MADEIRA': 'S.J.MADEIRA',
+        'SAO JOAO DA MADEIRA': 'S.J.MADEIRA',
+        'SJMADEIRA': 'S.J.MADEIRA',
     }
-    for chave, valor in mapeamento.items():
-        if chave in nome:
-            return valor
-    return nome
+    return canonico.get(nome, nome)
 
 ORDEM_MESES = {
     'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
@@ -596,6 +604,11 @@ def mostrar_qualidade():
                     df_combinado = combinar_projecao(df_ld_det, df_vsp_det)
                     df_combinado['Centro_Norm'] = df_combinado['Centro'].apply(normalizar_centro)
                     planos_previstos_total = df_combinado['Nº Ações Previstas'].sum()
+
+                    # --- DEBUG: comparar valores de Centro nos dois lados ---
+                    st.write("Projeção (df_combinado):", sorted(df_combinado['Centro'].astype(str).str.upper().unique()))
+                    st.write("Ações reais (df_cursos):", sorted(df_cursos['Centro'].astype(str).str.upper().unique()))
+                    # --------------------------------------------------------
 
                     # ---- CALCULAR ACOES FINALIZADAS (logica original, intacta) ----
                     if has_cursos and "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
