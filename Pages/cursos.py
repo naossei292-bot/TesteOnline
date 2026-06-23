@@ -430,7 +430,7 @@ def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataF
     if centro_detectado:
         df["Centro"] = centro_detectado
 
-    # ── Passo 1: Renomear colunas ambíguas ──────────────────────────────────
+    # ── Passo 1: Renomear colunas ambíguas 
     rename_inicial = {}
     for col in df.columns:
         n = _normalizar(col)
