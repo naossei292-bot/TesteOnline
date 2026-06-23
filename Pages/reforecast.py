@@ -1,17 +1,28 @@
 import streamlit as st
 import pandas as pd
+import re
+import unicodedata
 from io import BytesIO
 from datetime import datetime
 from openpyxl import load_workbook
 
-COL_REAL_LABEL = "Número REAL"  # rótulo limpo (a coluna real chama-se 'Número \nREAL')
+# Coluna que se edita na Tab 1 (a que o KPI "Cumprimento do Plano" usa).
+# Na VSP existem DUAS colunas com este nome; usa-se sempre a ÚLTIMA (bloco Projeção {ano}).
+ALVO_BASE = "numero de acoes de formacao a desenvolver do curso"
+COL_EDIT_LABEL = "Número de Ações de Formação a desenvolver do Curso"
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 1 — Editor do Número REAL no PFE (com filtros, preserva folhas/fórmulas)
+# Helpers
 # ════════════════════════════════════════════════════════════════════════════
+def _base_name(c):
+    """Nome normalizado: sem sufixo .N do pandas, sem \\n, sem acentos, minúsculas."""
+    base = re.sub(r'\.\d+$', '', str(c))
+    base = re.sub(r'\s+', ' ', base.replace('\n', ' ')).strip().lower()
+    return unicodedata.normalize('NFKD', base).encode('ASCII', 'ignore').decode('ASCII')
+
+
 def _achar_folhas_ano(sheet_names, ano):
-    """Devolve {tipo: nome_folha} APENAS para as folhas do ano indicado."""
     folhas = {}
     for s in sheet_names:
         sl = s.lower()
@@ -23,25 +34,28 @@ def _achar_folhas_ano(sheet_names, ano):
     return folhas
 
 
-def _col_numero_real_pandas(df):
-    for c in df.columns:
-        if "real" in str(c).strip().lower():
-            return c
-    return None
+def _col_alvo_pandas(df):
+    """ÚLTIMA coluna cujo nome bate com o alvo (na VSP há duas -> a do bloco Projeção)."""
+    cands = [c for c in df.columns if _base_name(c) == ALVO_BASE]
+    return cands[-1] if cands else None
 
 
-def _idx_col_real_openpyxl(ws):
-    for c in range(1, ws.max_column + 1):
-        v = ws.cell(row=1, column=c).value
-        if v and "real" in str(v).strip().lower():
-            return c
-    return None
+def _idx_col_alvo_openpyxl(ws):
+    """Índice (1-based) da ÚLTIMA coluna cujo cabeçalho bate com o alvo."""
+    idxs = [
+        c for c in range(1, ws.max_column + 1)
+        if ws.cell(1, c).value is not None and _base_name(ws.cell(1, c).value) == ALVO_BASE
+    ]
+    return idxs[-1] if idxs else None
 
 
-def _orig_real(v):
+def _orig_val(v):
     return None if pd.isna(v) else float(v)
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 1 — Editor do nº de ações a desenvolver (com filtros, preserva o ficheiro)
+# ════════════════════════════════════════════════════════════════════════════
 def _editor_pfe():
     ano = datetime.now().year
 
@@ -52,10 +66,10 @@ def _editor_pfe():
         key="upload_pfe_reforecast",
     )
     if pfe_file is None:
-        st.info("⬆️ Carregue a projeção anual para editar o Número REAL.")
+        st.info("⬆️ Carregue a projeção anual para editar o nº de ações a desenvolver.")
         return
 
-    file_bytes = pfe_file.getvalue()  # ler UMA vez (pandas + openpyxl)
+    file_bytes = pfe_file.getvalue()
     try:
         xl = pd.ExcelFile(BytesIO(file_bytes))
     except Exception as e:
@@ -69,33 +83,32 @@ def _editor_pfe():
 
     st.success(f"✅ Folhas de {ano}: " + " | ".join(f"{t} → '{n}'" for t, n in folhas_ano.items()))
     st.info(
-        "✏️ Só a coluna **Número REAL** é editável. Use os filtros para localizar o que "
-        "quer alterar; as edições são guardadas por linha e mantêm-se ao mudar o filtro. "
-        "Tudo o resto (fórmulas, folhas de outros anos) é preservado no ficheiro descarregado."
+        "✏️ Só a coluna **Nº de Ações a desenvolver** é editável (a que o KPI Cumprimento "
+        "do Plano usa). Use os filtros para localizar o que quer alterar; as edições são "
+        "guardadas por linha e mantêm-se ao mudar o filtro. As fórmulas e as folhas de "
+        "outros anos são preservadas no ficheiro descarregado."
     )
 
-    # Reset do store se o ficheiro mudou (evita arrastar edições de um ficheiro anterior)
     if st.session_state.get("_pfe_file_name") != pfe_file.name:
-        st.session_state.pfe_real = {}
+        st.session_state.pfe_alvo = {}
         st.session_state._pfe_file_name = pfe_file.name
-    if "pfe_real" not in st.session_state:
-        st.session_state.pfe_real = {}
+    if "pfe_alvo" not in st.session_state:
+        st.session_state.pfe_alvo = {}
 
     for tipo, nome_folha in folhas_ano.items():
         st.markdown(f"### 📄 {nome_folha}")
         df = pd.read_excel(BytesIO(file_bytes), sheet_name=nome_folha)
 
-        col_real = _col_numero_real_pandas(df)
-        if col_real is None:
-            st.warning(f"A folha '{nome_folha}' não tem coluna 'Número REAL'. Foi ignorada.")
+        col_alvo = _col_alvo_pandas(df)
+        if col_alvo is None:
+            st.warning(f"A folha '{nome_folha}' não tem a coluna '{COL_EDIT_LABEL}'. Foi ignorada.")
             continue
 
         df["_row"] = df.index + 2  # linha real do Excel (header = linha 1)
 
-        # Seed do store desta folha {linha_excel: valor original}
-        store = st.session_state.pfe_real.setdefault(nome_folha, {})
-        for r, v in zip(df["_row"], df[col_real]):
-            store.setdefault(int(r), _orig_real(v))
+        store = st.session_state.pfe_alvo.setdefault(nome_folha, {})
+        for r, v in zip(df["_row"], df[col_alvo]):
+            store.setdefault(int(r), _orig_val(v))
 
         contexto = [
             c for c in ["Centro de Formação", "Código curso", "Designação completa"]
@@ -104,7 +117,6 @@ def _editor_pfe():
         tem_centro = "Centro de Formação" in df.columns
         tem_cod = "Código curso" in df.columns
 
-        # ---- Filtros (por folha) ----
         fc1, fc2 = st.columns(2)
         sel_centro, sel_cod = [], []
         with fc1:
@@ -130,39 +142,37 @@ def _editor_pfe():
             st.info("Nenhuma linha para os filtros selecionados nesta folha.")
         else:
             df_f = df_f.copy()
-            df_f[COL_REAL_LABEL] = pd.to_numeric(df_f["_row"].map(store), errors="coerce")
+            df_f[COL_EDIT_LABEL] = pd.to_numeric(df_f["_row"].map(store), errors="coerce")
 
-            cols_show = contexto + [COL_REAL_LABEL]
+            cols_show = contexto + [COL_EDIT_LABEL]
             col_cfg = {c: st.column_config.TextColumn(c, disabled=True) for c in contexto}
-            col_cfg[COL_REAL_LABEL] = st.column_config.NumberColumn(
-                COL_REAL_LABEL, min_value=0, step=1, format="%d"
+            col_cfg[COL_EDIT_LABEL] = st.column_config.NumberColumn(
+                COL_EDIT_LABEL, min_value=0, step=1, format="%d"
             )
 
-            # a chave inclui os filtros: ao mudar, o editor re-semeia a partir do store
             fkey = "c:" + "_".join(sorted(sel_centro)) + "|k:" + "_".join(sorted(sel_cod))
             edit = st.data_editor(
                 df_f[cols_show], use_container_width=True, hide_index=True,
                 num_rows="fixed", column_config=col_cfg, key=f"pfe_ed_{tipo}_{fkey}",
             )
 
-            # Gravar de volta no store PELA LINHA REAL (nunca pela posição)
-            for excel_row, val in zip(df_f["_row"].tolist(), edit[COL_REAL_LABEL].tolist()):
+            for excel_row, val in zip(df_f["_row"].tolist(), edit[COL_EDIT_LABEL].tolist()):
                 v = pd.to_numeric(val, errors="coerce")
                 store[int(excel_row)] = None if pd.isna(v) else float(v)
 
         total_folha = sum(v for v in store.values() if v is not None)
-        st.caption(f"Σ Número REAL ({tipo}, folha completa): **{total_folha:.0f}** ações")
+        st.caption(f"Σ Nº Ações a desenvolver ({tipo}, folha completa): **{total_folha:.0f}** ações")
 
-    # ---- Gerar o ficheiro: aplicar o store a cada folha, preservando o resto ----
+    # Gerar o ficheiro: aplicar o store à coluna alvo de cada folha, preservando o resto.
     wb = load_workbook(BytesIO(file_bytes))
     for tipo, nome_folha in folhas_ano.items():
         ws = wb[nome_folha]
-        c_real = _idx_col_real_openpyxl(ws)
-        if c_real is None:
+        c_alvo = _idx_col_alvo_openpyxl(ws)
+        if c_alvo is None:
             continue
-        store = st.session_state.pfe_real.get(nome_folha, {})
+        store = st.session_state.pfe_alvo.get(nome_folha, {})
         for excel_row, val in store.items():
-            cell = ws.cell(row=int(excel_row), column=c_real)
+            cell = ws.cell(row=int(excel_row), column=c_alvo)
             if val is None or pd.isna(val):
                 cell.value = None
             else:
@@ -183,7 +193,7 @@ def _editor_pfe():
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Reprojeção do 2º semestre (snapshot) com filtro por Centro
+# TAB 2 — Análise da reprojeção do 2º semestre (SÓ LEITURA, sem download)
 # ════════════════════════════════════════════════════════════════════════════
 def _reforecast_snapshot():
     st.subheader("📁 Carregar snapshot do 1º semestre")
@@ -194,7 +204,7 @@ def _reforecast_snapshot():
         key="upload_snapshot_reforecast",
     )
     if snap_file is None:
-        st.info("⬆️ Carregue o snapshot para começar a reprojeção.")
+        st.info("⬆️ Carregue o snapshot para analisar a situação a meio do ano.")
         return
 
     try:
@@ -212,118 +222,61 @@ def _reforecast_snapshot():
 
     df['Previstas'] = pd.to_numeric(df['Previstas'], errors='coerce').fillna(0)
     df['Finalizadas'] = pd.to_numeric(df['Finalizadas'], errors='coerce').fillna(0)
-    df['_chave'] = (df['Centro'].astype(str).str.strip()
-                    + ' || ' + df['Código curso'].astype(str).str.strip())
 
     data_retrato = str(df['Data Retrato'].iloc[0]) if 'Data Retrato' in df.columns and len(df) else "—"
     st.success(f"✅ Snapshot carregado: **{len(df)}** linhas | Data do retrato: **{data_retrato}**")
+    st.caption("ℹ️ Esta página é só de leitura. A edição faz-se no separador **Editar Projeção**.")
 
-    if df['_chave'].duplicated().any():
-        n_dup = int(df['_chave'].duplicated().sum())
-        st.warning(
-            f"⚠️ {n_dup} linha(s) com Centro+Código curso repetido. "
-            "Como a edição é gravada por essa combinação, linhas repetidas partilhariam o mesmo alvo. "
-            "Confirma que o snapshot tem combinações únicas."
-        )
+    df['Falta p/ Plano'] = (df['Previstas'] - df['Finalizadas']).clip(lower=0).astype(int)
+    df['% Cumprido (1º sem)'] = 0.0
+    m = df['Previstas'] > 0
+    df.loc[m, '% Cumprido (1º sem)'] = (df.loc[m, 'Finalizadas'] / df.loc[m, 'Previstas'] * 100).round(1)
 
-    # Reset dos alvos se o ficheiro mudou
-    if st.session_state.get('_reforecast_snap_name') != snap_file.name:
-        st.session_state.alvo_reforecast = {}
-        st.session_state._reforecast_snap_name = snap_file.name
-    if 'alvo_reforecast' not in st.session_state:
-        st.session_state.alvo_reforecast = {}
-
-    # Seed: sugestão de alvo = quanto falta para o plano anual original
-    sugestao = (df['Previstas'] - df['Finalizadas']).clip(lower=0).astype(int)
-    for chave, s in zip(df['_chave'], sugestao):
-        st.session_state.alvo_reforecast.setdefault(chave, int(s))
-
-    # ---- Filtro por Centro
     st.markdown("---")
     centros = sorted(df['Centro'].dropna().astype(str).unique())
     sel = st.multiselect(
-        "🏢 Filtrar por Centro (para análise centro a centro)",
-        centros, default=centros, key="reforecast_centro_filter",
+        "🏢 Filtrar por Centro", centros, default=centros, key="reforecast_centro_filter",
     )
-    df_view = df[df['Centro'].astype(str).isin(sel)].copy() if sel else df.copy()
-    df_view = df_view.reset_index(drop=True)
+    filt = df[df['Centro'].astype(str).isin(sel)] if sel else df
+    parcial = bool(sel) and len(sel) < len(centros)
 
-    if df_view.empty:
+    if filt.empty:
         st.info("Nenhuma linha para os centros selecionados.")
         return
 
-    st.subheader("✏️ Definir alvo do 2º semestre")
-    st.info(
-        "Edite apenas a coluna **Alvo 2º Semestre**. As edições são guardadas por "
-        "Centro+Código curso, por isso mantêm-se quando muda o filtro."
-    )
-
-    df_view['Alvo 2º Semestre'] = df_view['_chave'].map(st.session_state.alvo_reforecast).fillna(0).astype(int)
-
-    cols_edit = ['Centro', 'Código curso', 'Previstas', 'Finalizadas', 'Alvo 2º Semestre']
-    edit = st.data_editor(
-        df_view[cols_edit],
-        use_container_width=True, hide_index=True, num_rows="fixed",
-        column_config={
-            "Centro": st.column_config.TextColumn("Centro", disabled=True),
-            "Código curso": st.column_config.TextColumn("Código curso", disabled=True),
-            "Previstas": st.column_config.NumberColumn("Previstas (anual orig.)", disabled=True),
-            "Finalizadas": st.column_config.NumberColumn("Finalizadas (1º sem)", disabled=True),
-            "Alvo 2º Semestre": st.column_config.NumberColumn("Alvo 2º Semestre", min_value=0, step=1),
-        },
-        key="editor_reforecast_" + "_".join(sorted(sel)),
-    )
-
-    for chave, alvo in zip(df_view['_chave'].tolist(), edit['Alvo 2º Semestre'].tolist()):
-        v = pd.to_numeric(alvo, errors='coerce')
-        st.session_state.alvo_reforecast[chave] = 0 if pd.isna(v) else int(v)
-
-    full = df.copy()
-    full['Alvo 2º Semestre'] = full['_chave'].map(st.session_state.alvo_reforecast).fillna(0).astype(int)
-    full['Novo Total Anual'] = full['Finalizadas'] + full['Alvo 2º Semestre']
-    full['Δ vs. Plano Orig.'] = full['Novo Total Anual'] - full['Previstas']
-
-    filt = full[full['Centro'].astype(str).isin(sel)] if sel else full
-    parcial = bool(sel) and len(sel) < len(centros)
-
-    st.markdown("---")
-    st.subheader("📊 Impacto no 2º semestre" + (f" — {len(sel)} centro(s)" if parcial else " (todos os centros)"))
+    prev = filt['Previstas'].sum()
+    fin = filt['Finalizadas'].sum()
+    st.subheader("📊 Situação a meio do ano" + (f" — {len(sel)} centro(s)" if parcial else " (todos os centros)"))
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.metric("Plano anual original", f"{filt['Previstas'].sum():.0f}")
+        st.metric("Plano (denominador)", f"{prev:.0f}")
     with c2:
-        st.metric("Finalizado (1º sem)", f"{filt['Finalizadas'].sum():.0f}")
+        st.metric("Finalizado (1º sem)", f"{fin:.0f}")
     with c3:
-        st.metric("Alvo 2º semestre", f"{filt['Alvo 2º Semestre'].sum():.0f}")
+        st.metric("Falta p/ plano", f"{max(prev - fin, 0):.0f}")
     with c4:
-        nt = filt['Novo Total Anual'].sum()
-        st.metric("Novo total anual", f"{nt:.0f}", delta=f"{nt - filt['Previstas'].sum():+.0f} vs. orig.")
+        st.metric("% Cumprido (1º sem)", f"{(fin / prev * 100) if prev > 0 else 0:.1f}%")
     if parcial:
+        glob_prev = df['Previstas'].sum()
+        glob_fin = df['Finalizadas'].sum()
         st.caption(
-            f"🌍 Global (todos os centros): novo total anual = {full['Novo Total Anual'].sum():.0f} "
-            f"(plano orig. {full['Previstas'].sum():.0f})"
+            f"🌍 Global (todos os centros): {glob_fin:.0f}/{glob_prev:.0f} "
+            f"= {(glob_fin / glob_prev * 100) if glob_prev > 0 else 0:.1f}% cumprido"
         )
 
     cols_final = ['Centro', 'Código curso', 'Previstas', 'Finalizadas',
-                  'Alvo 2º Semestre', 'Novo Total Anual', 'Δ vs. Plano Orig.']
-    with st.expander("📋 Ver reprojeção detalhada (centros filtrados)", expanded=True):
-        st.dataframe(filt[cols_final], use_container_width=True, hide_index=True)
-
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        full[cols_final].to_excel(writer, index=False, sheet_name="Reprojecao 2Sem")
-    buffer.seek(0)
-    st.download_button(
-        "📥 Baixar reprojeção editada (todos os centros)", data=buffer,
-        file_name=f"reprojecao_2sem_{data_retrato}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
+                  'Falta p/ Plano', '% Cumprido (1º sem)']
+    st.dataframe(
+        filt[cols_final], use_container_width=True, hide_index=True,
+        column_config={
+            "% Cumprido (1º sem)": st.column_config.NumberColumn("% Cumprido (1º sem)", format="%.1f%%"),
+        },
     )
 
 
 def mostrar_reforecast():
     st.header("🔄 Reprojeção do 2º Semestre")
-    tab1, tab2 = st.tabs(["✏️ Editar Projeção (Número Real)", "📊 Reprojeção 2º Semestre"])
+    tab1, tab2 = st.tabs(["✏️ Editar Projeção", "📊 Análise 2º Semestre"])
     with tab1:
         _editor_pfe()
     with tab2:
