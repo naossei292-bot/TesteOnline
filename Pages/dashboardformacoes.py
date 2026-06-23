@@ -1,7 +1,9 @@
 import streamlit as st
 import io
+import re
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 from plotly.subplots import make_subplots
 from datetime import date, datetime, timedelta
 
@@ -623,6 +625,210 @@ def grafico_receita(df: pd.DataFrame):
                       legend=dict(orientation="h", y=1.12))
     st.plotly_chart(fig, use_container_width=True)
 
+def grafico_acoes_vendidas(df_cursos):
+    """Top/bottom de ações por 'quantidade vendida'. Respeita o filtro de centro já aplicado a df_cursos."""
+    if df_cursos is None or df_cursos.empty or "Ação" not in df_cursos.columns:
+        return
+
+    st.markdown("---")
+    st.subheader("🏆 Ações mais e menos vendidas")
+
+    c1, c2, c3 = st.columns([1.7, 1.3, 1])
+    with c1:
+        metrica = st.radio(
+            "Medir 'vendas' por:",
+            ["Valor a receber (vendas)", "Valor recebido (cobrado)", "Inscritos", "Nº de ações"],
+            horizontal=True, key="vend_metrica",
+        )
+    with c2:
+        agrupar = st.radio(
+            "Agrupar por:",
+            ["Ação individual", "Tipo de curso (código)"],
+            horizontal=True, key="vend_agrupar",
+        )
+    with c3:
+        top_n = st.slider("Top N", 3, 20, 10, key="vend_topn")
+
+    df = df_cursos.copy()
+
+    # Chave de agrupamento
+    if agrupar.startswith("Tipo"):
+        def extrair_tipo(nome):
+            nome = str(nome).strip()
+            if "_" in nome:
+                return nome.split("_")[0]
+            if "/" in nome:
+                return nome.split("/")[0]
+            return nome[:4] if len(nome) >= 4 else nome
+        df["_grupo"] = df["Ação"].apply(extrair_tipo)
+        label_grupo = "Curso"
+    else:
+        df["_grupo"] = df["Ação"].astype(str)
+        label_grupo = "Ação"
+
+    # Métrica
+    if metrica == "Valor a receber (vendas)":
+        col = "Valor total a receber"
+        if col not in df.columns:
+            st.info(f"Sem coluna '{col}' nos dados.")
+            return
+        serie = df.groupby("_grupo")[col].sum()
+        unidade = "€"
+    elif metrica == "Valor recebido (cobrado)":
+        col = "Valor Total Recebido"
+        if col not in df.columns:
+            st.info(f"Sem coluna '{col}' nos dados.")
+            return
+        serie = df.groupby("_grupo")[col].sum()
+        unidade = "€"
+    elif metrica == "Inscritos":
+        if "Inscritos" not in df.columns:
+            st.info("Sem coluna 'Inscritos' nos dados.")
+            return
+        serie = df.groupby("_grupo")["Inscritos"].sum()
+        unidade = "inscritos"
+    else:  # Nº de ações
+        serie = df.groupby("_grupo")["Ação"].nunique()
+        unidade = "ações"
+
+    agg = serie.reset_index()
+    agg.columns = [label_grupo, "Quantidade"]
+    agg = agg[agg["Quantidade"] > 0].sort_values("Quantidade", ascending=False)
+
+    if agg.empty:
+        st.info("Sem dados para construir o gráfico.")
+        return
+
+    def barra(dados, titulo, cor, chave):
+        dados = dados.sort_values("Quantidade", ascending=True)  # maior fica no topo
+        fig = px.bar(dados, x="Quantidade", y=label_grupo, orientation="h", title=titulo)
+        fig.update_traces(
+            marker_color=cor, textposition="outside",
+            text=dados["Quantidade"],
+            texttemplate="%{x:,.0f}" + ("€" if unidade == "€" else ""),
+        )
+        fig.update_layout(
+            height=max(220, len(dados) * 32),
+            xaxis_title=f"Quantidade ({unidade})", yaxis_title="",
+            margin=dict(l=10, r=55, t=50, b=10),
+        )
+        st.plotly_chart(fig, use_container_width=True, key=chave)
+
+    if len(agg) <= top_n * 2:
+        barra(agg, f"Ranking por {metrica.lower()}", "#1f77b4", "vend_unico")
+    else:
+        col_top, col_bot = st.columns(2)
+        with col_top:
+            barra(agg.head(top_n), f"🔝 Mais vendidas (top {top_n})", "#2ca02c", "vend_top")
+        with col_bot:
+            barra(agg.tail(top_n), f"🔻 Menos vendidas (bottom {top_n})", "#d62728", "vend_bot")
+
+VSP_FAMILIAS = {"ALM", "APAAA", "APAPA", "ARE", "ARD", "BAS", "CS",
+                "FETP", "SPR", "SPR50", "VIG", "VIGA", "VTVA"}
+
+
+def _classificar_bl_vsp(acao):
+    code = str(acao).strip().upper().split("/")[0]   # parte antes da "/"
+    is_bl = code.endswith("_BL")
+    base = code[:-3] if is_bl else code              # tira o sufixo "_BL"
+    m = re.match(r"^[A-Za-z]+", base)                 # família = parte alfabética (ARD70 -> ARD)
+    familia = m.group(0) if m else ""
+    is_vsp = familia in VSP_FAMILIAS
+    if is_bl and is_vsp:
+        return "VSP + BL"
+    if is_bl:
+        return "BL"
+    if is_vsp:
+        return "VSP"
+    return None  # nem BL nem VSP -> ignorar
+
+
+def grafico_bl_vsp(df):
+    """Distribuição de ações por categoria (VSP, BL, sobreposição). Seletor abre a lista."""
+    if df is None or df.empty or "Ação" not in df.columns:
+        return
+
+    import re
+
+    st.markdown("---")
+    st.subheader("📚 Ações por categoria: VSP vs Be-Learning (BL)")
+
+    d = df.copy()
+    d["_cat"] = d["Ação"].apply(_classificar_bl_vsp)
+
+    total_acoes = d["Ação"].nunique()
+    ignoradas = d[d["_cat"].isna()]["Ação"].nunique()
+    d_cat = d[d["_cat"].notna()]
+    if d_cat.empty:
+        st.info("Nenhuma ação se enquadra em VSP ou BL.")
+        return
+
+    contagem = (
+        d_cat.groupby("_cat")["Ação"].nunique()
+        .reindex(["VSP", "BL", "VSP + BL"]).dropna().reset_index()
+    )
+    contagem.columns = ["Categoria", "Nº de Ações"]
+
+    cores = {"VSP": "#1f77b4", "BL": "#ff7f0e", "VSP + BL": "#9467bd"}
+    fig = go.Figure(go.Bar(
+        x=contagem["Categoria"], y=contagem["Nº de Ações"],
+        text=contagem["Nº de Ações"], textposition="outside",
+        marker_color=[cores.get(c, "#888") for c in contagem["Categoria"]],
+        hovertemplate="<b>%{x}</b><br>%{y} ações<extra></extra>",
+    ))
+    fig.update_layout(
+        height=380, yaxis_title="Nº de ações (únicas)", xaxis_title="",
+        margin=dict(l=10, r=10, t=30, b=10),
+    )
+    st.plotly_chart(fig, use_container_width=True, key="bl_vsp_chart")
+
+    st.caption(
+        f"Total de ações: {total_acoes} | Classificadas: {total_acoes - ignoradas} | "
+        f"Ignoradas (nem VSP nem BL): {ignoradas}"
+    )
+
+    # ----- Seletor fiável (substitui o clique na barra) -----
+    categorias = contagem["Categoria"].tolist()
+    escolha = st.radio(
+        "Ver a lista de ações de:",
+        ["— Nenhuma —"] + categorias,
+        horizontal=True,
+        key="bl_vsp_cat_sel",
+    )
+
+    if escolha != "— Nenhuma —":
+        d_sel = d_cat[d_cat["_cat"] == escolha].copy()
+        st.markdown(f"### 📋 Ações **{escolha}** ({d_sel['Ação'].nunique()} ações)")
+
+        cols_tab = [c for c in [
+            "Ação", "Centro", "Status", "Data Inicial", "Data Final",
+            "Inscritos", "Aptos", "Valor total a receber", "Valor Total Recebido", "Formador",
+        ] if c in d_sel.columns]
+        df_show = d_sel[cols_tab].copy()
+        for cd in ["Data Inicial", "Data Final"]:
+            if cd in df_show.columns and pd.api.types.is_datetime64_any_dtype(df_show[cd]):
+                df_show[cd] = df_show[cd].dt.strftime("%d/%m/%Y")
+        for cv in ["Valor total a receber", "Valor Total Recebido"]:
+            if cv in df_show.columns:
+                df_show[cv] = df_show[cv].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
+        st.dataframe(df_show, use_container_width=True, hide_index=True,
+                     height=min(600, 55 + len(df_show) * 35))
+        st.markdown("---")
+
+    # ----- Auditoria -----
+    with st.expander("🔎 Verificar classificação (que famílias entraram em cada grupo)"):
+        d_aud = d_cat.copy()
+        d_aud["_familia"] = d_aud["Ação"].apply(
+            lambda a: (re.match(r"^[A-Za-z]+", str(a).upper().split("/")[0]).group(0)
+                       if re.match(r"^[A-Za-z]+", str(a).upper().split("/")[0]) else "?")
+        )
+        resumo = (
+            d_aud.groupby(["_cat", "_familia"])["Ação"].nunique()
+            .reset_index().rename(columns={"_cat": "Categoria", "_familia": "Família", "Ação": "Nº Ações"})
+            .sort_values(["Categoria", "Nº Ações"], ascending=[True, False])
+        )
+        st.dataframe(resumo, use_container_width=True, hide_index=True)
+    
 # ── Tabela Geral de Ações ─────────────────────────────────────────────────────
 def tabela_geral_acoes(df: pd.DataFrame):
     if df.empty:
@@ -1123,7 +1329,12 @@ def mostrar_dashboard():
     with c6:
         grafico_avaliacao_formador(df)
 
+    grafico_acoes_vendidas(df)
+    
+    grafico_bl_vsp(df)
+    
     tabela_geral_acoes(df)
+
 
 if __name__ == "__main__":
     mostrar_dashboard()

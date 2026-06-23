@@ -156,6 +156,10 @@ def converter_numericos_cursos(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
+def _limpar_log(msg: str) -> str:
+    """Converte uma linha de log markdown em texto simples para a consola."""
+    return str(msg).replace("&nbsp;", " ").replace("**", "").replace("`", "")
+
 # ═══════════════════════════════════════════════════════════════
 # FUNÇÃO AUXILIAR: CATEGORIZAR ESTADO DO FORMANDO
 # ═══════════════════════════════════════════════════════════════
@@ -418,14 +422,6 @@ def obter_centro_por_sheet(sheet_name: str) -> str:
     return sheet_name
 
 def preparar_combinado(df: pd.DataFrame, sheet_name: str = "") -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    # Debug temporário
-    st.write("=== DEBUG ===")
-    st.write(f"Colunas: {df.columns.tolist()}")
-    if "Estado" in df:
-        st.write(f"Valores de Estado: {df['Estado'].unique()}")
-        st.write(f"Contagem: {df['Estado'].value_counts()}")
-    st.write("=============")
-
     df = df.copy()
     df.columns = df.columns.astype(str).str.strip()
     log = {}
@@ -1014,8 +1010,12 @@ def mostrar_cursos():
                 )
                 st.session_state.uploader_key += 1
 
+            # --- Logs: erros/avisos no ecrã; sucesso só na consola ---
             for linha in linhas_log:
-                st.markdown(linha, unsafe_allow_html=True)
+                if linha.lstrip().startswith("❌") or linha.lstrip().startswith("⚠️"):
+                    st.error(_limpar_log(linha))
+                else:
+                    print(_limpar_log(linha))
             if linhas_log:
                 st.rerun()
 

@@ -605,11 +605,6 @@ def mostrar_qualidade():
                     df_combinado['Centro_Norm'] = df_combinado['Centro'].apply(normalizar_centro)
                     planos_previstos_total = df_combinado['Nº Ações Previstas'].sum()
 
-                    # --- DEBUG: comparar valores de Centro nos dois lados ---
-                    st.write("Projeção (df_combinado):", sorted(df_combinado['Centro'].astype(str).str.upper().unique()))
-                    st.write("Ações reais (df_cursos):", sorted(df_cursos['Centro'].astype(str).str.upper().unique()))
-                    # --------------------------------------------------------
-
                     # ---- CALCULAR ACOES FINALIZADAS (logica original, intacta) ----
                     if has_cursos and "Status" in df_cursos.columns and "Ação" in df_cursos.columns:
                         df_cursos_temp = df_cursos.copy()
