@@ -751,7 +751,7 @@ def grafico_bl_vsp(df):
     import re
 
     st.markdown("---")
-    st.subheader("📚 Ações por categoria: VSP vs Be-Learning (BL)")
+    st.subheader("📚 Ações por categoria: VSP vs BL")
 
     d = df.copy()
     d["_cat"] = d["Ação"].apply(_classificar_bl_vsp)
