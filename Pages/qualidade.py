@@ -155,6 +155,19 @@ def ordenar_meses(valores):
         key=lambda m: (ORDEM_MESES.get(str(m).strip().lower(), 99), str(m).strip().lower())
     )
 
+VSP_FAMILIAS = {"ALM", "APAAA", "APAPA", "ARE", "ARD", "BAS", "CS",
+                "FETP", "SPR", "SPR50", "VIG", "VIGA", "VTVA"}
+
+
+def _is_vsp(codigo):
+    """VSP = família na lista E não-_BL. Tudo o resto (incl. _BL) é LD."""
+    code = str(codigo).strip().upper().split("/")[0]
+    if code.endswith("_BL"):
+        return False  # _BL conta sempre como LD
+    m = re.match(r"^[A-Za-z]+", code)
+    fam = m.group(0) if m else ""
+    return fam in VSP_FAMILIAS
+
 # ------------------------------------------------------------
 # Página principal de Qualidade
 # ------------------------------------------------------------
@@ -781,6 +794,32 @@ def mostrar_qualidade():
             st.caption(f"📈 Cumprimento: {cumprimento_show:.1f}% (Meta: {st.session_state.obj_plano:.0f}%)")
             st.session_state.planos_finalizados_calculado = planos_finalizados
             st.session_state.planos_previstos_calculado = planos_previstos_total
+
+            # --- Taxa de execução por família: VSP vs LD ---
+            if (df_combinado is not None and not df_combinado.empty
+                    and {"Código curso", "Nº Ações Previstas", "Nº Finalizadas"}.issubset(df_combinado.columns)):
+                _mask_vsp = df_combinado["Código curso"].apply(_is_vsp)
+                prev_vsp = df_combinado.loc[_mask_vsp, "Nº Ações Previstas"].sum()
+                fin_vsp = df_combinado.loc[_mask_vsp, "Nº Finalizadas"].sum()
+                prev_ld = df_combinado.loc[~_mask_vsp, "Nº Ações Previstas"].sum()
+                fin_ld = df_combinado.loc[~_mask_vsp, "Nº Finalizadas"].sum()
+                pct_vsp = (fin_vsp / prev_vsp * 100) if prev_vsp > 0 else 0
+                pct_ld = (fin_ld / prev_ld * 100) if prev_ld > 0 else 0
+
+                st.markdown("**Cumprimento por família** (cada uma sobre o seu próprio plano)")
+                col_vsp, col_ld = st.columns(2)
+                with col_vsp:
+                    st.metric(
+                        "📘 Cumprimento VSP", f"{pct_vsp:.1f}%",
+                        help=f"{int(fin_vsp)} finalizadas / {int(prev_vsp)} previstas (família VSP)",
+                    )
+                with col_ld:
+                    st.metric(
+                        "📗 Cumprimento LD", f"{pct_ld:.1f}%",
+                        help=f"{int(fin_ld)} finalizadas / {int(prev_ld)} previstas (não-VSP, inclui _BL)",
+                    )
+            else:
+                st.caption("ℹ️ VSP% / LD% indisponíveis (sem projeção carregada).")
 
     if st.session_state.detalhe_ativo == 'avf':
         with st.expander("📊 Detalhe da Avaliação dos Formadores", expanded=True):
