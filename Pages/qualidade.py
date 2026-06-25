@@ -1271,8 +1271,10 @@ def mostrar_qualidade():
                 st.error("⚠️ Ficheiro de exemplo não encontrado: assets/reclamacoes.xlsx")
         if recl_file is not None:
             try:
-                # Lê o Excel usando a segunda linha como cabeçalho
-                df_recl = pd.read_excel(recl_file, header=0)
+                # Folha certa + cabeçalho na 2ª linha (a 1ª é a faixa de título)
+                xl = pd.ExcelFile(recl_file)
+                folha_recl = next((s for s in xl.sheet_names if "reclam" in s.lower()), xl.sheet_names[0])
+                df_recl = pd.read_excel(recl_file, sheet_name=folha_recl, header=1)
                 # Normaliza nomes das colunas (minúsculas, sem espaços)
                 df_recl.columns = df_recl.columns.str.strip().str.lower()
 
@@ -1429,20 +1431,20 @@ def mostrar_qualidade():
     st.markdown("---")
     st.subheader("🔧 Ações de Melhoria e Recorrência")
 
-    if "acoes_df" not in st.session_state:
-        st.session_state.acoes_df = None
-    if "acoes_filename" not in st.session_state:
-        st.session_state.acoes_filename = None
+    if "acoes_melhoria_df" not in st.session_state:
+        st.session_state.acoes_melhoria_df = None
+    if "acoes_melhoria_filename" not in st.session_state:
+        st.session_state.acoes_melhoria_filename = None
 
-    if st.session_state.acoes_df is not None:
-        st.success(f"📁 Ficheiro de Ações de Melhoria carregado: **{st.session_state.acoes_filename}**")
+    if st.session_state.acoes_melhoria_df is not None:
+        st.success(f"📁 Ficheiro de Ações de Melhoria carregado: **{st.session_state.acoes_melhoria_filename}**")
         col_reset, _ = st.columns([1, 5])
         with col_reset:
             if st.button("🔄 Trocar ficheiro de ações", key="reset_acoes"):
-                st.session_state.acoes_df = None
-                st.session_state.acoes_filename = None
+                st.session_state.acoes_melhoria_df = None
+                st.session_state.acoes_melhoria_filename = None
                 st.rerun()
-        df_acoes = st.session_state.acoes_df.copy()
+        df_acoes = st.session_state.acoes_melhoria_df.copy()
     else:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c1:
@@ -1462,8 +1464,8 @@ def mostrar_qualidade():
             try:
                 df_acoes = pd.read_excel(acoes_file)
                 df_acoes.columns = df_acoes.columns.str.strip()
-                st.session_state.acoes_df = df_acoes.copy()
-                st.session_state.acoes_filename = acoes_file.name
+                st.session_state.acoes_melhoria_df = df_acoes.copy()
+                st.session_state.acoes_melhoria_filename = acoes_file.name
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao processar ficheiro de ações: {e}")
