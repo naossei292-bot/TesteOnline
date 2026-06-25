@@ -898,6 +898,9 @@ def tabela_devedores_formandos(df: pd.DataFrame):
     st.markdown("---")
     st.markdown("### 🧾 Detalhe de Devedores (por formando)")
 
+    def _fmt_euro2(v):  # euros com 2 casas, estilo PT (€1.234,50)
+        return f"€{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
     form = st.session_state.get("formandos_df", pd.DataFrame())
     if form is None or form.empty:
         st.info("Sem dados de formandos carregados (carregue um ficheiro combinado na página Análise de Formações).")
@@ -910,7 +913,7 @@ def tabela_devedores_formandos(df: pd.DataFrame):
         return
     f["Total_a_pagar"] = pd.to_numeric(f["Total_a_pagar"], errors="coerce").fillna(0)
 
-    # Respeita o filtro de ações já aplicado no dashboard (se as duas tabelas usarem "Ação")
+    # Respeita o filtro de ações já aplicado no dashboard
     if "Ação" in f.columns and "Ação" in df.columns:
         f = f[f["Ação"].astype(str).isin(set(df["Ação"].astype(str)))]
 
@@ -919,43 +922,45 @@ def tabela_devedores_formandos(df: pd.DataFrame):
         st.info("Nenhum formando com valor por pagar (Total_a_pagar > 0).")
         return
 
-    # Converter campos numéricos
-    campos_valor = ["Valor_curso", "Desconto", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]
-    for c in campos_valor:
+    # Campos em € (2 casas) e Desconto em % — tratados em separado
+    campos_euro = ["Valor_curso", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]
+    for c in campos_euro:
         if c in devedores.columns:
             devedores[c] = pd.to_numeric(devedores[c], errors="coerce")
+    if "Desconto" in devedores.columns:
+        devedores["Desconto"] = pd.to_numeric(devedores["Desconto"], errors="coerce")
 
-    # Montar colunas a mostrar (tolerante a nomes de pessoa diferentes)
+    # Montar colunas (tolerante a nomes de pessoa diferentes)
     cols_final, em_falta = [], []
     if "Ação" in devedores.columns:
         cols_final.append("Ação")
-    for c in ["Nome", "Formando", "No_formando"]:           # identificador(es) da pessoa
+    for c in ["Nome", "Formando", "No_formando"]:
         if c in devedores.columns and c not in cols_final:
             cols_final.append(c)
     if not any(c in devedores.columns for c in ["Nome", "Formando", "No_formando"]):
         em_falta.append("Formando/Nome")
-    for c in campos_valor:
+    for c in ["Valor_curso", "Desconto", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]:
         if c in devedores.columns:
             cols_final.append(c)
         else:
             em_falta.append(c)
 
     df_show = devedores[cols_final].copy()
-    chaves_ordenacao = (["Ação", "Total_a_pagar"] if "Ação" in df_show.columns else ["Total_a_pagar"])
-    df_show = df_show.sort_values(
-        chaves_ordenacao,
-        ascending=[True, False] if "Ação" in df_show.columns else [False],
-    )
+    chaves = (["Ação", "Total_a_pagar"] if "Ação" in df_show.columns else ["Total_a_pagar"])
+    df_show = df_show.sort_values(chaves, ascending=[True, False] if "Ação" in df_show.columns else [False])
 
     m1, m2 = st.columns(2)
     with m1:
         st.metric("Formandos em dívida", str(len(df_show)))
     with m2:
-        st.metric("Total por pagar", fmt_euro(devedores["Total_a_pagar"].sum()))
+        st.metric("Total por pagar", _fmt_euro2(devedores["Total_a_pagar"].sum()))
 
-    for c in campos_valor:
+    # Formatação final: € com 2 casas, Desconto em %
+    for c in campos_euro:
         if c in df_show.columns:
-            df_show[c] = df_show[c].apply(lambda x: fmt_euro(x) if pd.notna(x) else "—")
+            df_show[c] = df_show[c].apply(lambda x: _fmt_euro2(x) if pd.notna(x) else "—")
+    if "Desconto" in df_show.columns:
+        df_show["Desconto"] = df_show["Desconto"].apply(lambda x: f"{x:.0f}%" if pd.notna(x) else "—")
 
     st.dataframe(df_show.reset_index(drop=True), use_container_width=True, hide_index=True,
                  height=min(600, 55 + len(df_show) * 35))
@@ -963,7 +968,7 @@ def tabela_devedores_formandos(df: pd.DataFrame):
     if em_falta:
         st.caption("⚠️ Campos pedidos ausentes nos dados de formandos: " + ", ".join(em_falta)
                    + ". Confirme que a lista COLUNAS_FORMANDOS (página Análise de Formações) os inclui.")
-
+        
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
