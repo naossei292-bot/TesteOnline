@@ -1426,7 +1426,7 @@ def mostrar_qualidade():
 
 
     # ------------------------------------------------------------
-    # KPI 9 – Ações de Melhoria Implementadas e Recorrência (inalterado)
+    # KPI 9 – Ações de Melhoria Implementadas e Recorrência
     # ------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔧 Ações de Melhoria e Recorrência")
