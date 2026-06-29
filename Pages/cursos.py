@@ -20,7 +20,7 @@ COLUNAS_CURSOS = [
 ]
 
 COLUNAS_FORMANDOS = [
-    "Ação", "Data_inicial", "Data_final", "Estado", "Nome",
+    "Ação", "Centro", "Data_inicial", "Data_final", "Estado", "Nome",
     "No_formando", "Valor_curso", "Desconto",
     "Valor_curso_final",
     "Total_ja_pago", "Total_a_pagar",

@@ -660,6 +660,11 @@ def grafico_acoes_vendidas(df_cursos):
             return nome[:4] if len(nome) >= 4 else nome
         df["_grupo"] = df["Ação"].apply(extrair_tipo)
         label_grupo = "Curso"
+
+        # VIG absorve BAS e EUFCD: estes não contam à parte (apenas para Nº de ações)
+        ABSORVIDAS_POR_VIG = {"BAS", "EUFCD4798", "EUFCD4478"}
+        if metrica == "Nº de ações":
+            df = df[~df["_grupo"].astype(str).str.strip().str.upper().isin(ABSORVIDAS_POR_VIG)]
     else:
         df["_grupo"] = df["Ação"].astype(str)
         label_grupo = "Ação"
@@ -893,8 +898,8 @@ def tabela_geral_acoes(df: pd.DataFrame):
     )
 
 def tabela_devedores_formandos(df: pd.DataFrame):
-    """Devedores ao nível do FORMANDO (Total_a_pagar > 0), com o detalhe de pagamento.
-    Lê de st.session_state.formandos_df — não do df agregado de ações."""
+    """Devedores ao nível do FORMANDO. RECALCULA o final e o a_pagar a partir do desconto (%),
+    porque o ficheiro de origem trata o desconto como € (subtrai em vez de aplicar a %)."""
     st.markdown("---")
     st.markdown("### 🧾 Detalhe de Devedores (por formando)")
 
@@ -908,32 +913,47 @@ def tabela_devedores_formandos(df: pd.DataFrame):
 
     f = form.copy()
 
-    if "Total_a_pagar" not in f.columns:
-        st.warning("Não encontrei 'Total_a_pagar' nos dados de formandos — sem isto não dá para identificar devedores.")
-        return
-    f["Total_a_pagar"] = pd.to_numeric(f["Total_a_pagar"], errors="coerce").fillna(0)
+    # --- Campos-base em numérico ---
+    for c in ["Valor_curso", "Desconto", "Total_ja_pago"]:
+        if c in f.columns:
+            f[c] = pd.to_numeric(f[c], errors="coerce")
 
-    # Respeita o filtro de ações já aplicado no dashboard
+    if "Valor_curso" not in f.columns:
+        st.warning("Sem coluna 'Valor_curso' — não dá para recalcular os valores. Verifique COLUNAS_FORMANDOS.")
+        return
+
+    desconto = f["Desconto"].fillna(0) if "Desconto" in f.columns else 0
+    ja_pago = f["Total_ja_pago"].fillna(0) if "Total_ja_pago" in f.columns else 0
+
+    # Sanidade: se os descontos parecem frações (0,25) e não % (25), avisar
+    if "Desconto" in f.columns:
+        nz = f["Desconto"].dropna()
+        nz = nz[nz > 0]
+        if not nz.empty and nz.max() <= 1:
+            st.warning("⚠️ Os descontos parecem estar em fração (ex.: 0,25) e não em percentagem (25). "
+                       "Se for o caso, o recálculo está a tratá-los mal — confirma a coluna Desconto.")
+
+    # --- RECALCULAR (corrige o erro de origem) ---
+    f["Valor_curso_final"] = (f["Valor_curso"] * (1 - desconto / 100)).round(2)
+    f["Total_a_pagar"] = (f["Valor_curso_final"] - ja_pago).round(2)
+
+    # Filtro de ações do dashboard
     if "Ação" in f.columns and "Ação" in df.columns:
         f = f[f["Ação"].astype(str).isin(set(df["Ação"].astype(str)))]
 
     devedores = f[f["Total_a_pagar"] > 0].copy()
     if devedores.empty:
-        st.info("Nenhum formando com valor por pagar (Total_a_pagar > 0).")
+        st.info("Nenhum formando com valor por pagar (Total_a_pagar > 0) após recálculo.")
         return
 
-    # Campos em € (2 casas) e Desconto em % — tratados em separado
-    campos_euro = ["Valor_curso", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]
-    for c in campos_euro:
-        if c in devedores.columns:
-            devedores[c] = pd.to_numeric(devedores[c], errors="coerce")
-    if "Desconto" in devedores.columns:
-        devedores["Desconto"] = pd.to_numeric(devedores["Desconto"], errors="coerce")
-
-    # Montar colunas (tolerante a nomes de pessoa diferentes)
+    # Montar colunas: Ação, Centro, identificador da pessoa, depois os valores
     cols_final, em_falta = [], []
     if "Ação" in devedores.columns:
         cols_final.append("Ação")
+    if "Centro" in devedores.columns:
+        cols_final.append("Centro")
+    else:
+        em_falta.append("Centro")
     for c in ["Nome", "Formando", "No_formando"]:
         if c in devedores.columns and c not in cols_final:
             cols_final.append(c)
@@ -942,8 +962,6 @@ def tabela_devedores_formandos(df: pd.DataFrame):
     for c in ["Valor_curso", "Desconto", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]:
         if c in devedores.columns:
             cols_final.append(c)
-        else:
-            em_falta.append(c)
 
     df_show = devedores[cols_final].copy()
     chaves = (["Ação", "Total_a_pagar"] if "Ação" in df_show.columns else ["Total_a_pagar"])
@@ -955,7 +973,8 @@ def tabela_devedores_formandos(df: pd.DataFrame):
     with m2:
         st.metric("Total por pagar", _fmt_euro2(devedores["Total_a_pagar"].sum()))
 
-    # Formatação final: € com 2 casas, Desconto em %
+    # Formatação: € com 2 casas, Desconto em %
+    campos_euro = ["Valor_curso", "Valor_curso_final", "Total_ja_pago", "Total_a_pagar"]
     for c in campos_euro:
         if c in df_show.columns:
             df_show[c] = df_show[c].apply(lambda x: _fmt_euro2(x) if pd.notna(x) else "—")
@@ -966,8 +985,8 @@ def tabela_devedores_formandos(df: pd.DataFrame):
                  height=min(600, 55 + len(df_show) * 35))
 
     if em_falta:
-        st.caption("⚠️ Campos pedidos ausentes nos dados de formandos: " + ", ".join(em_falta)
-                   + ". Confirme que a lista COLUNAS_FORMANDOS (página Análise de Formações) os inclui.")
+        st.caption("⚠️ Campos ausentes nos dados de formandos: " + ", ".join(em_falta)
+                   + ". Confirme a lista COLUNAS_FORMANDOS (página Análise de Formações).")
         
 # ── Filtros na sidebar ────────────────────────────────────────────────────────
 def aplicar_filtros_dashboard(df: pd.DataFrame) -> pd.DataFrame:
