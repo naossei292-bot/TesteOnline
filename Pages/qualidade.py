@@ -168,6 +168,56 @@ def _is_vsp(codigo):
     fam = m.group(0) if m else ""
     return fam in VSP_FAMILIAS
 
+def _sigla_centro(nome):
+    """Extrai a sigla do centro: 'SJM 1' -> 'SJM', 'POR2' -> 'POR'."""
+    m = re.match(r"^[A-Za-z]+", str(nome).strip())
+    return m.group(0).upper() if m else str(nome).strip().upper()
+
+def grafico_devolucoes_por_centro(df_filtrado):
+    """Barras por sigla de centro: valor devolvido (aceite) vs valor negado."""
+    if df_filtrado is None or df_filtrado.empty or "Centro" not in df_filtrado.columns:
+        st.info("Sem dados para o gráfico de devoluções.")
+        return
+
+    d = df_filtrado.copy()
+    d["_sigla"] = d["Centro"].apply(_sigla_centro)
+
+    agg_cols = {}
+    if "Valor Devolvido" in d.columns:
+        agg_cols["Devolvido (aceite)"] = ("Valor Devolvido", "sum")
+    if "Valor_Nao_Aceite" in d.columns:
+        agg_cols["Negado"] = ("Valor_Nao_Aceite", "sum")
+    if not agg_cols:
+        st.info("Sem colunas de valores de devolução nos dados.")
+        return
+
+    resumo = d.groupby("_sigla").agg(**agg_cols).reset_index()
+    valor_cols = list(agg_cols.keys())
+    resumo = resumo[resumo[valor_cols].sum(axis=1) > 0]   # tira centros sem qualquer valor
+    if resumo.empty:
+        st.info("Nenhuma devolução (aceite ou negada) nos centros filtrados.")
+        return
+
+    resumo = resumo.sort_values(valor_cols[0], ascending=False)
+
+    cores = {"Devolvido (aceite)": "#2ca02c", "Negado": "#d62728"}
+    fig = go.Figure()
+    for col in valor_cols:
+        fig.add_trace(go.Bar(
+            x=resumo["_sigla"], y=resumo[col], name=col,
+            marker_color=cores.get(col),
+            text=resumo[col].apply(lambda v: f"{v:,.2f} €".replace(",", " ")),
+            textposition="outside",
+        ))
+    fig.update_layout(
+        title=dict(text="Devoluções por Centro", font_size=14),
+        barmode="group", height=380,
+        xaxis_title="Centro (sigla)", yaxis_title="Valor (€)",
+        legend=dict(orientation="h", y=1.12),
+        margin=dict(l=10, r=10, t=60, b=10),
+    )
+    st.plotly_chart(fig, use_container_width=True, key="grafico_devolucoes_centro")
+
 # ------------------------------------------------------------
 # Página principal de Qualidade
 # ------------------------------------------------------------
@@ -1355,7 +1405,7 @@ def mostrar_qualidade():
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             
             with col_f1:
-                centros_opcoes = sorted(df_recl['Centro'].dropna().unique())
+                centros_opcoes = sorted(df_recl['Centro'].dropna().apply(_sigla_centro).unique())
                 centros_sel = st.multiselect("Centro", options=centros_opcoes, default=centros_opcoes, key="filtro_recl_centro")
             
             with col_f2:
@@ -1375,7 +1425,7 @@ def mostrar_qualidade():
         # Aplicar filtros
         df_filtrado = df_recl.copy()
         if centros_sel:
-            df_filtrado = df_filtrado[df_filtrado['Centro'].isin(centros_sel)]
+            df_filtrado = df_filtrado[df_filtrado['Centro'].apply(_sigla_centro).isin(centros_sel)]
         if meses_sel:
             df_filtrado = df_filtrado[df_filtrado['data'].isin(meses_sel)]
         if cursos_sel:
@@ -1407,6 +1457,8 @@ def mostrar_qualidade():
             st.metric("❌ Total de Devoluções Negadas", f"{total_negado:,.2f} €".replace(',', ' '))
         with col_recl4:
             st.metric("📋 Nº Reclamações", total_reclamacoes)
+        
+        grafico_devolucoes_por_centro(df_filtrado)
         
         # Lista detalhada (filtrada)
         with st.expander("📋 Lista completa de Reclamações", expanded=False):
